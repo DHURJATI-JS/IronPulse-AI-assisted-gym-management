@@ -1,0 +1,69 @@
+{#- Small status pieces of the load-test page. Import WITH CONTEXT:
+      {% import "superadmin/_load_test_macros.html" as lt with context %}
+    Status colours always come with an icon and a word (never colour alone). -#}
+
+{#- Run verdict: True / False / None (the run could not be read) -#}
+{% macro verdict_chip(passed) -%}
+{% if passed is sameas true %}<span class="badge badge-green">{{ icon("check", "size-3.5") }}Pass</span>
+{% elif passed is sameas false %}<span class="badge badge-red">{{ icon("x", "size-3.5") }}Fail</span>
+{% else %}<span class="badge badge-zinc">{{ icon("alert", "size-3.5") }}Unreadable</span>{% endif %}
+{%- endmacro %}
+
+{#- One step / SLO result -#}
+{% macro result_chip(passed) -%}
+{% if passed %}<span class="badge badge-green">{{ icon("check", "size-3.5") }}Pass</span>
+{% else %}<span class="badge badge-red">{{ icon("x", "size-3.5") }}Fail</span>{% endif %}
+{%- endmacro %}
+
+{#- A failure rate: from 1 % a red badge WITH an alert icon (the icon, not only the colour, marks it), above 0 an
+    amber badge, plain 0 otherwise; ``failures``: the count, after it -#}
+{% macro failure_rate(rate, flag, failures=None) -%}
+{% if flag == "red" %}<span class="badge badge-red">{{ icon("alert", "size-3.5", label="Above 1 %") }}{{ fmt.pct(rate) }}</span>
+{%- elif flag %}<span class="badge badge-{{ flag }}">{{ fmt.pct(rate) }}</span>
+{%- else %}<span class="muted">0 %</span>{% endif %}
+{%- if failures is not none %} <span class="text-xs tabular-nums muted">{{ fmt.num(failures) }}</span>{% endif %}
+{%- endmacro %}
+
+{% macro severity_chip(severity) -%}
+{% set tone = {"high": "red", "medium": "amber"}.get(severity, "zinc") %}
+<span class="badge badge-{{ tone }}">{{ icon("alert" if severity != "low" else "info", "size-3.5") }}{{ severity | capitalize }}</span>
+{%- endmacro %}
+
+{% macro status_chip(status) -%}
+{% if status == "fixed" %}<span class="badge badge-green">{{ icon("check", "size-3.5") }}Fixed</span>
+{% elif status == "open" %}<span class="badge badge-amber">{{ icon("clock", "size-3.5") }}Open</span>
+{% else %}<span class="badge badge-zinc">{{ icon("check-circle", "size-3.5") }}Accepted</span>{% endif %}
+{%- endmacro %}
+
+{#- Data the analysis did not record: a neutral tile (sa.inline_empty's green is kept for good news, e.g. no findings) -#}
+{% macro missing(title, body=None, ico="info") %}
+<div class="flex flex-col items-center rounded-[24px] bg-zinc-50 px-6 py-10 text-center dark:bg-white/[0.03]" data-lt-missing>
+  <span class="grid size-12 place-items-center rounded-2xl bg-zinc-200/70 text-zinc-500 dark:bg-white/[0.08] dark:text-zinc-400">{{ icon(ico, "size-6") }}</span>
+  <p class="mt-3 font-semibold">{{ title }}</p>
+  {% if body %}<p class="mt-1 max-w-sm text-sm muted">{{ body }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{#- Key / value pair inside a <dl class="sa-kv"> -#}
+{% macro kv(label, value, cls="") -%}
+<div class="{{ cls }}"><dt>{{ label }}</dt><dd>{{ value if value not in (none, "") else "—" }}</dd></div>
+{%- endmacro %}
+
+{#- The banner both load-test pages open with (admin_page.data_volume): how much data the app served during the run -
+    the rows of the test database, its total and its main tables in bold. Nothing when the run recorded no counts. -#}
+{% macro data_volume(dv) -%}
+{% if dv %}
+<section class="card mb-6 min-w-0 [overflow-wrap:anywhere] animate-fade-up" aria-labelledby="lt-data-volume" data-lt-data-volume>
+  <p class="eyebrow mb-1.5 flex items-center gap-1.5">{{ icon("layers", "size-3.5") }} Data volume</p>
+  <h2 id="lt-data-volume" class="text-2xl font-bold tracking-tight tabular-nums sm:text-3xl">{{ fmt.num(dv.total) }} database rows <span class="text-base font-semibold muted sm:text-lg">in {{ fmt.num(dv.tables) }} table{{ "s" if dv.tables != 1 }}</span></h2>
+  {% if dv.parts %}
+  <ul class="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-[15px]" data-lt-data-tables>
+    {% for rows, label in dv.parts %}
+    <li><strong class="font-bold tabular-nums">{{ fmt.num(rows) }}</strong> {{ label }}</li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <p class="mt-3 text-sm muted">The test database the app served during this run, filled before the run started.</p>
+</section>
+{% endif %}
+{%- endmacro %}

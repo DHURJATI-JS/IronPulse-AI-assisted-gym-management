@@ -1,0 +1,27 @@
+{% extends "auth/_center.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "auth/_macros.html" as am with context %}
+{% block title %}Choose a new password{% endblock %}
+{% block card %}
+{% if state != "ok" %}
+  {{ am.token_problem(state, what="reset link", retry_href="/auth/forgot", retry_label="Request a new link") }}
+{% else %}
+{% set e = errors or {} %}
+<div class="card p-7 sm:p-10">
+  {{ am.card_icon("lock") }}
+  <h1 class="mt-6 text-[28px] font-semibold leading-tight tracking-tight">Choose a new password</h1>
+  <p class="mt-2 text-[15px] leading-relaxed muted">For <span class="font-semibold text-ink dark:text-white">{{ email }}</span>. After saving, every device signed in to this account is signed out.</p>
+  {% if e %}<div class="mt-6">{{ ui.form_errors(e) }}</div>{% endif %}
+  <form method="post" action="/auth/reset" class="mt-8 space-y-5">
+    {{ ui.csrf() }}
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" value="{{ email }}" data-personal-email>
+    <input type="hidden" value="{{ name }}" data-personal-name>
+    {{ am.password_input("password", "New password", autocomplete="new-password", error=e.password, strength=True,
+                         help="At least 10 characters, mixing three of: lowercase, uppercase, digits, symbols.") }}
+    {{ am.password_input("password_confirm", "Confirm new password", autocomplete="new-password", error=e.password_confirm, match="password") }}
+    <button type="submit" class="btn btn-primary btn-lg w-full" data-busy-label="Saving…">Update password {{ icon("check", "size-4") }}</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

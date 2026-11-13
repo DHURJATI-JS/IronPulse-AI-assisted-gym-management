@@ -1,0 +1,222 @@
+{#- WP-E1 shared health UI pieces. Import WITH CONTEXT (needs csrf_token):
+      {% import "customer/health/_macros.html" as hm with context %}
+    No inline styles / handlers (strict CSP): behaviour lives in static/src/js/50-health.js. -#}
+{% import "_ui.html" as ui with context %}
+
+{#- ------------------------------------------------------------------ number input with a unit suffix #}
+{% macro unit_input(name, label, value, unit, error=None, help=None) %}
+<div>
+  <label class="label" for="f-{{ name }}">{{ label }}</label>
+  <div class="relative">
+    <input id="f-{{ name }}" name="{{ name }}" type="text" inputmode="decimal" autocomplete="off" required maxlength="8"
+           value="{{ value if value is not none else '' }}"
+           class="input pr-14 text-base font-semibold tabular-nums {{ 'input-error' if error }}"
+           {% if error %}aria-invalid="true" aria-describedby="e-{{ name }}"{% elif help %}aria-describedby="h-{{ name }}"{% endif %}>
+    <span class="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm font-medium text-zinc-400 dark:text-zinc-500">{{ unit }}</span>
+  </div>
+  {% if error %}<p class="field-error" id="e-{{ name }}">{{ error }}</p>{% elif help %}<p class="help" id="h-{{ name }}">{{ help }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{#- ------------------------------------------------------------------ the daily metrics form (pre-filled) #}
+{% macro metric_form(values, errors, hint, next="/me/health", minor=False, source="manual", submit_label="Save reading") %}
+<form method="post" action="/me/health/metrics" class="space-y-4" data-component="bmi-preview" data-minor="{{ '1' if minor else '0' }}">
+  {{ ui.csrf() }}
+  <input type="hidden" name="next" value="{{ next }}">
+  <input type="hidden" name="source" value="{{ source }}">
+  <div class="grid gap-4 min-[420px]:grid-cols-2">
+    {{ unit_input("height_cm", "Height", values.get("height_cm"), "cm", errors.get("height_cm")) }}
+    {{ unit_input("weight_kg", "Weight", values.get("weight_kg"), "kg", errors.get("weight_kg")) }}
+  </div>
+  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <p class="flex min-w-0 items-center gap-2 text-sm muted" aria-live="polite">
+      {{ icon("activity", "size-4 shrink-0 text-accent") }}<span data-bmi-out>{{ hint }}</span>
+    </p>
+    <button type="submit" class="btn btn-primary w-full shrink-0 whitespace-nowrap sm:w-auto">{{ icon("check", "size-4") }} {{ submit_label }}</button>
+  </div>
+</form>
+{% endmacro %}
+
+{#- ------------------------------------------------------------------ BMI gauge (adults only; 14-40 scale) #}
+{% macro bmi_gauge(g) %}
+{% if g %}
+<figure class="mt-4" aria-label="BMI {{ g.value }}, {{ g.label }}">
+  <svg viewBox="0 0 100 12" preserveAspectRatio="none" class="h-3 w-full overflow-visible" aria-hidden="true" focusable="false">
+    {% for seg in g.segments %}
+    <line x1="{{ seg.x1 }}" y1="6" x2="{{ seg.x2 }}" y2="6" stroke-width="6" vector-effect="non-scaling-stroke"
+          class="{{ 'stroke-accent' if seg.active else 'stroke-zinc-200 dark:stroke-white/10' }}"/>
+    {% endfor %}
+    <path d="M {{ g.x }} 6 L {{ g.x }} 6" stroke-width="15" stroke-linecap="round" vector-effect="non-scaling-stroke" class="stroke-white dark:stroke-surface-dark"/>
+    <path d="M {{ g.x }} 6 L {{ g.x }} 6" stroke-width="10" stroke-linecap="round" vector-effect="non-scaling-stroke" class="stroke-ink dark:stroke-white"/>
+  </svg>
+  <figcaption class="relative mt-1.5 h-4 text-[11px] font-medium tabular-nums text-zinc-400 dark:text-zinc-500">
+    <span class="absolute left-[17.3%] -translate-x-1/2">18.5</span>
+    <span class="absolute left-[42.3%] -translate-x-1/2">25</span>
+    <span class="absolute left-[61.5%] -translate-x-1/2">30</span>
+  </figcaption>
+</figure>
+{% endif %}
+{% endmacro %}
+
+{#- ------------------------------------------------------------------ small weight sparkline #}
+{% macro sparkline(s) %}
+{% if s %}
+<svg viewBox="0 0 {{ s.w }} {{ s.h }}" preserveAspectRatio="none" class="mt-4 h-12 w-full overflow-visible" role="img" aria-label="{{ s.label }}">
+  <path d="{{ s.area }}" class="fill-accent/10"/>
+  <path d="{{ s.line }}" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" class="stroke-accent"/>
+  <path d="M {{ s.end.x }} {{ s.end.y }} L {{ s.end.x }} {{ s.end.y }}" stroke-width="11" stroke-linecap="round" vector-effect="non-scaling-stroke" class="stroke-white dark:stroke-surface-dark"/>
+  <path d="M {{ s.end.x }} {{ s.end.y }} L {{ s.end.x }} {{ s.end.y }}" stroke-width="7" stroke-linecap="round" vector-effect="non-scaling-stroke" class="stroke-accent"/>
+</svg>
+{% endif %}
+{% endmacro %}
+
+{#- ------------------------------------------------------------------ weight trend chart (+ JS hover layer) #}
+{% macro trend_chart(c) %}
+{% set tick_pos = ['top-0 -translate-y-1/2', 'top-1/2 -translate-y-1/2', 'bottom-0 translate-y-1/2'] %}
+<figure class="mt-6" data-component="trend-chart" data-points="{{ c.points | jsonattr }}" data-unit="kg">
+  <div class="flex gap-3">
+  <div class="relative h-48 w-9 shrink-0 sm:h-56" aria-hidden="true">
+    {% for t in c.ticks %}
+    <span class="absolute right-0 {{ tick_pos[loop.index0] }} text-[11px] font-medium tabular-nums text-zinc-400 dark:text-zinc-500">{{ t.label }}</span>
+    {% endfor %}
+  </div>
+  <div class="relative h-48 min-w-0 flex-1 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-4 focus-visible:ring-offset-white dark:focus-visible:ring-offset-surface-dark sm:h-56" data-plot tabindex="0"
+       aria-label="Weight trend. {{ c.summary }} Use the left and right arrow keys to read each day.">
+    <svg viewBox="0 0 {{ c.w }} {{ c.h }}" preserveAspectRatio="none" class="absolute inset-0 h-full w-full overflow-visible" aria-hidden="true" focusable="false">
+      {% for t in c.ticks %}
+      <line x1="0" x2="{{ c.w }}" y1="{{ t.y }}" y2="{{ t.y }}" stroke-width="1" vector-effect="non-scaling-stroke" class="stroke-black/[0.07] dark:stroke-white/[0.09]"/>
+      {% endfor %}
+      <path d="{{ c.area }}" class="fill-accent/10"/>
+      <path d="{{ c.line }}" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" class="stroke-accent"/>
+      <path d="M {{ c.end.x }} {{ c.end.y }} L {{ c.end.x }} {{ c.end.y }}" stroke-width="13" stroke-linecap="round" vector-effect="non-scaling-stroke" class="stroke-white dark:stroke-surface-dark"/>
+      <path d="M {{ c.end.x }} {{ c.end.y }} L {{ c.end.x }} {{ c.end.y }}" stroke-width="9" stroke-linecap="round" vector-effect="non-scaling-stroke" class="stroke-accent"/>
+    </svg>
+    <div class="pointer-events-none absolute inset-y-0 w-px -translate-x-1/2 bg-zinc-400/70 dark:bg-zinc-500/70" data-crosshair hidden></div>
+    <div class="pointer-events-none absolute -top-2 z-10 -translate-y-full whitespace-nowrap rounded-2xl bg-white/95 px-3 py-2 shadow-lg ring-1 ring-black/[0.06] backdrop-blur dark:bg-elevated-dark/95 dark:ring-white/10" data-tooltip hidden></div>
+  </div>
+  </div>
+  <div class="ml-12 mt-3 flex justify-between text-xs tabular-nums muted" aria-hidden="true">
+    {% for x in c.x_labels %}<span>{{ x }}</span>{% endfor %}
+  </div>
+  <figcaption class="sr-only">{{ c.summary }}</figcaption>
+  <p class="sr-only" aria-live="polite" data-live></p>
+</figure>
+{% endmacro %}
+
+{#- ------------------------------------------------------------------ air-conditioning advice card #}
+{% macro ac_card(ac, details=True) %}
+{% set tone = {'recommended': 'green', 'caution': 'amber', 'not_recommended': 'red'}.get(ac.verdict, 'zinc') %}
+{% set label = 'Comfort range' if ac.basis == 'default' else (ac.label or ac.verdict | humanize) %}
+<section class="card" aria-labelledby="ac-title">
+  <div class="flex items-center gap-3">
+    <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("thermometer", "size-5") }}</span>
+    <div class="min-w-0">
+      <h2 id="ac-title" class="section-title">Air conditioning</h2>
+      <p class="text-xs muted">From your health profile</p>
+    </div>
+  </div>
+  <div class="mt-5">
+    <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      {% if ac.temp_min is not none %}
+        <p class="whitespace-nowrap text-4xl font-semibold tracking-tight">{{ ac.temp_min }}–{{ ac.temp_max }}<span class="ml-1 text-2xl font-medium text-zinc-400 dark:text-zinc-500">°C</span></p>
+      {% else %}
+        <p class="flex items-center gap-2 text-2xl font-semibold tracking-tight">{{ icon("wind", "size-6 text-accent") }} Fan or fresh air</p>
+      {% endif %}
+      <span class="badge badge-{{ tone }} whitespace-nowrap">{{ label }}</span>
+    </div>
+    <p class="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{{ ac.ai_summary or ac.summary }}</p>
+    {% if ac.ai_summary %}
+      <p class="mt-2 inline-flex items-center gap-1.5 text-xs muted">{{ icon("sparkles", "size-3.5 text-violet") }} Worded by AI · numbers checked by our rules</p>
+    {% endif %}
+  </div>
+  {% if details and (ac.reasons or ac.tips) %}
+  <details class="group mt-4 border-t border-black/[0.06] pt-4 dark:border-white/[0.08]">
+    <summary class="flex cursor-pointer list-none items-center justify-between rounded-lg text-sm font-semibold text-accent">
+      Why, and how to use it {{ icon("chevron-down", "size-4 transition duration-300 group-open:rotate-180") }}
+    </summary>
+    {% if ac.reasons %}
+    <ul class="mt-3 space-y-2 text-sm">
+      {% for r in ac.reasons %}<li class="flex gap-2">{{ icon("info", "mt-0.5 size-4 shrink-0 text-zinc-400") }}<span>{{ r }}</span></li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if ac.tips %}
+    <ul class="mt-3 space-y-2 text-sm">
+      {% for t in ac.tips %}<li class="flex gap-2">{{ icon("check", "mt-0.5 size-4 shrink-0 text-ok") }}<span>{{ t }}</span></li>{% endfor %}
+    </ul>
+    {% endif %}
+  </details>
+  {% endif %}
+</section>
+{% endmacro %}
+
+{#- ------------------------------------------------------------------ health alerts list #}
+{% macro alert_list(alerts, next="/me/health", title="Alerts", empty_text="No alerts - your recent readings look steady.", compact=False, more_href=None) %}
+<section class="card" aria-labelledby="alerts-title">
+  <div class="flex items-center justify-between gap-3">
+    <h2 id="alerts-title" class="section-title">{{ title }}</h2>
+    <span class="flex items-center gap-2">
+      {% set unread = alerts | selectattr("acknowledged_at", "none") | list %}
+      {% if unread %}<span class="badge badge-red">{{ unread | length }} new</span>{% endif %}
+      {% if more_href %}<a href="{{ more_href }}" class="text-sm font-semibold text-accent hover:underline">All alerts</a>{% endif %}
+    </span>
+  </div>
+  {% if alerts %}
+  <ul class="mt-4 space-y-3">
+    {% for a in alerts %}
+    {% set lv = a.level.value %}
+    <li class="rounded-2xl p-4 {{ 'bg-bad/[0.08] dark:bg-bad/[0.12]' if lv in ('critical', 'life_threatening') else ('bg-warn/10 dark:bg-warn/[0.12]' if lv == 'warning' else 'bg-zinc-100/80 dark:bg-white/[0.04]') }}">
+      <div class="flex items-start gap-3">
+        <span class="mt-0.5 shrink-0 {{ 'text-bad' if lv in ('critical', 'life_threatening') else ('text-warn' if lv == 'warning' else 'text-accent') }}">{{ icon("alert" if lv != 'info' else "info", "size-5") }}</span>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            <p class="font-semibold">{{ a.title }}</p>
+            {{ ui.status(a.level) }}
+            {% if a.source == 'ai' %}<span class="badge badge-violet">{{ icon("sparkles", "size-3") }}AI</span>{% endif %}
+          </div>
+          <p class="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300 {{ 'line-clamp-3' if compact }}">{{ a.message }}</p>
+          {% if a.recommendation and not compact %}<p class="mt-2 text-sm font-medium">{{ a.recommendation }}</p>{% endif %}
+          <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs muted">
+            <span>{{ a.created_at | dt("%d %b, %H:%M") }}</span>
+            {% if compact %}<a href="/me/health" class="font-semibold text-accent hover:underline">Details</a>{% endif %}
+            {% if a.guardian_notified %}<span class="inline-flex items-center gap-1">{{ icon("envelope", "size-3.5") }} Guardian informed</span>{% endif %}
+            {% if a.acknowledged_at %}
+              <span class="inline-flex items-center gap-1">{{ icon("check", "size-3.5") }} Read</span>
+            {% else %}
+              <form method="post" action="/me/health/alerts/{{ a.id }}/ack" class="inline">
+                {{ ui.csrf() }}<input type="hidden" name="next" value="{{ next }}">
+                <button type="submit" class="rounded-md font-semibold text-accent hover:underline">Mark as read</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="mt-4 flex items-center gap-3 rounded-2xl bg-ok/10 p-4 text-sm text-[#166534] dark:text-[#86efac]">
+    {{ icon("check-circle", "size-5 shrink-0") }}<p>{{ empty_text }}</p>
+  </div>
+  {% endif %}
+</section>
+{% endmacro %}
+
+{#- ------------------------------------------------------------------ "paused for safety" card #}
+{% macro suspended_card(profile, minor=False) %}
+<section class="card relative overflow-hidden ring-bad/25 dark:ring-bad/30" role="alert" aria-labelledby="paused-title">
+  <div aria-hidden="true" class="pointer-events-none absolute -right-20 -top-24 size-64 rounded-full bg-bad/15 blur-3xl"></div>
+  <div class="relative flex flex-col gap-4 sm:flex-row sm:items-start">
+    <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-bad/12 text-bad">{{ icon("heart", "size-6") }}</span>
+    <div class="min-w-0 flex-1">
+      <p class="eyebrow !text-bad">Safety pause</p>
+      <h2 id="paused-title" class="mt-1 text-xl font-semibold tracking-tight">Your gym activities are paused for your safety</h2>
+      <p class="mt-2 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{{ profile.suspension_reason or 'A recent health check needs medical attention.' }}</p>
+      <p class="mt-3 text-sm leading-relaxed">This isn't a punishment - your wellbeing comes first.
+        {% if minor %}Please talk to your parent or guardian and see a doctor.{% else %}Please consult a healthcare professional.{% endif %}
+        If you feel unwell or in danger, call your local emergency number (112 in India and the EU, 911 in the US) now.
+        A gym admin can switch activities back on once it's safe.</p>
+      {% if profile.suspended_at %}<p class="mt-3 text-xs muted">Paused {{ profile.suspended_at | dt("%d %b %Y, %H:%M") }}</p>{% endif %}
+    </div>
+  </div>
+</section>
+{% endmacro %}

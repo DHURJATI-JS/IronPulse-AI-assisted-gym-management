@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/finance/_macros.html" as fin with context %}
+{% block title %}Payroll{% endblock %}
+{% block content %}
+{% call ui.page_header("Payroll", "Salaries are counted by the days each person actually worked, with country-specific deductions, tax and gratuity estimates.", eyebrow="Finance") %}
+  <a href="#run-payroll" class="btn btn-primary">{{ icon("plus", "size-4") }} Run payroll</a>
+{% endcall %}
+{{ fin.finance_nav("payroll") }}
+
+{# ------------------------------------------------------------------ "run payroll" for every gym, in the background #}
+{% if generation %}
+<section class="card mb-6 flex flex-col gap-3 animate-fade-up" aria-labelledby="run-progress-title" data-component="payroll-run" data-task="{{ generation.id }}" data-url="{{ generation.url }}">
+  <div class="flex items-center gap-3">
+    <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent"><span class="spinner size-4"></span></span>
+    <div class="min-w-0">
+      <h2 id="run-progress-title" class="section-title">Payroll for {{ generation.label }} is being generated</h2>
+      <p class="text-sm muted" data-progress-text aria-live="polite">{% if generation.gyms %}{{ generation.done }} of {{ generation.gyms }} gyms done{% else %}Starting...{% endif %} - statements appear below as each gym finishes.</p>
+    </div>
+  </div>
+  <progress class="ip-progress" max="100" value="{{ generation.progress }}" aria-labelledby="run-progress-title">{{ generation.progress }}%</progress>
+  <p class="text-xs muted">You can leave this page - we'll notify you when it's done.</p>
+</section>
+{% endif %}
+
+{# ------------------------------------------------------------------ KPIs #}
+<section class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 animate-fade-up" aria-label="Payroll status">
+  {{ fin.kpi("Due", kpi.due.count, kpi.due.amount or "Nothing due", "clock", "amber", "/owner/payroll?status=due") }}
+  {{ fin.kpi("Overdue", kpi.overdue.count, "Past the due date" if kpi.overdue.count else "Nothing overdue", "alert", "red" if kpi.overdue.count else "zinc", "/owner/payroll?status=overdue", "fin-negative" if kpi.overdue.count else "") }}
+  {{ fin.kpi("Awaiting proof", kpi.awaiting.count + kpi.review.count, (kpi.review.count ~ " being verified") if kpi.review.count else "Upload the payment proof", "upload", "blue", "/owner/payroll?status=awaiting_proof") }}
+  {{ fin.kpi("Paid", kpi.paid.count, kpi.paid.amount or "No payments yet", "check-circle", "green", "/owner/payroll?status=paid") }}
+</section>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-3">
+  {# ---------------------------------------------------------------- statements #}
+  <section class="lg:col-span-2" aria-labelledby="statements-title">
+    <h2 id="statements-title" class="sr-only">Salary statements</h2>
+    <form method="get" action="/owner/payroll" class="card-flat mb-4 flex flex-wrap items-end gap-3" aria-label="Filter statements">
+      {% if gyms | length > 1 %}
+      <div class="min-w-[9rem] flex-1">
+        <label class="label" for="pf-gym">Gym</label>
+        <select id="pf-gym" name="gym" class="input" data-autosubmit>
+          <option value="">All gyms</option>
+          {% for g in gyms %}<option value="{{ g.id }}" {{ 'selected' if filters.gym == g.id }}>{{ g.name }}</option>{% endfor %}
+        </select>
+      </div>
+      {% endif %}
+      <div class="min-w-[9rem] flex-1">
+        <label class="label" for="pf-status">Status</label>
+        <select id="pf-status" name="status" class="input" data-autosubmit>
+          <option value="">All statements</option>
+          {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if filters.status == v }}>{{ l }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="min-w-[11rem] flex-[2]">
+        <label class="label" for="pf-employee">Staff member</label>
+        <select id="pf-employee" name="employee" class="input" data-autosubmit>
+          <option value="">Everyone</option>
+          {% for e in employees %}<option value="{{ e.id }}" {{ 'selected' if filters.employee == e.id }}>{{ e.full_name }}{% if gyms | length > 1 %} · {{ e.name }}{% endif %}{% if e.status.value == 'terminated' %} (left){% endif %}</option>{% endfor %}
+        </select>
+      </div>
+      <noscript><button class="btn btn-secondary">Filter</button></noscript>
+      {% if filters.gym or filters.status or filters.employee %}<a href="/owner/payroll" class="btn btn-ghost">Reset</a>{% endif %}
+    </form>
+
+    {% if employee %}
+      <div class="card-muted mb-4 flex flex-wrap items-center justify-between gap-3 !p-4">
+        <p class="text-sm"><span class="font-semibold">{{ employee.full_name }}</span> <span class="muted">· {{ employee.name }}</span></p>
+        <a href="/owner/staff/{{ employee.id }}/settlement" class="btn btn-secondary btn-sm">{{ icon("briefcase", "size-4") }} Dues &amp; final settlement</a>
+      </div>
+    {% endif %}
+
+    {% if statements %}
+      <ul class="card !p-2 grid gap-1">
+        {% for st in statements %}
+          <li>
+            <a href="/owner/payroll/{{ st.id }}" class="group flex flex-col gap-3 rounded-[20px] px-3 py-3 transition hover:bg-zinc-900/[0.035] sm:flex-row sm:items-center dark:hover:bg-white/[0.04]">
+              <div class="flex min-w-0 flex-1 items-center gap-3">
+                {{ ui.avatar(st.employee.photo_key, st.employee.display_name, "size-11") }}
+                <div class="min-w-0">
+                  <p class="flex flex-wrap items-center gap-2 font-medium">
+                    <span class="truncate">{{ st.employee.display_name }}</span>
+                    {% if st.is_final_settlement %}{{ ui.badge("Final settlement", "violet") }}{% endif %}
+                  </p>
+                  <p class="truncate text-xs muted">
+                    {{ st.period_start | date("%d %b") }} – {{ st.period_end | date("%d %b %Y") }} · {{ st.days_worked }} day{{ 's' if st.days_worked != 1 }} paid
+                    {% if gyms | length > 1 %} · {{ gym_names.get(st.gym_id) }}{% endif %}
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-center justify-between gap-4 pl-14 sm:justify-end sm:pl-0">
+                <div class="flex flex-col items-start gap-1 sm:items-end">
+                  {{ fin.statement_status(st) }}
+                  {{ fin.due_chip(st, today) }}
+                </div>
+                <div class="min-w-[7.5rem] text-right">
+                  <p class="font-semibold tabular-nums">{{ st.net_pay | money(st.currency) }}</p>
+                  <p class="text-xs muted tabular-nums">gross {{ st.gross_pay | money(st.currency) }}</p>
+                </div>
+                <span class="hidden text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-accent sm:block dark:text-zinc-600" aria-hidden="true">{{ icon("chevron-right", "size-5") }}</span>
+              </div>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+      {% if pages > 1 %}
+      <nav class="mt-5 flex items-center justify-between gap-3" aria-label="Pagination">
+        {% if prev_qs %}<a href="/owner/payroll{{ prev_qs }}" class="btn btn-secondary btn-sm" rel="prev">{{ icon("arrow-left", "size-4") }} Previous</a>{% else %}<span></span>{% endif %}
+        <p class="text-sm muted">Page {{ page }} of {{ pages }} · {{ total }} statements</p>
+        {% if next_qs %}<a href="/owner/payroll{{ next_qs }}" class="btn btn-secondary btn-sm" rel="next">Next {{ icon("arrow-right", "size-4") }}</a>{% else %}<span></span>{% endif %}
+      </nav>
+      {% endif %}
+    {% elif filters.status or filters.employee or filters.gym %}
+      {{ ui.empty("No statements match", "Try another status or staff member - or clear the filters.", "search", "Clear filters", "/owner/payroll") }}
+    {% else %}
+      {{ ui.empty("No salary statements yet", "Run payroll for last month: IronPulse counts each person's paid days, applies their country's rules and tells you exactly what to pay.", "banknotes", "Run payroll", "#run-payroll") }}
+    {% endif %}
+  </section>
+
+  {# ---------------------------------------------------------------- run payroll + how it works #}
+  <aside class="grid content-start gap-6">
+    <section id="run-payroll" class="card scroll-mt-24" aria-labelledby="run-title">
+      <div class="flex items-center gap-3">
+        <span class="grid size-10 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("calendar", "size-5") }}</span>
+        <div>
+          <h2 id="run-title" class="section-title">Run payroll</h2>
+          <p class="text-xs muted">Safe to run twice - nobody is paid twice for a day.</p>
+        </div>
+      </div>
+      {% if gen_errors %}<div class="mt-4">{{ ui.form_errors(gen_errors) }}</div>{% endif %}
+      <form method="post" action="/owner/payroll/generate" class="mt-5 grid gap-4">
+        {{ ui.csrf() }}
+        {{ ui.field("month", "Month", type="month", value=gen_values.month, required=True, error=gen_errors.get("month"), attrs='max="' ~ max_month ~ '"', help="Statements are due on the 7th of the following month.") }}
+        {% if gyms | length > 1 %}
+          <div>
+            <label class="label" for="f-gym">Gym</label>
+            <select id="f-gym" name="gym" class="input {{ 'input-error' if gen_errors.get('gym') }}">
+              <option value="">All my gyms</option>
+              {% for g in gyms %}<option value="{{ g.id }}" {{ 'selected' if gen_values.gym | string == g.id | string }}>{{ g.name }}</option>{% endfor %}
+            </select>
+            {% if gen_errors.get('gym') %}<p class="field-error">{{ gen_errors.gym }}</p>{% endif %}
+          </div>
+        {% elif gyms %}
+          <input type="hidden" name="gym" value="{{ gyms[0].id }}">
+        {% endif %}
+        <button class="btn btn-primary w-full" {{ 'disabled' if not gyms }}>{{ icon("sparkles", "size-4") }} Generate statements</button>
+      </form>
+    </section>
+
+    <section class="card-muted" aria-labelledby="how-title">
+      <h2 id="how-title" class="text-sm font-semibold">How a salary gets paid</h2>
+      <ol class="mt-4 grid gap-3 text-sm">
+        {% for n, title, body in [
+          (1, "Generate", "Gross = monthly salary × days worked ÷ days in the month."),
+          (2, "Pay", "Cashfree Payouts for INR bank / UPI, or your own bank transfer."),
+          (3, "Upload proof", "Screenshot or PDF with the amount, UTR / reference and date."),
+          (4, "Verified", "OCR engines match the proof; the ledger records the payment.")] %}
+          <li class="flex gap-3">
+            <span class="fin-step">{{ n }}</span>
+            <span><span class="font-medium">{{ title }}</span><span class="block text-xs muted">{{ body }}</span></span>
+          </li>
+        {% endfor %}
+      </ol>
+      <p class="mt-4 flex items-start gap-2 text-xs muted">{{ icon("info", "size-4 shrink-0") }}<span>Tax, social-security and gratuity amounts are estimates for {{ "16" }} countries - always confirm with a qualified accountant.</span></p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

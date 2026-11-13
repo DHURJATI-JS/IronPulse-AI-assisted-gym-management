@@ -1,0 +1,140 @@
+{% extends "auth/_center.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "auth/_macros.html" as am with context %}
+{% import "identity/_fields.html" as idf with context %}
+{% block title %}Staff invitation{% endblock %}
+{% block width %}{{ "max-w-md" if state != "ok" else "max-w-3xl" }}{% endblock %}
+{% block card %}
+{% if state != "ok" %}
+  {% call am.token_problem(state, what="invitation") %}{% if state == "withdrawn" %}Contact the gym if you think this is a mistake.{% else %}Ask the gym owner to resend your staff invitation from their Staff page.{% endif %}{% endcall %}
+{% else %}
+{% set e = errors or {} %}
+<div class="space-y-6">
+  {# ------------------------------------------------------------ invitation summary #}
+  <div class="card overflow-hidden !p-0">
+    <div class="hero-gradient px-6 pb-7 pt-8 sm:px-10">
+      <div class="flex items-center gap-4">
+        {{ ui.avatar(gym.logo_key, gym.name, "size-14", "text-lg") }}
+        <div class="min-w-0">
+          <p class="eyebrow">Staff invitation</p>
+          <h1 class="mt-1 text-2xl font-semibold tracking-tight sm:text-[32px]">Join {{ gym.name }}</h1>
+        </div>
+      </div>
+      <p class="mt-4 max-w-xl text-[15px] leading-relaxed muted">{{ owner_name or "The gym owner" }} invited <span class="font-semibold text-ink dark:text-white">{{ employee.full_name }}</span> to the team. Link an IronPulse staff account to accept.</p>
+    </div>
+    <dl class="grid gap-px bg-black/[0.05] sm:grid-cols-3 dark:bg-white/[0.07]">
+      <div class="bg-white px-6 py-4 sm:px-8 dark:bg-surface-dark"><dt class="text-xs muted">Position</dt><dd class="mt-1 font-semibold">{{ employee.role_title or (employee.role | humanize) }}</dd></div>
+      <div class="bg-white px-6 py-4 sm:px-8 dark:bg-surface-dark"><dt class="text-xs muted">Works</dt><dd class="mt-1 font-semibold">{{ {"online": "Online", "offline": "At the gym", "both": "Online & at the gym"}.get(employee.work_mode.value, employee.work_mode | humanize) }}</dd></div>
+      <div class="min-w-0 bg-white px-6 py-4 sm:px-8 dark:bg-surface-dark"><dt class="text-xs muted">Invited e-mail</dt><dd class="mt-1 truncate font-semibold">{{ employee.invite_email }}</dd></div>
+    </dl>
+  </div>
+
+  {% if eligibility == "ok" %}
+  {# ------------------------------------------------------------ signed-in staff account #}
+  <div class="card sm:p-8">
+    <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
+      {{ ui.avatar(user.photo_key, user.full_name, "size-14", "text-lg") }}
+      <div class="min-w-0 flex-1">
+        <p class="font-semibold">Signed in as {{ user.full_name }}</p>
+        <p class="truncate text-sm muted">{{ user.email }} · staff account</p>
+      </div>
+      <form method="post" action="/auth/staff-invite">
+        {{ ui.csrf() }}
+        <input type="hidden" name="token" value="{{ token }}">
+        <input type="hidden" name="action" value="link">
+        <button type="submit" class="btn btn-primary w-full sm:w-auto" data-busy-label="Linking…">{{ icon("check", "size-4") }} Link my account</button>
+      </form>
+    </div>
+    <p class="mt-5 text-xs muted">After linking, {{ gym.name }} activates you once your photo and ID card (and any required documents) are verified.</p>
+  </div>
+
+  {% elif eligibility == "refused" %}
+  {# ------------------------------------------------------------ wrong account #}
+  <div class="card sm:p-8">
+    {{ ui.alert(refusal, "danger", title="This account can't accept the invitation") }}
+    <form method="post" action="/auth/logout" class="mt-6 flex flex-col gap-3 sm:flex-row">
+      {{ ui.csrf() }}
+      <input type="hidden" name="next" value="/auth/staff-invite?token={{ token }}">
+      <button type="submit" class="btn btn-dark">{{ icon("logout", "size-4") }} Sign out and continue</button>
+      <a href="/" class="btn btn-secondary">Not now</a>
+    </form>
+  </div>
+
+  {% else %}
+  {# ------------------------------------------------------------ anonymous: sign in OR create #}
+  <div class="card-flat flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div class="flex items-center gap-3">
+      <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("login", "size-5") }}</span>
+      <div><p class="font-semibold">Already have a staff account?</p><p class="text-sm muted">Sign in with {{ employee.invite_email }} and come straight back here.</p></div>
+    </div>
+    <a href="{{ login_url }}" class="btn btn-secondary shrink-0">Sign in to link it</a>
+  </div>
+
+  <form method="post" action="/auth/staff-invite" enctype="multipart/form-data" class="acct-form space-y-6" data-component="signup-form" data-staff="1">
+    {{ ui.csrf() }}
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="action" value="create">
+    <input type="hidden" name="timezone" value="{{ form.timezone or '' }}" data-tz-hidden data-component="tz-hidden">
+    {% if e %}
+      {{ ui.form_errors(e) }}
+      <p class="-mt-3 flex items-center gap-2 text-xs muted">{{ icon("info", "size-3.5 shrink-0") }} Attached files are never kept after an error - please choose your photo and ID card again.</p>
+    {% endif %}
+
+    <section class="card sm:p-8">
+      {{ am.section_head(1, "Create your staff account", "Your staff account is separate from any member account and uses the invited e-mail address.") }}
+      <div class="grid gap-5 sm:grid-cols-2">
+        {{ ui.field("full_name", "Full name (as on your ID)", value=form.full_name, required=True, error=e.full_name, autocomplete="name", attrs='maxlength="120"') }}
+        <div>
+          <label class="label" for="f-invite-email">E-mail address</label>
+          <input id="f-invite-email" type="email" class="input cursor-not-allowed opacity-70" value="{{ employee.invite_email }}" disabled data-personal-email>
+          {% if e.email %}<p class="field-error">{{ e.email }}</p>{% else %}<p class="help">Fixed to the address the gym invited.</p>{% endif %}
+        </div>
+        {{ am.phone_input(form.phone, form.phone_country, error=e.phone) }}
+        {{ ui.field("date_of_birth", "Date of birth", type="date", value=form.date_of_birth, required=True, error=e.date_of_birth, autocomplete="bday",
+                    attrs='max="' ~ today ~ '" min="' ~ min_dob ~ '"', help="Staff members must be at least 16.") }}
+        {{ ui.select("country", "Country", countries, value=form.country, required=True, error=e.country, attrs='autocomplete="country" data-country-select') }}
+        {{ ui.field("city", "City", value=form.city, required=True, error=e.city, autocomplete="address-level2", attrs='maxlength="120"') }}
+      </div>
+    </section>
+
+    <section class="card sm:p-8">
+      {{ am.section_head(2, "Profile photo", "Compulsory for staff - members see it on your gym's page and in chat.") }}
+      <div class="flex flex-col gap-6 sm:flex-row sm:items-center" data-component="photo-preview">
+        <span class="avatar size-24 shrink-0 text-2xl ring-4 ring-accent/15">
+          <img alt="Selected photo preview" class="hidden" data-photo-img>
+          <span data-photo-placeholder>{{ icon("camera", "size-8") }}</span>
+        </span>
+        <div class="min-w-0 flex-1">
+          <label class="label" for="f-photo">Photo <span class="text-bad">*</span></label>
+          <input id="f-photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-sm muted" required data-photo-input>
+          {% if e.photo %}<p class="field-error">{{ e.photo }}</p>{% else %}<p class="help">A clear, front-facing photo. JPG, PNG or WEBP up to {{ app.max_upload_mb }} MB.</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <section class="card sm:p-8">
+      {{ am.section_head(3, "Password", "Hashed with Argon2id - nobody at the gym can see it.") }}
+      <div class="grid gap-5 sm:grid-cols-2">
+        {{ am.password_input("password", "Password", autocomplete="new-password", error=e.password, strength=True,
+                             help="At least 10 characters, mixing three of: lowercase, uppercase, digits, symbols.") }}
+        {{ am.password_input("password_confirm", "Confirm password", autocomplete="new-password", error=e.password_confirm, match="password") }}
+      </div>
+    </section>
+
+    <section class="card sm:p-8">
+      {{ am.section_head(4, "Government ID card", "Required before the gym can activate you. Verification usually takes about a minute.") }}
+      {{ idf.id_fields(prefix="id", default_country=(form.id_country or "IN"), doc_type=(form.id_doc_type or None)) }}
+      {% for k in ("id_front", "id_doc_type", "id_country") %}{% if e[k] %}<p class="field-error">{{ e[k] }}</p>{% endif %}{% endfor %}
+    </section>
+
+    <section class="card sm:p-8">
+      {{ am.terms_checkbox(form.accept_terms, e.accept_terms) }}
+      <div class="mt-6 flex justify-end">
+        <button type="submit" class="btn btn-primary btn-lg w-full sm:w-auto" data-busy-label="Creating your account…">Create account &amp; join {{ gym.name }} {{ icon("arrow-right", "size-4") }}</button>
+      </div>
+    </section>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

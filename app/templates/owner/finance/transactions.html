@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/finance/_macros.html" as fin with context %}
+{% block title %}Transactions{% endblock %}
+{% block content %}
+{% call ui.page_header("Transactions", "Every incoming and outgoing payment of your gyms - memberships, salaries, gratuity, refunds and payouts.", eyebrow="Finance") %}
+  <a href="/owner/finance/transactions.csv{{ csv_qs }}" class="btn btn-secondary" download>{{ icon("download", "size-4") }} Export CSV</a>
+{% endcall %}
+{{ fin.finance_nav("transactions") }}
+
+{# ------------------------------------------------------------------ period (the page never reads the whole history by default) #}
+<nav class="mb-4 animate-fade-up" aria-label="Period">
+  <div class="tabs max-w-full overflow-x-auto">
+    {% for p in period_links %}
+      <a href="/owner/finance/transactions{{ p.qs }}" class="tab whitespace-nowrap {{ 'tab-active' if p.active }}"{% if p.active %} aria-current="true"{% endif %}>{{ p.label }}</a>
+    {% endfor %}
+    {% if period == "custom" %}<span class="tab tab-active whitespace-nowrap" aria-current="true">{{ icon("calendar", "size-4") }} {{ period_label }}</span>{% endif %}
+  </div>
+</nav>
+
+{# ------------------------------------------------------------------ filters #}
+<form method="get" action="/owner/finance/transactions" class="card-flat mb-6 animate-fade-up" role="search" aria-label="Filter transactions">
+  {% if filters.period %}<input type="hidden" name="period" value="{{ filters.period }}">{% endif %}
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="sm:col-span-2">
+      <label class="label" for="f-q">Search</label>
+      <div class="relative">
+        <span class="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-zinc-400">{{ icon("search", "size-4") }}</span>
+        <input id="f-q" name="q" type="search" value="{{ filters.q or '' }}" maxlength="80" class="input !pl-10" placeholder="Description, person or UTR / reference" autocomplete="off">
+      </div>
+    </div>
+    {% if gyms | length > 1 %}
+      <div>
+        <label class="label" for="f-gym">Gym</label>
+        <select id="f-gym" name="gym" class="input">
+          <option value="">All gyms</option>
+          {% for g in gyms %}<option value="{{ g.id }}" {{ 'selected' if filters.gym == g.id }}>{{ g.name }}</option>{% endfor %}
+        </select>
+      </div>
+    {% endif %}
+    {{ ui.select("direction", "Direction", directions, filters.direction, empty="In & out") }}
+    {{ ui.select("category", "Category", categories, filters.category, empty="All categories") }}
+    {{ ui.select("status", "Status", statuses, filters.status, empty="Any status") }}
+    {{ ui.field("from", "From", type="date", value=filters["from"] or "", error=errors.get("from"), help="Dates replace the period above.") }}
+    {{ ui.field("to", "To", type="date", value=filters["to"] or "", error=errors.get("to")) }}
+  </div>
+  <div class="mt-5 flex flex-wrap items-center gap-2">
+    <button class="btn btn-primary">{{ icon("sliders", "size-4") }} Apply filters</button>
+    {% if qs %}<a href="/owner/finance/transactions" class="btn btn-ghost">Reset</a>{% endif %}
+    <p class="ml-auto text-sm muted" aria-live="polite">{% if total %}Showing {{ first_row }}-{{ last_row }} of {{ "{:,}".format(total) }}{{ "+" if total_capped }}{% else %}No matching transactions{% endif %}</p>
+  </div>
+</form>
+
+{# ------------------------------------------------------------------ totals for the filtered set #}
+{% if total_capped %}
+<div class="card-muted mb-6 flex items-start gap-3 !p-4 text-sm animate-fade-up" role="note">
+  {{ icon("info", "size-5 shrink-0 text-accent") }}
+  <p>More than {{ "{:,}".format(totals_cap) }} transactions match, so totals aren't added up here. Pick a shorter period or add a filter to see them - the list below still shows the newest first.</p>
+</div>
+{% elif summary %}
+<section class="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 animate-fade-up" aria-label="Totals for these filters">
+  {% for s in summary %}
+    <div class="card-muted flex flex-col gap-2 !p-4">
+      <p class="eyebrow !text-zinc-500 dark:!text-zinc-400">{{ s.currency }} · completed · {{ period_label }}</p>
+      <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
+        <span class="fin-amount-in font-semibold">+{{ s["in"] }}</span>
+        <span class="fin-amount-out font-semibold">&minus;{{ s.out }}</span>
+        <span class="font-semibold {{ 'fin-negative' if s.negative else '' }}">Net {{ s.net }}</span>
+      </div>
+    </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{# ------------------------------------------------------------------ results #}
+{% if rows %}
+  {# mobile: stacked list #}
+  <ul class="card !p-2 grid gap-1 sm:hidden">
+    {% for tx in rows %}
+      <li class="rounded-2xl px-2 py-3">
+        <div class="flex items-start gap-3">
+          {{ fin.direction_icon(tx) }}
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium leading-snug">{{ tx.description }}</p>
+            <p class="mt-0.5 text-xs muted">{{ (tx.completed_at or tx.created_at) | dt("%d %b %Y, %H:%M") }}{% if tx.gym %} · {{ tx.gym.name }}{% endif %}</p>
+            <div class="mt-2 flex flex-wrap items-center gap-1.5">{{ fin.category_badge(tx.category) }}{{ ui.status(tx.status) }}
+              {% if tx.proof_verified is sameas true %}<span class="badge badge-green">{{ icon("check", "size-3.5") }}Proof verified</span>{% elif tx.proof_verified is sameas false and tx.status.value == 'success' %}<span class="badge badge-amber">Confirmed manually</span>{% endif %}
+            </div>
+          </div>
+          <div class="shrink-0 text-right text-sm">{{ fin.signed_amount(tx) }}</div>
+        </div>
+        {% if tx.salary_statement_id %}<a href="/owner/payroll/{{ tx.salary_statement_id }}" class="mt-2 inline-flex items-center gap-1 pl-12 text-xs font-medium text-accent">Open statement {{ icon("chevron-right", "size-3.5") }}</a>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+
+  {# tablet / desktop: table #}
+  <div class="table-wrap hidden sm:block animate-fade-up">
+    <table class="table">
+      <caption class="sr-only">Transactions, newest first</caption>
+      <thead>
+        <tr>
+          <th scope="col">Date</th>
+          <th scope="col">Description</th>
+          <th scope="col" class="hidden lg:table-cell">Category</th>
+          <th scope="col">Status</th>
+          <th scope="col" class="hidden xl:table-cell">Reference</th>
+          <th scope="col" class="text-right">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tx in rows %}
+          <tr>
+            <td class="whitespace-nowrap text-xs muted">{{ (tx.completed_at or tx.created_at) | dt("%d %b %Y") }}<br>{{ (tx.completed_at or tx.created_at) | dt("%H:%M") }}</td>
+            <td class="min-w-[14rem]">
+              <div class="flex items-center gap-3">
+                {{ fin.direction_icon(tx) }}
+                <div class="min-w-0">
+                  {% if tx.salary_statement_id %}
+                    <a href="/owner/payroll/{{ tx.salary_statement_id }}" class="font-medium hover:text-accent">{{ tx.description }}</a>
+                  {% else %}
+                    <p class="font-medium">{{ tx.description }}</p>
+                  {% endif %}
+                  <p class="text-xs muted">{% if tx.gym %}{{ tx.gym.name }} · {% endif %}{{ tx.provider | humanize }}{% if tx.provider == 'test' %} (simulated){% endif %}</p>
+                </div>
+              </div>
+            </td>
+            <td class="hidden lg:table-cell">{{ fin.category_badge(tx.category) }}</td>
+            <td>
+              <div class="flex flex-col items-start gap-1">
+                {{ ui.status(tx.status) }}
+                {% if tx.proof_verified is sameas true %}<span class="inline-flex items-center gap-1 text-xs fin-check-pass">{{ icon("check", "size-3.5") }}Proof verified</span>
+                {% elif tx.proof_verified is sameas false and tx.status.value == 'success' %}<span class="text-xs text-[#b45309] dark:text-[#fbbf24]">Confirmed manually</span>{% endif %}
+              </div>
+            </td>
+            <td class="hidden max-w-[12rem] truncate font-mono text-xs xl:table-cell" title="{{ tx.provider_reference or '' }}">{{ tx.provider_reference or '—' }}</td>
+            <td class="whitespace-nowrap text-right">{{ fin.signed_amount(tx) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if pages > 1 %}
+  <nav class="mt-6 flex items-center justify-between gap-3" aria-label="Pagination">
+    {% if prev_qs %}<a href="/owner/finance/transactions{{ prev_qs }}" class="btn btn-secondary btn-sm" rel="prev">{{ icon("arrow-left", "size-4") }} Newer</a>{% else %}<span></span>{% endif %}
+    <p class="text-sm muted">Page {{ page }} of {{ "{:,}".format(pages) }}{{ "+" if total_capped }}</p>
+    {% if next_qs %}<a href="/owner/finance/transactions{{ next_qs }}" class="btn btn-secondary btn-sm" rel="next">Older {{ icon("arrow-right", "size-4") }}</a>{% else %}<span></span>{% endif %}
+  </nav>
+  {% if total_capped and not next_qs %}<p class="mt-3 text-center text-xs muted">The list stops after {{ "{:,}".format(totals_cap) }} transactions - choose a shorter period or dates to reach older ones.</p>{% endif %}
+  {% endif %}
+{% elif qs %}
+  {{ ui.empty("Nothing matches these filters", "Try a wider period or date range, or clear the search to see more transactions.", "search", "Clear filters", "/owner/finance/transactions") }}
+{% else %}
+  {{ ui.empty("No transactions in the " ~ (period_label | lower), "Membership payments, salary payouts and every other money movement will be listed here.", "receipt", "Show all time", "/owner/finance/transactions?period=all") }}
+{% endif %}
+{% endblock %}

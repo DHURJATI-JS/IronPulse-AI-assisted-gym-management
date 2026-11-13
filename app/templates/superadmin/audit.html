@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% block title %}Audit log{% endblock %}
+{% block content %}
+{% call sa.header("Audit log", "Append-only record of sensitive actions across every gym - bans, reviews, deletions, payroll, refunds and more.", section, sections, counts) %}
+{% endcall %}
+
+<form method="get" action="/superadmin/audit" class="card-flat mb-6 grid gap-3 sm:grid-cols-[14rem_minmax(0,1fr)_auto] sm:items-end" role="search" aria-label="Filter the audit log">
+  <div>
+    <label class="label" for="f-area">Area</label>
+    <select id="f-area" name="area" class="input" data-autosubmit>
+      <option value="">All areas</option>
+      {% for a in areas %}<option value="{{ a }}" {{ 'selected' if area == a }}>{{ a | humanize }}</option>{% endfor %}
+    </select>
+  </div>
+  {{ ui.field("q", "Action contains", value=q, error=q_error, placeholder="e.g. ban_lift, review, delete", attrs='maxlength="80" autocomplete="off" spellcheck="false"') }}
+  <div class="flex gap-2">
+    {% if actor_id %}<input type="hidden" name="actor" value="{{ actor_id }}">{% endif %}
+    <button class="btn btn-dark flex-1 sm:flex-none">{{ icon("search", "size-4") }} Filter</button>
+    {% if area or q or actor_id or q_error %}<a href="/superadmin/audit" class="btn btn-secondary" aria-label="Reset filters">{{ icon("x", "size-4") }}</a>{% endif %}
+  </div>
+</form>
+{% if actor_id %}
+  <p class="-mt-3 mb-5 flex items-center gap-2 text-sm">{{ icon("user", "size-4 text-accent") }} Actions by <span class="font-medium">{{ people[actor_id].display_name if people.get(actor_id) else "account #" ~ actor_id }}</span> <a href="/superadmin/audit{{ ('?area=' ~ area) if area }}" class="text-accent hover:underline">show everyone</a></p>
+{% endif %}
+
+{% if rows %}
+<div class="table-wrap !overflow-visible">
+  <div class="sa-row-head sa-cols-audit" aria-hidden="true"><span>When</span><span>Who</span><span>What</span><span>Where</span></div>
+  <ul class="sa-list">
+    {% for r in rows %}
+    {% set actor = people.get(r.actor_id) if r.actor_id else None %}
+    <li class="sa-row sa-cols-audit">
+      <div>
+        <p class="text-sm tabular-nums">{{ r.created_at | dt("%d %b, %H:%M") }}</p>
+        <p class="text-xs muted">{{ r.created_at | timeago }}</p>
+      </div>
+      <div class="min-w-0">
+        {% if actor %}
+          <a href="/superadmin/audit?actor={{ actor.id }}" class="block truncate text-sm font-medium hover:text-accent">{{ actor.display_name }}</a>
+          <p class="truncate text-xs muted">{{ actor.role.value | humanize }}{% if actor.email %} · {{ actor.email }}{% endif %}</p>
+        {% elif r.actor_id %}
+          <p class="text-sm muted">Purged account</p>
+        {% else %}
+          <p class="flex items-center gap-1.5 text-sm font-medium">{{ icon("bolt", "size-3.5 text-violet") }} System</p>
+          <p class="text-xs muted">automation or AI</p>
+        {% endif %}
+      </div>
+      <div class="min-w-0">
+        <p class="flex flex-wrap items-center gap-1.5"><span class="sa-mono">{{ r.action }}</span><span class="text-xs muted">{{ r.entity_type | humanize }}{% if r.entity_id %} #{{ r.entity_id }}{% endif %}</span></p>
+        {{ sa.json_facts(r.detail, 4) }}
+        {% if r.detail %}
+        <details class="mt-1 text-xs"><summary class="cursor-pointer text-accent">Full detail</summary><pre class="sa-pre mt-2 max-h-64 !text-[11px]">{{ details[r.id] }}</pre></details>
+        {% endif %}
+      </div>
+      <div class="min-w-0 text-xs">
+        {% if r.gym_id %}<p class="truncate text-sm">{{ gyms.get(r.gym_id, "Gym #" ~ r.gym_id) }}</p>{% else %}<p class="muted">Platform</p>{% endif %}
+        {% if r.ip %}<p class="mt-0.5">{{ sa.ip_link(r.ip) }}</p>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{{ sa.pagination(pager, "entries") }}
+{% elif area or q or actor_id %}
+  {{ ui.empty("Nothing matches", "No audit entries for these filters.", "search", "Show everything", "/superadmin/audit") }}
+{% else %}
+  {{ ui.empty("No audit entries yet", "Sensitive actions such as bans, reviews and account deletions are recorded here automatically.", "document") }}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_macros.html" as sm with context %}
+{% block title %}Staff portal{% endblock %}
+{% block content %}
+<header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between animate-fade-up">
+  <div class="flex items-center gap-4">
+    {{ ui.avatar(user.photo_key, user.full_name, "size-14 hidden sm:inline-flex", "text-lg") }}
+    <div>
+      <p class="eyebrow mb-1">Staff portal</p>
+      <h1 class="text-3xl font-semibold tracking-tight sm:text-[40px] sm:leading-tight">{{ greeting }}, {{ user.full_name.split()[0] }}</h1>
+      <p class="mt-1 text-[15px] muted">{{ local_now.strftime("%A, %d %B") }} · {{ user.timezone }}</p>
+    </div>
+  </div>
+  <div class="flex flex-wrap gap-2">
+    <a href="/staff/schedule" class="btn btn-secondary">{{ icon("calendar", "size-4") }} Schedule</a>
+    <a href="/staff/clients" class="btn btn-secondary">{{ icon("users", "size-4") }} Clients</a>
+    <a href="/chat" class="btn btn-primary">{{ icon("chat", "size-4") }} Chat</a>
+  </div>
+</header>
+
+{% if not employments %}
+  <div class="card flex flex-col items-center px-6 py-16 text-center">
+    <span class="grid size-16 place-items-center rounded-[22px] bg-accent/10 text-accent">{{ icon("briefcase", "size-8") }}</span>
+    <h2 class="mt-5 text-xl font-semibold">You're not linked to a gym yet</h2>
+    <p class="mt-2 max-w-md text-sm muted">When a gym adds you as staff, you'll receive an invitation e-mail. Open its link while signed in to connect the job to this account - your schedule and clients then appear here.</p>
+    <div class="mt-6 flex flex-wrap justify-center gap-2">
+      <a href="/account/identity" class="btn btn-primary">{{ icon("id-card", "size-4") }} Verify your ID meanwhile</a>
+      {% if hiring %}<a href="/jobs" class="btn btn-secondary">{{ icon("briefcase", "size-4") }} Browse open jobs</a>{% endif %}
+    </div>
+  </div>
+  {% if former %}
+    <p class="mt-6 text-center text-sm muted">Past employments: {% for e in former %}{{ e.gym.name }}{{ ", " if not loop.last }}{% endfor %}</p>
+  {% endif %}
+{% else %}
+
+{% for emp in pending %}
+  {% set reqs = requirements[emp.id] %}
+  <section class="card mb-6 ring-2 !ring-warn/30 animate-fade-up" id="cert-{{ emp.id }}">
+    <div class="flex flex-col gap-6 lg:flex-row">
+      <div class="lg:w-72 lg:shrink-0">
+        <span class="badge badge-amber">{{ icon("clock", "size-3.5") }}Awaiting approval</span>
+        <h2 class="mt-3 text-xl font-semibold tracking-tight">Finish joining {{ emp.gym.name }}</h2>
+        <p class="mt-1 text-sm muted">You'll be approved as {{ emp.role_title or S.ROLE_LABELS[emp.role.value] | lower }} automatically once everything below is complete.</p>
+      </div>
+      <div class="min-w-0 flex-1">
+        {{ sm.requirements(reqs, "staff") }}
+        {% if emp.is_trainer %}
+          <form method="post" action="/staff/employments/{{ emp.id }}/documents" enctype="multipart/form-data" class="mt-4 flex flex-col gap-3 rounded-2xl bg-zinc-100/70 p-4 sm:flex-row sm:items-end dark:bg-white/[0.04]">
+            {{ ui.csrf() }}
+            <input type="hidden" name="doc_type" value="certification">
+            <div class="min-w-0 flex-1">
+              <label class="label" for="cert-file-{{ emp.id }}">{{ "Upload another certification" if (emp.documents | selectattr("doc_type", "equalto", "certification") | list) else "Upload a trainer certification" }}</label>
+              <input id="cert-file-{{ emp.id }}" name="document" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" class="block w-full text-sm muted" required>
+              <p class="help">PDF or photo. We check that the name on it matches yours.</p>
+            </div>
+            <button class="btn btn-primary shrink-0">{{ icon("upload", "size-4") }} Upload</button>
+          </form>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+{% endfor %}
+
+<section class="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4" aria-label="At a glance">
+  {{ ui.stat("Shifts today", today_items | length, (today_items | selectattr("state", "equalto", "now") | list | length) ~ " in progress", "clock", "blue") }}
+  {{ ui.stat("Hours this week", S.fmt_hours(week_minutes), week_count ~ " shift" ~ ("s" if week_count != 1 else ""), "calendar", "violet") }}
+  {{ ui.stat("Clients", total_clients, "Assigned to you", "users", "green") }}
+  {{ ui.stat("Employments", employments | length, "Gyms you work for", "briefcase", "amber") }}
+</section>
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <div class="min-w-0 space-y-6 lg:col-span-2">
+    <section class="card">
+      {{ sm.card_title("Today", "Times shown in each branch's local time.", "clock") }}
+      {% if today_items %}
+        <ul class="space-y-2.5">
+          {% for item in today_items %}
+          {% set s = item.shift %}
+          <li class="flex items-center gap-4 rounded-2xl px-4 py-3 {{ 'bg-accent/10 ring-1 ring-accent/30' if item.state == 'now' else 'bg-zinc-100/70 dark:bg-white/[0.04]' }} {{ 'opacity-60' if item.state == 'done' }}">
+            <div class="w-[6.75rem] shrink-0">
+              <p class="whitespace-nowrap text-sm font-semibold tabular-nums">{{ s.start_time.strftime("%H:%M") }}–{{ s.end_time.strftime("%H:%M") }}</p>
+              <p class="text-[11px] muted">{{ item.tz }}</p>
+            </div>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium">{{ item.where }}</p>
+              <p class="truncate text-xs muted">{{ item.emp.gym.name }} · {{ item.emp.role_title or S.ROLE_LABELS[item.emp.role.value] }}{% if item.emp.status.value != "active" %} · <span class="text-[#b45309] dark:text-[#fbbf24]">{{ item.emp.status | humanize }}</span>{% endif %}</p>
+            </div>
+            {% if item.state == "now" %}<span class="badge badge-blue"><span class="dot animate-pulse-dot bg-current"></span>Now</span>
+            {% elif item.state == "next" %}<span class="badge badge-zinc">in {{ S.fmt_duration(item.starts_in) }}</span>
+            {% else %}<span class="badge badge-green">{{ icon("check", "size-3") }}Done</span>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="rounded-2xl bg-zinc-100/70 px-6 py-8 text-center dark:bg-white/[0.04]">
+          <span class="mx-auto grid size-11 place-items-center rounded-2xl bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("sun", "size-5") }}</span>
+          <p class="mt-3 font-semibold">No shifts today</p>
+          <p class="mt-1 text-sm muted">Enjoy the day off - your full week is in the schedule.</p>
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <div class="mb-5 flex items-start justify-between gap-3">
+        <div class="flex items-start gap-3">
+          <span class="grid size-9 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">{{ icon("calendar", "size-[18px]") }}</span>
+          <div><h2 class="section-title">This week</h2><p class="mt-0.5 text-sm muted">{{ S.fmt_hours(week_minutes) }} h across {{ week_count }} shift{{ 's' if week_count != 1 }}</p></div>
+        </div>
+        <a href="/staff/schedule" class="btn btn-ghost btn-sm shrink-0">Full schedule {{ icon("chevron-right", "size-4") }}</a>
+      </div>
+      {% if week_count %}{{ sm.week_strip(week_days, today_wd) }}
+      {% else %}<p class="rounded-2xl bg-zinc-100/70 px-4 py-6 text-center text-sm muted dark:bg-white/[0.04]">No shifts scheduled yet - your gym admin adds them.</p>{% endif %}
+    </section>
+  </div>
+
+  <aside class="space-y-6">
+    <section class="card">
+      {{ sm.card_title("Your employments", None, "briefcase") }}
+      <ul class="space-y-3">
+        {% for emp in employments %}
+        <li class="rounded-2xl bg-zinc-100/70 p-4 dark:bg-white/[0.04]">
+          <div class="flex items-start gap-3">
+            {{ sm.photo(emp.photo_key, emp.full_name, "size-11") }}
+            <div class="min-w-0 flex-1">
+              <p class="truncate font-semibold">{{ emp.gym.name }}</p>
+              <p class="truncate text-xs muted">{{ emp.role_title or S.ROLE_LABELS[emp.role.value] }} · {{ S.EMPLOYMENT_TYPE_LABELS[emp.employment_type.value] }}</p>
+              <div class="mt-1.5">{{ ui.status(emp.status) }}</div>
+            </div>
+          </div>
+          <div class="mt-3 flex flex-wrap gap-1.5 text-xs">
+            <span class="chip">{{ icon(S.WORK_MODE_ICONS[emp.work_mode.value], "size-3.5") }}{{ S.WORK_MODE_LABELS[emp.work_mode.value] }}</span>
+            <span class="chip">{{ icon("calendar", "size-3.5") }}Since {{ emp.hire_date | date("%b %Y") }}</span>
+            {% if emp.is_trainer %}<span class="chip">{{ icon("users", "size-3.5") }}{{ client_counts.get(emp.id, 0) }} client{{ 's' if client_counts.get(emp.id, 0) != 1 }}</span>{% endif %}
+          </div>
+          {% if emp.status.value == "suspended" %}
+            <p class="mt-3 text-xs text-[#991b1b] dark:text-[#fca5a5]">Access is suspended - contact your gym admin.</p>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    <section class="card-muted">
+      <p class="flex items-center gap-2 text-sm font-semibold">{{ icon("shield", "size-4 text-accent") }} Your account</p>
+      <dl class="mt-3 space-y-2 text-sm">
+        <div class="flex items-center justify-between gap-3"><dt class="muted">ID card</dt><dd>{{ ui.status(user.id_status) }}</dd></div>
+        <div class="flex items-center justify-between gap-3"><dt class="muted">Profile photo</dt><dd>{% if user.photo_key %}<span class="badge badge-green">Added</span>{% else %}<a href="/account" class="badge badge-red">Add photo</a>{% endif %}</dd></div>
+      </dl>
+      <a href="/account" class="btn btn-secondary btn-sm mt-4 w-full">{{ icon("user", "size-4") }} Account settings</a>
+    </section>
+  </aside>
+</div>
+{% endif %}
+{% endblock %}

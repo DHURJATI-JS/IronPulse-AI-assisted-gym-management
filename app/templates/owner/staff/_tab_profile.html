@@ -1,0 +1,24 @@
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_form.html" as sf with context %}
+{% if errors.role == S.POSITION_LOCKED %}
+  <div class="alert alert-warning mb-6" role="alert">
+    {{ icon("alert", "size-5 shrink-0") }}
+    <div>
+      <p class="font-semibold">Positions are changed with “Change position”</p>
+      <p>{{ S.POSITION_LOCKED }}</p>
+      {% if can_change_position %}<p class="mt-2"><a href="/owner/staff/{{ emp.id }}/change-position" class="font-medium text-accent hover:underline">Change position →</a></p>{% endif %}
+    </div>
+  </div>
+{% endif %}
+{{ ui.form_errors(errors | dictsort | rejectattr("1", "equalto", S.POSITION_LOCKED) | map(attribute="1") | list) }}
+<form method="post" action="/owner/staff/{{ emp.id }}" enctype="multipart/form-data" data-component="staff-form">
+  {{ ui.csrf() }}
+  {{ sf.staff_fields(editing=True, linked=linked, employee=emp, position_locked=True) }}
+  <div class="glass sticky bottom-4 z-20 mt-10 flex flex-col gap-3 rounded-[24px] p-3 pl-5 shadow-lg shadow-black/10 ring-1 ring-black/[0.06] sm:flex-row sm:items-center sm:justify-between dark:ring-white/10">
+    <p class="text-xs muted">{{ icon("bell", "size-3.5 inline -mt-0.5") }} {{ "They are notified about changes to their profile and salary." if linked else "Changes apply immediately." }}</p>
+    <div class="flex gap-2">
+      <a href="/owner/staff/{{ emp.id }}" class="btn btn-ghost flex-1 sm:flex-none">Cancel</a>
+      <button type="submit" class="btn btn-primary flex-1 sm:flex-none">{{ icon("check", "size-4") }} Save changes</button>
+    </div>
+  </div>
+</form>

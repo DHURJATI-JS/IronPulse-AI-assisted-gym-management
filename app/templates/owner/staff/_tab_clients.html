@@ -1,0 +1,80 @@
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_macros.html" as sm with context %}
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_23rem]">
+  <section class="card min-w-0">
+    {{ sm.card_title("Assigned clients", client_total ~ " active · members with a trainer-included plan", "users") }}
+    {% if clients %}
+      <ul class="divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+        {% for c in clients %}
+        <li class="flex flex-wrap items-center gap-3 py-3.5 sm:flex-nowrap">
+          {{ ui.avatar(c.customer.photo_key, c.customer.display_name, "size-11") }}
+          <div class="min-w-0 flex-1">
+            <p class="truncate font-medium">{{ c.customer.display_name }}</p>
+            <p class="truncate text-xs muted">{{ c.plan.name if c.plan else "Trainer plan" }}{% if c.subscription and c.subscription.ends_on %} · until {{ c.subscription.ends_on | date }}{% endif %} · assigned {{ c.link.created_at | timeago }}</p>
+          </div>
+          {{ sm.mode_chip(c.link.mode.value) }}
+          <form method="post" action="/owner/staff/{{ emp.id }}/clients/{{ c.link.id }}/remove" data-confirm="Unassign {{ c.customer.display_name }} from {{ emp.full_name }}?">
+            {{ ui.csrf() }}
+            <button class="btn btn-ghost btn-sm hover:!text-bad">{{ icon("x", "size-4") }} Unassign</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {{ ui.pager(clients, path=clients_path, params={"tab": "clients", "member_q": member_q}, noun="clients", label="Client pages") }}
+    {% else %}
+      <div class="rounded-2xl bg-zinc-100/70 px-6 py-10 text-center dark:bg-white/[0.04]">
+        <span class="mx-auto grid size-12 place-items-center rounded-2xl bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("users", "size-6") }}</span>
+        <p class="mt-3 font-semibold">No clients yet</p>
+        <p class="mx-auto mt-1 max-w-sm text-sm muted">Assign members whose active plan includes a trainer. Both of you are notified.</p>
+      </div>
+    {% endif %}
+  </section>
+
+  <aside class="space-y-6">
+    <section class="card" id="assign">
+      {{ sm.card_title("Assign a client", "Active plans with a trainer at " ~ emp.gym.name ~ ".", "plus") }}
+      {% if client_errors %}
+        <div class="mb-5">{{ ui.form_errors(client_errors) }}</div>
+      {% endif %}
+      {% if emp.status.value != "active" %}
+        {{ ui.alert("Clients can be assigned once " ~ emp.full_name ~ " is approved (status Active).", "info") }}
+      {% elif not eligible and not member_q %}
+        <p class="rounded-2xl bg-zinc-100/70 px-4 py-5 text-center text-sm muted dark:bg-white/[0.04]">No member currently has an active trainer-included plan that matches this trainer's work mode ({{ S.WORK_MODE_LABELS[emp.work_mode.value] | lower }}).</p>
+      {% else %}
+        <form method="get" action="/owner/staff/{{ emp.id }}#assign" class="mb-4 flex gap-2" role="search" aria-label="Find a member">
+          <input type="hidden" name="tab" value="clients">
+          <label class="min-w-0 flex-1"><span class="sr-only">Search members</span>
+            <input type="search" name="member_q" value="{{ member_q }}" placeholder="Search name or e-mail" class="input !py-2.5" maxlength="80">
+          </label>
+          <button class="btn btn-secondary" aria-label="Search members">{{ icon("search", "size-4") }}</button>
+        </form>
+        {% if not eligible %}
+        <p class="rounded-2xl bg-zinc-100/70 px-4 py-5 text-center text-sm muted dark:bg-white/[0.04]">No member matches “{{ member_q }}”. <a href="/owner/staff/{{ emp.id }}?tab=clients#assign" class="font-medium text-accent hover:underline">Show all</a></p>
+        {% else %}
+        <form method="post" action="/owner/staff/{{ emp.id }}/clients#assign" class="space-y-4">
+          {{ ui.csrf() }}
+          <div>
+            <label class="label" for="f-subscription_id">Member <span class="text-bad">*</span></label>
+            <select id="f-subscription_id" name="subscription_id" class="input" required>
+              {% for s in eligible %}
+                <option value="{{ s.id }}">{{ s.customer.display_name }} — {{ s.plan.name }} ({{ s.plan.mode.value | humanize }})</option>
+              {% endfor %}
+            </select>
+            {% if eligible_total > eligible | length %}<p class="help">Showing the first {{ eligible | length }} of {{ "{:,}".format(eligible_total) }} members - search by name or e-mail to find someone else.</p>{% endif %}
+          </div>
+          <div>
+            <label class="label" for="f-assign-mode">Coaching mode</label>
+            <select id="f-assign-mode" name="mode" class="input">
+              <option value="">Best match for the plan</option>
+              {% if S.work_mode_allows(emp.work_mode, "offline") %}<option value="offline">At the branch</option>{% endif %}
+              {% if S.work_mode_allows(emp.work_mode, "online") %}<option value="online">Online</option>{% endif %}
+            </select>
+            <p class="help">Must suit both the member's plan and the trainer's work mode.</p>
+          </div>
+          <button class="btn btn-primary w-full">{{ icon("check", "size-4") }} Assign client</button>
+        </form>
+        {% endif %}
+      {% endif %}
+    </section>
+  </aside>
+</div>

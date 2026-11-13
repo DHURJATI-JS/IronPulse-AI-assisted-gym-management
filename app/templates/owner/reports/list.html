@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/customers/_macros.html" as om with context %}
+{% block title %}Misconduct reports{% endblock %}
+{% block content %}
+{% call ui.page_header("Misconduct reports", "Members' reports about your staff. Every report needs a reply: accept it with an apology, or decline it with a reason - the member is notified either way.", eyebrow="Members") %}{% endcall %}
+{{ om.subnav("reports", counts.open) }}
+
+<section class="mb-8 grid grid-cols-3 gap-3 sm:gap-4 animate-fade-up" aria-label="Report summary">
+  {{ ui.stat("Awaiting reply", counts.open, "Needs your response" if counts.open else "All answered", "clock", "amber" if counts.open else "zinc") }}
+  {{ ui.stat("Accepted", counts.accepted, "Apology sent", "check-circle", "green") }}
+  {{ ui.stat("Declined", counts.declined, "Reason sent", "x-circle", "zinc") }}
+</section>
+
+<div class="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+  <nav class="no-scrollbar -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Filter by status">
+    <div class="tabs whitespace-nowrap">
+      {% for t in tabs %}<a href="{{ t.url }}" class="tab {{ 'tab-active' if t.active }}"{% if t.active %} aria-current="page"{% endif %}>{{ t.label }} <span class="ml-1 text-xs tabular-nums opacity-60">{{ t.count }}</span></a>{% endfor %}
+    </div>
+  </nav>
+  <form method="get" action="/owner/reports" class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center" role="search">
+    {% if filters.status %}<input type="hidden" name="status" value="{{ filters.status }}">{% endif %}
+    <label class="relative block">
+      <span class="sr-only">Search reports</span>
+      <span class="pointer-events-none absolute inset-y-0 left-3.5 grid place-items-center text-zinc-400">{{ icon("search", "size-4") }}</span>
+      <input type="search" name="q" value="{{ filters.q }}" placeholder="Staff, member or words" maxlength="80" class="input !py-2.5 pl-10">
+    </label>
+    {% if gyms | length > 1 %}
+    <label><span class="sr-only">Gym</span>
+      <select name="gym" class="input !py-2.5" data-autosubmit>
+        <option value="">All gyms</option>
+        {% for g in gyms %}<option value="{{ g.id }}" {{ 'selected' if filters.gym == g.id }}>{{ g.name }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <button class="btn btn-secondary">{{ icon("sliders", "size-4") }} Filter</button>
+  </form>
+</div>
+
+{% if not reports %}
+  {% if filters.q or filters.gym or filters.status %}
+    {{ ui.empty("No reports match", "Try a different search or clear the filters.", "search", "Clear filters", "/owner/reports") }}
+  {% else %}
+    {{ ui.empty("No reports - your team is doing great", "When a member reports a problem with a staff member it appears here, and you'll get a notification and an e-mail.", "check-badge") }}
+  {% endif %}
+{% else %}
+<ul class="grid gap-4 lg:grid-cols-2">
+  {% for r in reports %}
+  <li class="animate-fade-up">
+    <a href="/owner/reports/{{ r.id }}" class="card card-hover group flex h-full flex-col gap-4 !p-5">
+      <div class="flex items-start gap-3">
+        {{ ui.avatar(r.employee.photo_key if r.employee and not r.employee.deleted_at else None, r.employee.display_name if r.employee else 'Staff', "size-11", "text-sm") }}
+        <div class="min-w-0 flex-1">
+          <p class="truncate font-semibold group-hover:text-accent">{{ r.employee.display_name if r.employee else 'Staff member' }}</p>
+          <p class="truncate text-xs muted">{{ category_label(r.category) }} · {{ r.gym.name }}</p>
+        </div>
+        {% if r.status.value == 'open' %}{{ ui.badge("Awaiting reply", "amber", "clock") }}
+        {% elif r.status.value == 'accepted' %}{{ ui.badge("Accepted", "green") }}
+        {% else %}{{ ui.badge("Declined", "zinc") }}{% endif %}
+      </div>
+      <p class="line-clamp-3 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{{ r.description }}</p>
+      <div class="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs muted">
+        <span class="inline-flex items-center gap-1">{{ icon("user", "size-3.5") }} {{ r.reporter.display_name if r.reporter else 'Deleted user' }}</span>
+        <span class="inline-flex items-center gap-1">{{ icon("calendar", "size-3.5") }} {{ r.incident_date | date if r.incident_date else '—' }}</span>
+        <span class="ml-auto">{{ r.created_at | timeago }}</span>
+      </div>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{{ om.pager(page, pages, prev_url, next_url, total, "reports") }}
+{% endif %}
+{% endblock %}

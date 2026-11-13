@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "identity/_macros.html" as idm with context %}
+{% block title %}ID card & verification{% endblock %}
+{% block content %}
+{% set e = errors or {} %}
+{{ ui.page_header("ID card & verification",
+    "Your government ID keeps every gym safe. Several OCR engines read it independently and must agree before it's verified - anything unclear goes to a person.",
+    eyebrow="Account") }}
+{% include "account/_nav.html" %}
+
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+  {# ================================================================ main column #}
+  <div class="min-w-0 space-y-6">
+
+    {# ------------------------------------------------------------ status hero #}
+    <section class="card idv-hero overflow-hidden sm:p-8 animate-fade-up" data-tone="{{ hero.tone }}" aria-labelledby="idv-title"
+             {% if live %}data-component="idv-live" data-doc="{{ latest.id }}" data-status="{{ latest.status }}" data-url="/api/identity/status"{% endif %}>
+      <div class="relative flex flex-col gap-6 sm:flex-row sm:items-center">
+        {% if latest and latest.consensus_pct is not none and status in ("verified", "needs_review", "rejected") %}
+          {{ idm.ring(latest.consensus_pct, hero.tone, "size-24", caption="Consensus") }}
+        {% else %}
+          {{ idm.hero_icon(hero.icon, hero.tone, live=live) }}
+        {% endif %}
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            {{ ui.status(status) }}
+            {% if optional %}{{ ui.badge("Optional for platform admins", "zinc") }}{% endif %}
+            {% if latest %}<span class="chip">{{ icon("id-card", "size-3.5") }}{{ latest.doc_label }} · {{ latest.country }}</span>{% endif %}
+            {% if latest and latest.demo %}{{ ui.badge("Demo data", "violet") }}{% endif %}
+          </div>
+          <h2 id="idv-title" class="mt-3 text-2xl font-semibold tracking-tight sm:text-[28px] sm:leading-tight">{{ hero.title }}</h2>
+          <p class="mt-2 max-w-xl text-[15px] leading-relaxed muted">{{ hero.body }}</p>
+          {% if latest and status in ("rejected", "needs_review") and latest.reason %}
+            <div class="mt-4">{{ ui.alert(latest.reason, "danger" if status == "rejected" else "warning", title=("Why it was rejected" if status == "rejected" else "What needs a closer look")) }}</div>
+          {% endif %}
+          {% if latest and latest.status in ("verified", "needs_review", "rejected") and (latest.number_masked or latest.name_on_id) %}
+          <dl class="mt-5 grid gap-3 text-sm sm:grid-cols-3">
+            <div class="idv-fact"><dt>ID number</dt><dd class="font-mono tracking-wide">{{ latest.number_masked or "Not read" }}</dd></div>
+            <div class="idv-fact"><dt>Name on card</dt><dd class="truncate">{{ latest.name_on_id or "Not read" }}</dd></div>
+            <div class="idv-fact"><dt>{{ "Expires" if latest.expires_on else ("Verified" if latest.status == "verified" else "Checked") }}</dt>
+              <dd>{{ latest.expires_on | date if latest.expires_on else ((latest.verified_at or latest.reviewed_at or latest.created_at) | dt("%d %b %Y")) }}</dd></div>
+          </dl>
+          {% endif %}
+          {% if can_recheck %}
+          <form method="post" action="/account/identity/{{ latest.id }}/recheck" class="mt-5">
+            {{ ui.csrf() }}
+            <button type="submit" class="btn btn-secondary btn-sm">{{ icon("refresh", "size-4") }} Run the automatic check again</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+      <div class="divider"></div>
+      {{ idm.stepper(steps) }}
+      {% if live %}
+      <p class="mt-6 flex items-center gap-2 text-xs muted" role="status" aria-live="polite" data-live-note>
+        <span class="ai-dot animate-pulse" data-state="online"></span><span data-live-text>Checking now - this page updates by itself.</span>
+      </p>
+      {% endif %}
+    </section>
+
+    {# ------------------------------------------------------------ upload (first when action is needed) #}
+    {% if upload_primary %}
+    <section id="upload" class="card scroll-mt-24 sm:p-8 animate-fade-up" aria-labelledby="idv-upload-title">
+      <div class="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 id="idv-upload-title" class="section-title">{{ "Upload a new card" if status == "rejected" else "Upload your ID card" }}</h2>
+          <p class="mt-1 text-sm muted">Takes about a minute. Your name and date of birth are matched against your profile.</p>
+        </div>
+        <span class="hidden sm:inline-flex">{{ ui.badge("Required" if not optional else "Optional", "red" if not optional else "zinc") }}</span>
+      </div>
+      {{ idm.upload_form(form, e, block=upload_block, optional=optional) }}
+    </section>
+    {% endif %}
+
+    {# ------------------------------------------------------------ engines #}
+    <section class="card sm:p-8" aria-labelledby="idv-engines-title">
+      <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 id="idv-engines-title" class="section-title">OCR engines</h2>
+          <p class="mt-1 text-sm muted">
+            {% if latest and engine_rows and engine_rows[0].state == "done" %}
+              {{ latest.agreeing }} of {{ latest.engines_read }} engine{{ "" if latest.engines_read == 1 else "s" }} that read your card agreed on the ID number. At least {{ min_engines }} must agree.
+            {% else %}
+              {{ available_count }} engine{{ "" if available_count == 1 else "s" }} ready on this server. At least {{ min_engines }} must agree on your ID number before it's verified automatically.
+            {% endif %}
+          </p>
+        </div>
+        <div class="shrink-0">{{ ui.ai_chip(disclaimer=False) }}</div>
+      </div>
+      {{ idm.engines(engine_rows) }}
+    </section>
+
+    {# ------------------------------------------------------------ checks #}
+    {% if check_rows %}
+    <section class="card sm:p-8" aria-labelledby="idv-checks-title">
+      <div class="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 id="idv-checks-title" class="section-title">Checks</h2>
+          <p class="mt-1 text-sm muted">{{ latest.checks_passed }} of {{ latest.checks_total }} passed{% if latest.status == "verified" %} - you're all set{% endif %}.</p>
+        </div>
+        {{ idm.ring(((latest.checks_passed * 100) // (latest.checks_total or 1)), idm.tone_of(latest.status), "size-14", text="text-xs") }}
+      </div>
+      {{ idm.checks(check_rows) }}
+      {% if latest.ai_summary %}
+      <div class="card-muted mt-6 !p-4">
+        <p class="flex items-center gap-2 text-sm font-semibold">{{ icon("sparkles", "size-4 text-violet") }} AI document check</p>
+        <p class="mt-1.5 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{{ latest.ai_summary }}</p>
+        {{ ui.ai_disclaimer("The AI check is supporting evidence only - it never decides on its own.") }}
+      </div>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {# ------------------------------------------------------------ history #}
+    <section class="card sm:p-8" aria-labelledby="idv-history-title">
+      <div class="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 id="idv-history-title" class="section-title">Submissions</h2>
+          <p class="mt-1 text-sm muted">Every card you (or your gym) uploaded, newest first. Numbers stay masked.</p>
+        </div>
+        {% if history %}<span class="chip tabular-nums">{{ history | length }}</span>{% endif %}
+      </div>
+      {% if history %}
+        {{ idm.history(history) }}
+      {% else %}
+        <div class="flex flex-col items-center rounded-[24px] border border-dashed border-black/10 px-6 py-12 text-center dark:border-white/10">
+          <span class="grid size-14 place-items-center rounded-2xl bg-accent/10 text-accent dark:text-[#64b5ff]">{{ icon("id-card", "size-7") }}</span>
+          <h3 class="mt-4 text-base font-semibold">No ID card yet</h3>
+          <p class="mt-1 max-w-sm text-sm muted">Upload a photo of your Aadhaar, passport, driving licence or any government ID to unlock memberships.</p>
+          <a href="#upload" class="btn btn-primary btn-sm mt-5">{{ icon("upload", "size-4") }} Upload now</a>
+        </div>
+      {% endif %}
+    </section>
+  </div>
+
+  {# ================================================================ side column #}
+  <aside class="min-w-0 space-y-6" aria-label="ID card details">
+    {% if latest %}
+    <section class="card" aria-labelledby="idv-images-title">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <h2 id="idv-images-title" class="section-title">Your card</h2>
+        <span class="chip">{{ icon("lock", "size-3.5") }} Private</span>
+      </div>
+      <div class="space-y-3">
+        {{ idm.thumb(latest.id, "front", "Front side") }}
+        {% if latest.has_back %}{{ idm.thumb(latest.id, "back", "Back side") }}{% endif %}
+      </div>
+      <p class="mt-3 text-xs muted">Blurred for privacy - press Show to check what you uploaded.</p>
+    </section>
+    {% endif %}
+
+    {% if not upload_primary %}
+    <section id="upload" class="card scroll-mt-24" aria-labelledby="idv-replace-title">
+      <details class="group" {{ 'open' if e }}>
+        <summary class="flex cursor-pointer list-none items-start justify-between gap-3 rounded-2xl focus-visible:outline-2">
+          <span>
+            <span id="idv-replace-title" class="section-title block">{{ "Replace your ID card" if status == "verified" else "Upload a different card" }}</span>
+            <span class="mt-1 block text-xs muted">{{ "Card expired or details changed? Upload the new one." if status == "verified" else "Wrong card or a blurry photo? Send another one." }}</span>
+          </span>
+          <span class="grid size-8 shrink-0 place-items-center rounded-full bg-zinc-900/[0.05] transition group-open:rotate-180 dark:bg-white/10" aria-hidden="true">{{ icon("chevron-down", "size-4") }}</span>
+        </summary>
+        <div class="mt-5">
+          {% if status == "verified" %}
+          <div class="mb-4">{{ ui.alert("A new card restarts verification. Memberships that need a verified ID pause until the new card is checked.", "warning") }}</div>
+          {% endif %}
+          {{ idm.upload_form(form, e, block=upload_block, optional=optional, replacing=True) }}
+        </div>
+      </details>
+    </section>
+    {% endif %}
+
+    {{ idm.privacy() }}
+
+    <section class="card-flat" aria-labelledby="idv-accepted-title">
+      <h2 id="idv-accepted-title" class="text-sm font-semibold">Cards we check automatically</h2>
+      <ul class="mt-3 flex flex-wrap gap-2">
+        {% for label in ["Aadhaar (checksum)", "Passport (MRZ)", "ID cards with MRZ", "PAN", "Voter ID", "Driving licence"] %}
+        <li class="chip">{{ label }}</li>
+        {% endfor %}
+      </ul>
+      <p class="mt-3 text-xs leading-relaxed muted">Other government IDs are welcome too - if the engines can't confirm everything, a person checks it.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

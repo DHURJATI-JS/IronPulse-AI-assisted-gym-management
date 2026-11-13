@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% block title %}Receipt {{ order.order_number }}{% endblock %}
+{% block content %}
+{% set cur = order.currency %}
+{% set g = order.gym %}
+<div class="shop-no-print mx-auto mb-6 flex max-w-3xl items-center justify-between gap-3">
+  <a href="{{ back }}" class="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">{{ icon("arrow-left", "size-4") }}Back to the order</a>
+  <button type="button" class="btn btn-dark btn-sm" data-component="shop-print">{{ shop.svg("printer", "size-4") }}Print / save PDF</button>
+</div>
+
+<article class="shop-receipt animate-fade-up" aria-labelledby="receipt-title">
+  <header class="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-[0.18em] text-accent">Tax invoice · receipt</p>
+      <h1 id="receipt-title" class="mt-2 text-2xl font-semibold tracking-tight">{{ g.name if g else "Gym store" }}</h1>
+      {% if g %}
+        <p class="mt-1 text-sm muted">{% if g.contact_email %}{{ g.contact_email }}{% endif %}{% if g.contact_email and g.contact_phone %} · {% endif %}{% if g.contact_phone %}{{ g.contact_phone }}{% endif %}</p>
+        <p class="text-sm muted">Country: {{ g.country_code }}</p>
+      {% endif %}
+    </div>
+    <dl class="grid gap-1 text-sm sm:text-right">
+      <div><dt class="inline muted">Order </dt><dd class="inline font-mono font-semibold">{{ order.order_number }}</dd></div>
+      <div><dt class="inline muted">Placed </dt><dd class="inline">{{ order.created_at | dt }}</dd></div>
+      <div><dt class="inline muted">Paid </dt><dd class="inline">{{ order.paid_at | dt }}</dd></div>
+      <div><dt class="inline muted">Payment </dt><dd class="inline">{{ "Cashfree" if order.payment_provider == "cashfree" else "Test gateway (simulated)" }}</dd></div>
+    </dl>
+  </header>
+
+  <div class="mt-8 grid gap-6 sm:grid-cols-2">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wider muted">Billed to</p>
+      <p class="mt-1.5 text-sm">{{ order.customer_label }}</p>
+    </div>
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-wider muted">{{ "Pickup" if order.fulfillment == "pickup" else "Ship to" }}</p>
+      {% if order.fulfillment == "pickup" and order.pickup_branch %}
+        <p class="mt-1.5 text-sm">{{ order.pickup_branch.name }}<br>{{ order.pickup_branch.address_line1 }}, {{ order.pickup_branch.city }}</p>
+      {% elif order.shipping_address %}
+        {% set a = order.shipping_address %}
+        <p class="mt-1.5 text-sm">{{ a.name }}<br>{{ a.line1 }}<br>{{ a.city }} {{ a.postal_code }} · {{ a.phone }}</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="mt-8 overflow-x-auto">
+    <table>
+      <thead><tr><th>Item</th><th class="!text-right">Qty</th><th class="!text-right">Unit price</th><th class="!text-right">Tax</th><th class="!text-right">Amount</th></tr></thead>
+      <tbody>
+        {% for it in items %}
+          <tr>
+            <td class="pr-3">{{ it.product_name }}{% if it.refunded_quantity %}<span class="block text-xs muted">{{ it.refunded_quantity }} refunded</span>{% endif %}</td>
+            <td class="text-right tabular-nums">{{ it.quantity }}</td>
+            <td class="text-right tabular-nums">{{ it.unit_price | money(cur) }}</td>
+            <td class="text-right tabular-nums">{{ '%g' | format(it.tax_rate | float) }}%</td>
+            <td class="text-right font-medium tabular-nums">{{ it.line_total | money(cur) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="mt-6 ml-auto grid max-w-xs gap-1 text-sm">
+    <div class="shop-line"><span class="muted">Subtotal (excl. tax)</span><span class="tabular-nums">{{ order.subtotal | money(cur) }}</span></div>
+    {% if order.discount_total | float > 0 %}<div class="shop-line"><span class="muted">Discount{% if order.coupon_code %} ({{ order.coupon_code }}){% endif %}</span><span class="tabular-nums">−{{ order.discount_total | money(cur) }}</span></div>{% endif %}
+    {% for rate, amount in quote.tax_by_rate() %}<div class="shop-line"><span class="muted">GST / tax @ {{ '%g' | format(rate | float) }}%</span><span class="tabular-nums">{{ amount | money(cur) }}</span></div>{% endfor %}
+    <div class="shop-line"><span class="muted">{{ "Delivery" if order.fulfillment == "delivery" else "Pickup" }}</span><span class="tabular-nums">{{ order.shipping_fee | money(cur) }}</span></div>
+    <div class="shop-total mt-1"><span>Total paid</span><span>{{ order.total | money(cur) }}</span></div>
+    {% if order.refunded_total | float > 0 %}
+      <div class="shop-line"><span class="muted">Refunded</span><span class="tabular-nums">−{{ order.refunded_total | money(cur) }}</span></div>
+      <div class="shop-line font-semibold"><span>Net</span><span class="tabular-nums">{{ (order.total - order.refunded_total) | money(cur) }}</span></div>
+    {% endif %}
+  </div>
+
+  <footer class="mt-10 border-t border-black/[0.06] pt-6 text-xs leading-relaxed muted dark:border-white/[0.08]">
+    <p>Thank you for shopping with {{ g.name if g else "us" }}. Line amounts include tax and any coupon discount. Returns can be requested within 7 days of pickup or delivery from your order page.</p>
+    <p class="mt-1">Generated by {{ app.name }} on {{ now | dt }}.</p>
+  </footer>
+</article>
+{% endblock %}

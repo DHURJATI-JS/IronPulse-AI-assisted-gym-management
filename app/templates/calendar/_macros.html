@@ -1,0 +1,81 @@
+{#- Calendar / tasks macros (WP-E2). Behaviour: static/src/js/53-calendar.js -#}
+{% import "_ui.html" as ui with context %}
+{% set KIND_LABELS = {"task": "To-do", "reminder": "Reminder", "event": "Event", "workout": "Workout", "bedtime": "Bedtime", "renewal": "Renewal", "shift": "Shift", "more": "Full list"} %}
+{% set KIND_TONES = {"task": "blue", "reminder": "violet", "event": "green", "workout": "amber", "bedtime": "zinc", "renewal": "amber", "shift": "green", "more": "zinc"} %}
+
+{% macro kind_badge(kind) -%}
+<span class="badge tone-{{ KIND_TONES.get(kind, 'blue') }}">{{ KIND_LABELS.get(kind, kind | humanize) }}</span>
+{%- endmacro %}
+
+{#- One entry in the calendar day panel (mirrored by 53-calendar.js when another day is picked) -#}
+{% macro day_item(it, back) %}
+<li class="flex items-start gap-3 rounded-2xl bg-zinc-900/[0.03] p-3 dark:bg-white/[0.04]">
+  <span class="mt-1.5 size-2.5 shrink-0 rounded-full dot-{{ it.tone }}"></span>
+  <div class="min-w-0 flex-1">
+    <p class="font-medium {{ 'line-through opacity-60' if it.done }}">{{ it.title }}</p>
+    <p class="mt-0.5 text-xs muted">{{ it.time or "All day" }} · {{ KIND_LABELS.get(it.kind, it.kind | humanize) }}{% if it.detail %} · {{ it.detail }}{% endif %}</p>
+  </div>
+  {% if it.task_id %}
+    <form method="post" action="/tasks/{{ it.task_id }}/toggle" data-task-toggle data-no-busy>
+      {{ ui.csrf() }}<input type="hidden" name="next" value="{{ back }}">
+      <button type="submit" class="task-check" aria-pressed="{{ 'true' if it.done else 'false' }}" aria-label="{{ 'Mark as not done' if it.done else 'Mark as done' }}: {{ it.title }}">{{ icon("check", "size-3.5") }}</button>
+    </form>
+  {% elif it.link %}
+    <a href="{{ it.link }}" class="btn btn-ghost btn-icon !size-8 shrink-0" aria-label="Open {{ it.title }}">{{ icon("chevron-right", "size-4") }}</a>
+  {% endif %}
+</li>
+{% endmacro %}
+
+{#- Task row on the tasks page -#}
+{% macro task_row(t, when, back) %}
+{% set kind = t.kind.value %}
+<li class="group flex items-start gap-3 py-3.5" id="task-{{ t.id }}">
+  <form method="post" action="/tasks/{{ t.id }}/toggle" class="pt-0.5" data-task-toggle data-no-busy>
+    {{ ui.csrf() }}<input type="hidden" name="next" value="{{ back }}">
+    <button type="submit" class="task-check" aria-pressed="{{ 'true' if t.completed_at else 'false' }}" aria-label="{{ 'Mark as not done' if t.completed_at else 'Mark as done' }}: {{ t.title }}">{{ icon("check", "size-3.5") }}</button>
+  </form>
+  <div class="min-w-0 flex-1">
+    <p class="font-medium break-words {{ 'line-through text-zinc-400 dark:text-zinc-500' if t.completed_at }}" data-task-title>{{ t.title }}</p>
+    <div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+      {{ kind_badge(kind) }}
+      <span class="muted">{{ when(t) }}</span>
+      {% if t.remind_at %}
+        <span class="chip !py-0.5">{{ icon("bell", "size-3") }} {{ "Reminded" if t.reminded_at else (t.remind_at | dt("%d %b, %H:%M")) }}</span>
+      {% endif %}
+      {% if t.created_by == "ai" %}<span class="badge badge-violet">{{ icon("sparkles", "size-3") }} AI</span>{% endif %}
+    </div>
+    {% if t.notes %}<p class="mt-1.5 line-clamp-2 text-sm muted">{{ t.notes }}</p>{% endif %}
+  </div>
+  <form method="post" action="/tasks/{{ t.id }}/delete" data-confirm="Delete “{{ t.title }}”?">
+    {{ ui.csrf() }}<input type="hidden" name="next" value="{{ back }}">
+    <button type="submit" class="btn btn-ghost btn-icon !size-9 text-zinc-400 hover:text-bad sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100" aria-label="Delete {{ t.title }}">{{ icon("trash", "size-4") }}</button>
+  </form>
+</li>
+{% endmacro %}
+
+{#- Task form (tasks page + calendar quick add). values/errors are dicts. -#}
+{% macro task_form(values, errors, back, kinds, compact=False, day=None) %}
+<form method="post" action="/tasks" class="grid gap-4" novalidate data-component="task-form">
+  {{ ui.csrf() }}
+  <input type="hidden" name="next" value="{{ back }}">
+  {{ ui.field("title", "Title", value=values.get("title", ""), required=True, error=errors.get("title"), placeholder="e.g. Stretch for 10 minutes", attrs='maxlength="200" autocomplete="off"') }}
+  <div class="grid gap-4 sm:grid-cols-2 {{ 'lg:grid-cols-1 xl:grid-cols-2' if compact }}">
+    {{ ui.select("kind", "Type", kinds, value=values.get("kind") or "task", error=errors.get("kind")) }}
+    {{ ui.field("due_date", "Date", type="date", value=values.get("due_date") or (day or ""), error=errors.get("due_date"), attrs='data-due-date') }}
+  </div>
+  <div class="grid gap-4 sm:grid-cols-2 {{ 'lg:grid-cols-1 xl:grid-cols-2' if compact }}">
+    {{ ui.field("due_time", "Time", type="time", value=values.get("due_time", ""), error=errors.get("due_time"), help="Leave empty for all day") }}
+    {{ ui.field("remind_at", "Remind me", type="datetime-local", value=values.get("remind_at", ""), error=errors.get("remind_at"), help="Optional - in-app + e-mail") }}
+  </div>
+  <div class="-mt-2 flex flex-wrap gap-1.5" data-remind-presets hidden>
+    <button type="button" class="suggestion-chip" data-remind-offset="0">At due time</button>
+    <button type="button" class="suggestion-chip" data-remind-offset="15">15 min before</button>
+    <button type="button" class="suggestion-chip" data-remind-offset="60">1 h before</button>
+    <button type="button" class="suggestion-chip" data-remind-offset="1440">1 day before</button>
+  </div>
+  {% if not compact %}
+    {{ ui.textarea("notes", "Notes", value=values.get("notes", ""), error=errors.get("notes"), rows=3, attrs='maxlength="2000"', placeholder="Optional details") }}
+  {% endif %}
+  <button type="submit" class="btn btn-primary w-full sm:w-auto">{{ icon("plus", "size-4") }} Add {{ "to calendar" if compact else "task" }}</button>
+</form>
+{% endmacro %}

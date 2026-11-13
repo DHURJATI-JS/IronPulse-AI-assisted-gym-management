@@ -1,0 +1,25 @@
+{#- Account settings (members): "Share my health and safety information with my gym's trainers" - default ON.
+    Included by account/index.html; posts to /account/health-sharing (app/routers/chat.py). Works without JavaScript. -#}
+{% set _profile = user.customer_profile %}
+{% set _sharing = _profile.share_health_with_trainers if _profile is not none and _profile.share_health_with_trainers is not none else true %}
+<section id="health-sharing" class="card scroll-mt-24" aria-labelledby="health-sharing-title">
+  <div class="flex items-start gap-3">
+    <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-bad/10 text-bad">{{ icon("shield", "size-5") }}</span>
+    <div class="min-w-0">
+      <h2 id="health-sharing-title" class="section-title">Health &amp; safety sharing</h2>
+      <p class="mt-1 text-sm muted">Your trainers use your conditions, allergies, medication and injuries to keep training safe. Your gym's admin team always sees them for your safety.</p>
+    </div>
+  </div>
+  <form method="post" action="/account/health-sharing" class="mt-5 space-y-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="share" value="0">
+    <label class="flex cursor-pointer items-start gap-3 rounded-2xl p-4 ring-1 ring-black/[0.06] dark:ring-white/[0.08]" for="f-share-health">
+      <input id="f-share-health" type="checkbox" name="share" value="1" class="mt-0.5 size-5 shrink-0 accent-[#0a84ff]"{% if _sharing %} checked{% endif %}>
+      <span class="min-w-0">
+        <span class="block font-medium">Share my health and safety information with my gym's trainers</span>
+        <span class="mt-0.5 block text-xs muted">{% if _sharing %}On - your trainers see your safety notes and get warnings before suggesting exercises that may not suit you.{% else %}Off - trainers only see "The member chose not to share health details - ask before training".{% endif %}</span>
+      </span>
+    </label>
+    <button type="submit" class="btn btn-secondary w-full sm:w-auto">{{ icon("check", "size-4") }} Save choice</button>
+  </form>
+</section>

@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% import "owner/shop/_macros.html" as os with context %}
+{% block title %}{{ product.name if product else "New product" }} · Shop{% endblock %}
+{% block content %}
+{% set p = product %}
+{% set facts = v.nutrition_facts or {} %}
+{% set cat_value = v.category.value if v.category and v.category.value is defined else (v.category or "supplements") %}
+{% call ui.page_header(p.name if p else "New product", subtitle=("Sold by " ~ gym.name) if p else "Add a product to " ~ gym.name ~ "'s shop. Members see it as soon as it's live.", eyebrow="Edit product" if p else "Shop", back="/owner/shop/products") %}
+  {% if p %}
+    {% if p.is_active %}<span class="badge badge-green">Live</span>{% else %}<span class="badge badge-zinc">Hidden</span>{% endif %}
+    <a href="/shop/p/{{ p.id }}/{{ p.slug }}" class="btn btn-secondary btn-sm">{{ icon("eye", "size-4") }}View in shop</a>
+  {% endif %}
+{% endcall %}
+{{ os.tabs("products") }}
+{{ ui.form_errors(errors) }}
+
+<div class="grid gap-6 {{ 'lg:grid-cols-[1fr_380px]' }}">
+  {# =================================================================== main form #}
+  <form method="post" action="{{ '/owner/shop/products/' ~ p.id if p else '/owner/gyms/' ~ gym.id ~ '/shop/products/new' }}" enctype="multipart/form-data" class="grid content-start gap-6" novalidate>
+    {{ ui.csrf() }}
+
+    <section class="card" aria-labelledby="basics-title">
+      <h2 id="basics-title" class="shop-section-title">{{ icon("info", "size-5 text-accent") }}Basics</h2>
+      <div class="mt-5 grid gap-5 sm:grid-cols-2">
+        {{ ui.field("name", "Product name", value=v.name, required=True, error=errors.name, placeholder="e.g. Gold Whey Protein 1 kg", attrs='maxlength="160"', cls="sm:col-span-2") }}
+        {{ ui.field("brand", "Brand", value=v.brand, error=errors.brand, placeholder="e.g. PulseFuel", attrs='maxlength="80"') }}
+        {{ ui.select("category", "Category", categories, value=cat_value, required=True, error=errors.category) }}
+        {{ ui.textarea("description", "Description", value=v.description, required=True, error=errors.description, rows=5, placeholder="What it is, who it's for, how to use it. Members and the AI assistant read this.", attrs='maxlength="5000"', cls="sm:col-span-2") }}
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="price-title">
+      <h2 id="price-title" class="shop-section-title">{{ icon("banknotes", "size-5 text-[#1f8c3a] dark:text-[#4ade80]") }}Pricing &amp; tax</h2>
+      <p class="mt-1 text-sm muted">Prices are in {{ gym.currency }} and exclude tax; tax is added at checkout.</p>
+      <div class="mt-5 grid gap-5 sm:grid-cols-3">
+        {{ ui.field("price", "Selling price", type="text", value=v.price if v.price is not none else "", required=True, error=errors.price, placeholder="2999", attrs='inputmode="decimal"') }}
+        {{ ui.field("compare_at_price", "MRP / compare-at", type="text", value=v.compare_at_price if v.compare_at_price is not none else "", error=errors.compare_at_price, placeholder="3499", attrs='inputmode="decimal"', help="Optional - shown struck through") }}
+        {{ ui.field("tax_rate", "Tax / GST %", type="text", value=v.tax_rate if v.tax_rate is not none else "0", error=errors.tax_rate, placeholder="18", attrs='inputmode="decimal"', help="0 - 50") }}
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="inv-title">
+      <h2 id="inv-title" class="shop-section-title">{{ shop.svg("package", "size-5 text-[#b45309] dark:text-[#fbbf24]") }}Inventory</h2>
+      <div class="mt-5 grid gap-5 sm:grid-cols-3">
+        {{ ui.field("sku", "SKU", value=v.sku, error=errors.sku, placeholder="WHEY-CHOC-1KG", attrs='maxlength="64"') }}
+        {% if not p %}
+          {{ ui.field("stock", "Opening stock", type="number", value=v.stock, error=errors.stock, attrs='min="0" max="100000"') }}
+        {% else %}
+          <div><p class="label">Stock</p><p class="flex h-[46px] items-center gap-2">{{ os.stock_badge(p) }}<a href="#stock" class="text-xs font-semibold text-accent hover:underline">Adjust</a></p></div>
+        {% endif %}
+        {{ ui.field("low_stock_threshold", "Low-stock alert at", type="number", value=v.low_stock_threshold, error=errors.low_stock_threshold, attrs='min="0" max="10000"', help="Daily digest when stock ≤ this") }}
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="ful-title">
+      <h2 id="ful-title" class="shop-section-title">{{ shop.svg("truck", "size-5 text-violet") }}Fulfilment</h2>
+      <div class="mt-5 grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="How customers get it">
+        {% for value, label in fulfillment_labels.items() %}
+          <label class="shop-option">
+            <input type="radio" name="fulfillment" value="{{ value }}" class="peer sr-only" {{ 'checked' if v.fulfillment == value }}>
+            <span class="shop-radio" aria-hidden="true"></span>
+            <span class="text-sm font-semibold">{{ label }}</span>
+          </label>
+        {% endfor %}
+      </div>
+      {% if errors.fulfillment %}<p class="field-error">{{ errors.fulfillment }}</p>{% endif %}
+      <div class="mt-5">
+        {% set branch_opts = [] %}
+        {% for b in branches %}{% set _ = branch_opts.append((b.id, b.name ~ " · " ~ b.city)) %}{% endfor %}
+        {% if branches %}
+          {{ ui.select("pickup_branch_id", "Pickup branch", branch_opts, value=v.pickup_branch_id, error=errors.pickup_branch_id, empty="Any verified, open branch", help="Leave empty to allow pickup at every verified, open branch") }}
+        {% else %}
+          <p class="alert alert-info">{{ icon("info", "size-4 shrink-0") }}<span>Pickup needs a verified, open branch. Until then, members can order with home delivery.</span></p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="safety-title">
+      <h2 id="safety-title" class="shop-section-title">{{ icon("shield", "size-5 text-bad") }}Safety &amp; labelling</h2>
+      <p class="mt-1 text-sm muted">Used for each member's personalised safety check and by the AI assistant. Deterministic checks always win over AI text.</p>
+      <div class="mt-5 grid gap-4 sm:grid-cols-2">
+        {{ ui.checkbox("is_supplement", "Dietary supplement", v.is_supplement, "Adds a “check with your doctor” note") }}
+        {{ ui.checkbox("age_restricted", "Adults only (18+)", v.age_restricted, "Members under 18 can't buy it") }}
+      </div>
+      <fieldset class="mt-6">
+        <legend class="label">Contains allergens</legend>
+        <div class="shop-check-grid mt-2">
+          {% for key, label in allergens.items() %}
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="allergens" value="{{ key }}" class="checkbox" {{ 'checked' if key in (v.allergens or []) }}>{{ label }}</label>
+          {% endfor %}
+        </div>
+      </fieldset>
+      <fieldset class="mt-6">
+        <legend class="label">Not advised for (caution tags)</legend>
+        <div class="shop-check-grid mt-2">
+          {% for key in common_tags %}
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="caution_tags" value="{{ key }}" class="checkbox" {{ 'checked' if key in (v.caution_tags or []) }}>{{ caution_tags[key] }}</label>
+          {% endfor %}
+        </div>
+        <details class="mt-3" {{ 'open' if (v.caution_tags or []) | reject('in', common_tags) | list }}>
+          <summary class="cursor-pointer text-sm font-semibold text-accent">More conditions</summary>
+          <div class="shop-check-grid mt-3">
+            {% for key, label in caution_tags.items() if key not in common_tags %}
+              <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="caution_tags" value="{{ key }}" class="checkbox" {{ 'checked' if key in (v.caution_tags or []) }}>{{ label }}</label>
+            {% endfor %}
+          </div>
+        </details>
+        {% set auto = inferred.items() | selectattr("1", "ne", "owner") | list %}
+        {% if auto %}
+          <p class="mt-3 text-xs muted">{{ icon("sparkles", "inline size-3.5 text-violet") }} Automatically flagged from the ingredients: {% for tag, why in auto %}{{ caution_tags.get(tag, tag) }} ({{ "contains creatine" if why == "creatine" else "stimulants" }}){{ ", " if not loop.last }}{% endfor %}.</p>
+        {% endif %}
+      </fieldset>
+      <div class="mt-6">
+        {{ ui.textarea("ingredients", "Ingredients", value=v.ingredients, error=errors.ingredients, rows=3, placeholder="Whey protein isolate (milk), cocoa, soy lecithin…", attrs='maxlength="4000"') }}
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="nut-title">
+      <h2 id="nut-title" class="shop-section-title">{{ icon("activity", "size-5 text-accent") }}Nutrition facts <span class="text-sm font-normal muted">· optional, per serving</span></h2>
+      <div class="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {{ ui.field("serving_size", "Serving size", value=facts.get("serving_size", ""), error=errors.serving_size, placeholder="1 scoop (30 g)", attrs='maxlength="60"', cls="col-span-2") }}
+        {% for key, label, unit in nutrition_fields %}
+          {{ ui.field(key, label ~ " (" ~ unit ~ ")", value=facts.get(key, ""), error=errors[key], attrs='inputmode="decimal"') }}
+        {% endfor %}
+      </div>
+    </section>
+
+    {% if not p %}
+      <section class="card" aria-labelledby="photos-title">
+        <h2 id="photos-title" class="shop-section-title">{{ icon("photo", "size-5 text-accent") }}Photos</h2>
+        <p class="mt-1 text-sm muted">Up to {{ max_images }} photos (JPG, PNG or WEBP). The first one is the cover. Location data is stripped automatically.</p>
+        <div class="mt-4">
+          <label for="f-images" class="label">Choose photos</label>
+          <input id="f-images" name="images" type="file" accept="image/*" multiple class="block w-full text-sm muted" data-component="shop-image-preview" data-preview-target="new-previews" data-max="{{ max_images }}">
+          {% if errors.images %}<p class="field-error">{{ errors.images }}</p>{% endif %}
+        </div>
+        <div id="new-previews" class="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-4" aria-live="polite"></div>
+      </section>
+    {% endif %}
+
+    <section class="card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {{ ui.checkbox("is_active", "Live in the shop", v.is_active, "Untick to keep it hidden while you prepare it") }}
+      <button type="submit" class="btn btn-primary btn-lg">{{ icon("check", "size-4") }}{{ "Save changes" if p else "Create product" }}</button>
+    </section>
+  </form>
+
+  {# =================================================================== side column #}
+  <aside class="grid h-fit gap-6">
+    {% if p %}
+      <section id="stock" class="card scroll-mt-24" aria-labelledby="stock-title">
+        <div class="flex items-center justify-between gap-3">
+          <h2 id="stock-title" class="section-title">Stock</h2>
+          {{ os.stock_badge(p) }}
+        </div>
+        <form method="post" action="/owner/shop/products/{{ p.id }}/stock" class="mt-4 grid gap-4">
+          {{ ui.csrf() }}
+          <div class="tabs w-full" role="radiogroup" aria-label="Stock change">
+            {% for value, label in [("restock", "Restock"), ("remove", "Remove"), ("set", "Set to")] %}
+              <label class="tab flex-1 cursor-pointer text-center has-[:checked]:bg-white has-[:checked]:text-ink has-[:checked]:shadow-sm dark:has-[:checked]:bg-white/15 dark:has-[:checked]:text-white">
+                <input type="radio" name="mode" value="{{ value }}" class="sr-only" {{ 'checked' if loop.first }}>{{ label }}
+              </label>
+            {% endfor %}
+          </div>
+          {{ ui.field("quantity", "Quantity", type="number", value="", required=True, attrs='min="0" max="100000"', placeholder="e.g. 24") }}
+          {{ ui.field("reason", "Reason", value="", required=True, attrs='maxlength="255" minlength="3"', placeholder="New delivery / damaged / stock count") }}
+          <button type="submit" class="btn btn-dark">Update stock</button>
+        </form>
+        {% if movements %}
+          <h3 class="mt-6 text-xs font-semibold uppercase tracking-wider muted">Recent movements</h3>
+          <ul class="mt-2 divide-y divide-black/[0.05] text-sm dark:divide-white/[0.06]">
+            {% for m in movements %}
+              <li class="flex items-center justify-between gap-3 py-2">
+                <span class="min-w-0"><span class="block font-medium">{{ m.reason | humanize }}</span><span class="block truncate text-xs muted">{{ (m.note ~ " · ") if m.note }}{{ ("Order · ") if m.order_id and not m.note }}{{ m.created_at | timeago }}</span></span>
+                <span class="shrink-0 font-semibold tabular-nums {{ 'text-[#1f8c3a] dark:text-[#4ade80]' if m.change > 0 else 'text-[#d1281e] dark:text-[#ff6b61]' }}">{{ '+' if m.change > 0 }}{{ m.change }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </section>
+
+      <section id="photos" class="card scroll-mt-24" aria-labelledby="ph-title">
+        <div class="flex items-center justify-between gap-3">
+          <h2 id="ph-title" class="section-title">Photos</h2>
+          <span class="text-xs muted">{{ p.images | length }} / {{ max_images }}</span>
+        </div>
+        {% if p.images %}
+          <ul class="mt-4 grid grid-cols-2 gap-3">
+            {% for img in p.images %}
+              <li class="shop-img-tile">
+                <img src="{{ media_url(img.image_key) }}" alt="{{ img.alt or p.name }}" loading="lazy">
+                {% if loop.first %}<span class="shop-tag absolute left-2 top-2">Cover</span>{% endif %}
+                <div class="absolute inset-x-2 bottom-2 flex items-center justify-between gap-1">
+                  <div class="flex gap-1">
+                    {% if not loop.first %}
+                      <form method="post" action="/owner/shop/products/{{ p.id }}/images/{{ img.id }}/move">{{ ui.csrf() }}<input type="hidden" name="direction" value="first"><button type="submit" class="shop-wish !size-8" aria-label="Make this the cover photo" title="Make cover">{{ icon("star", "size-3.5") }}</button></form>
+                      <form method="post" action="/owner/shop/products/{{ p.id }}/images/{{ img.id }}/move">{{ ui.csrf() }}<input type="hidden" name="direction" value="up"><button type="submit" class="shop-wish !size-8" aria-label="Move photo earlier" title="Move earlier">{{ icon("arrow-left", "size-3.5") }}</button></form>
+                    {% endif %}
+                    {% if not loop.last %}
+                      <form method="post" action="/owner/shop/products/{{ p.id }}/images/{{ img.id }}/move">{{ ui.csrf() }}<input type="hidden" name="direction" value="down"><button type="submit" class="shop-wish !size-8" aria-label="Move photo later" title="Move later">{{ icon("arrow-right", "size-3.5") }}</button></form>
+                    {% endif %}
+                  </div>
+                  <form method="post" action="/owner/shop/products/{{ p.id }}/images/{{ img.id }}/delete" data-confirm="Remove this photo?">{{ ui.csrf() }}<button type="submit" class="shop-wish !size-8 hover:!text-bad" aria-label="Remove photo" title="Remove">{{ icon("trash", "size-3.5") }}</button></form>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="mt-3 text-sm muted">No photos yet - products with photos sell much better.</p>
+        {% endif %}
+        {% if p.images | length < max_images %}
+          <form method="post" action="/owner/shop/products/{{ p.id }}/images" enctype="multipart/form-data" class="mt-5 grid gap-3">
+            {{ ui.csrf() }}
+            <label for="f-more" class="label">Add photos</label>
+            <input id="f-more" name="images" type="file" accept="image/*" multiple required class="block w-full text-sm muted" data-component="shop-image-preview" data-preview-target="more-previews" data-max="{{ max_images - p.images | length }}">
+            <div id="more-previews" class="grid grid-cols-3 gap-2" aria-live="polite"></div>
+            <button type="submit" class="btn btn-secondary">{{ icon("upload", "size-4") }}Upload</button>
+          </form>
+        {% endif %}
+      </section>
+
+      <section class="card" aria-labelledby="vis-title">
+        <h2 id="vis-title" class="section-title">Visibility</h2>
+        <p class="mt-1 text-sm muted">{{ "Members can see and buy it." if p.is_active else "Hidden - members can't see or buy it." }}</p>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <form method="post" action="/owner/shop/products/{{ p.id }}/status">{{ ui.csrf() }}<input type="hidden" name="action" value="{{ 'deactivate' if p.is_active else 'activate' }}"><button type="submit" class="btn {{ 'btn-secondary' if p.is_active else 'btn-success' }} btn-sm">{{ icon("eye", "size-4") }}{{ "Hide from shop" if p.is_active else "Make live" }}</button></form>
+          {% if has_orders %}
+            <p class="w-full text-xs muted">This product is in past orders, so it can be hidden but not deleted.</p>
+          {% else %}
+            {{ ui.confirm_button("/owner/shop/products/" ~ p.id ~ "/delete", "Delete", "Delete " ~ p.name ~ " permanently? This also removes its photos.", "danger", "sm", "trash") }}
+          {% endif %}
+        </div>
+      </section>
+    {% else %}
+      <section class="card-muted">
+        <p class="font-semibold">Tips for a great listing</p>
+        <ul class="mt-3 grid gap-2 text-sm muted">
+          <li class="flex gap-2">{{ icon("photo", "size-4 shrink-0 text-accent") }}Use 3+ photos on a plain background.</li>
+          <li class="flex gap-2">{{ icon("shield", "size-4 shrink-0 text-accent") }}Tick allergens and caution tags - members get a personalised warning.</li>
+          <li class="flex gap-2">{{ icon("sparkles", "size-4 shrink-0 text-accent") }}A clear description helps the AI assistant answer questions accurately.</li>
+          <li class="flex gap-2">{{ shop.svg("tag", "size-4 shrink-0 text-accent") }}Set an MRP to show the discount.</li>
+        </ul>
+      </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

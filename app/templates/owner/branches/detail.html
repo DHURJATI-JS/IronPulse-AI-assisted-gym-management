@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/branches/_macros.html" as om %}
+{% block title %}{{ branch.name }} · {{ gym.name }}{% endblock %}
+{% block main_class %}owner-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ static('vendor/leaflet/leaflet.css') }}">{% endblock %}
+{% macro delete_button(action, message, label) -%}
+<form method="post" action="{{ action }}" class="inline-flex" data-confirm="{{ message }}">
+  {{ ui.csrf() }}
+  <button type="submit" class="btn btn-ghost btn-icon !size-9 text-[#d1281e] hover:!bg-bad/10 dark:text-[#ff6b61]" aria-label="{{ label }}" title="{{ label }}">{{ icon("trash", "size-4") }}</button>
+</form>
+{%- endmacro %}
+{% block content %}
+{% set status = branch.verification_status.value %}
+{% set tone_bg = {'green': 'bg-ok', 'amber': 'bg-warn', 'red': 'bg-bad', 'blue': 'bg-accent', 'zinc': 'bg-zinc-400'} %}
+{% set open_days = branch.hours | length %}
+
+{% call ui.page_header(branch.name, branch.address_line1 ~ ", " ~ branch.city ~ " · " ~ country_label, eyebrow=gym.name, back="/owner/gyms/" ~ gym.id) %}
+  {{ om.vstatus(branch.verification_status) }}
+  {% if not branch.is_open %}{{ ui.badge("Closed", "zinc", "lock") }}{% endif %}
+  {% if live %}<a href="/gyms/{{ gym.slug }}/branches/{{ branch.id }}" class="btn btn-secondary btn-sm">{{ icon("external", "size-4") }} Public page</a>{% endif %}
+{% endcall %}
+
+{# ------------------------------------------------------------------ stepper #}
+<nav aria-label="Branch progress" class="mb-8">
+  <ol class="owner-stepper">
+    {% for s in steps %}
+    <li class="owner-step" data-state="{{ s.state }}">
+      <a href="{{ s.href }}" class="owner-step-link" {% if s.state in ('current', 'active', 'error', 'warning') %}aria-current="step"{% endif %}>
+        <span class="owner-step-dot">
+          {% if s.state == 'done' %}{{ icon("check", "size-3.5") }}
+          {% elif s.state == 'error' %}{{ icon("x", "size-3.5") }}
+          {% elif s.state == 'locked' %}{{ icon("lock", "size-3") }}
+          {% elif s.state == 'active' %}<span class="spinner !size-3"></span>
+          {% else %}{{ loop.index }}{% endif %}
+        </span>
+        <span class="owner-step-label"><span class="sm:hidden">{{ s.short }}</span><span class="hidden sm:inline">{{ s.label }}</span></span>
+        <span class="owner-step-hint">{{ s.hint }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ol>
+</nav>
+
+{% if owner_missing and branch.verification_status.value != 'verified' %}
+<div class="mb-6">
+  {{ ui.alert("Submitting for verification needs a verified owner: " ~ (owner_missing | join(", ") | lower) ~ ". Fix it under Account → " ~ ("Photo" if "photo" in (owner_missing | join(" ")) else "ID card") ~ ".", "warning", "Your owner profile isn't complete yet") }}
+</div>
+{% endif %}
+
+<div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
+  <div class="min-w-0 space-y-6">
+
+    {# ============================================================ DETAILS #}
+    <section id="details" class="scroll-mt-24" aria-labelledby="details-h">
+      <details class="card owner-collapsible" {{ 'open' if details_open }}>
+        <summary class="flex cursor-pointer list-none items-start justify-between gap-4">
+          <div class="min-w-0">
+            <h2 id="details-h" class="section-title">Branch details</h2>
+            <p class="mt-0.5 truncate text-sm muted">{{ branch.address_line1 }}, {{ branch.city }} · {{ open_days }} day{{ 's' if open_days != 1 }} open · {{ branch.features | length }} facilit{{ 'ies' if branch.features | length != 1 else 'y' }}</p>
+          </div>
+          <span class="btn btn-secondary btn-sm shrink-0"><span class="owner-when-closed">{{ icon("pencil", "size-4") }} Edit</span><span class="owner-when-open">{{ icon("chevron-down", "size-4 rotate-180") }} Collapse</span></span>
+        </summary>
+        <form method="post" action="/owner/branches/{{ branch.id }}" class="mt-6" novalidate data-component="verified-guard" data-verified="{{ '1' if is_verified_branch else '0' }}">
+          {{ ui.csrf() }}
+          {{ ui.form_errors(errors) }}
+          {% include "owner/branches/_form_fields.html" %}
+          <div class="mt-6 flex justify-end">
+            <button type="submit" class="btn btn-primary">{{ icon("check", "size-4") }} Save details</button>
+          </div>
+        </form>
+      </details>
+    </section>
+
+    {# ============================================================ DOCUMENTS #}
+    <section id="documents" class="card scroll-mt-24" aria-labelledby="docs-h">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="docs-h" class="section-title">Compliance documents</h2>
+          <p class="mt-0.5 text-sm muted">Encrypted at rest - only you and the verification pipeline can open them.</p>
+        </div>
+        <span class="chip">{{ icon("globe", "size-3.5") }} {{ rules.name }} rules</span>
+      </div>
+
+      <div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div>
+          <h3 class="text-sm font-semibold">Required for {{ country_label }}</h3>
+          <ul class="mt-3 space-y-2">
+            {% for req, ok in requirement_status %}
+            <li class="flex items-start gap-3 rounded-2xl p-3 {{ 'bg-ok/[0.07]' if ok else 'bg-zinc-50 dark:bg-white/[0.03]' }}">
+              {% if ok %}
+                <span class="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-ok text-white">{{ icon("check", "size-3.5") }}</span>
+              {% else %}
+                <span class="mt-0.5 size-6 shrink-0 rounded-full border-2 border-dashed border-zinc-300 dark:border-white/20" aria-hidden="true"></span>
+              {% endif %}
+              <div class="min-w-0">
+                <p class="text-sm font-medium">{{ req.label }}<span class="sr-only"> - {{ 'uploaded' if ok else 'missing' }}</span></p>
+                <p class="text-xs muted">{{ req.authority }}{% if req.accepted_labels | length > 1 %} · upload as: {{ req.accepted_labels | join(" or ") }}{% else %} · upload as: {{ req.accepted_labels[0] }}{% endif %}</p>
+              </div>
+            </li>
+            {% endfor %}
+            <li class="flex items-start gap-3 rounded-2xl bg-zinc-50 p-3 dark:bg-white/[0.03]">
+              {% if branch.registration_number %}
+                <span class="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-accent text-white">{{ icon("key", "size-3.5") }}</span>
+              {% else %}
+                <span class="mt-0.5 size-6 shrink-0 rounded-full border-2 border-dashed border-zinc-300 dark:border-white/20" aria-hidden="true"></span>
+              {% endif %}
+              <div class="min-w-0">
+                <p class="text-sm font-medium">{{ rules.registration_label }}</p>
+                <p class="truncate font-mono text-xs muted">{{ branch.registration_number or "Not entered yet - add it under Branch details" }}</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <form method="post" action="/owner/branches/{{ branch.id }}/documents" enctype="multipart/form-data" class="card-muted space-y-4" novalidate>
+          {{ ui.csrf() }}
+          <div class="flex items-center gap-2">
+            <span class="grid size-8 place-items-center rounded-xl bg-white text-accent shadow-sm dark:bg-white/10">{{ icon("upload", "size-4") }}</span>
+            <h3 class="text-sm font-semibold">Upload a document</h3>
+          </div>
+          {% if doc_errors.form %}<p class="alert alert-danger">{{ doc_errors.form }}</p>{% endif %}
+          {{ ui.select("doc_type", "Document type", doc_type_options, value=doc_values.doc_type, required=True, error=doc_errors.doc_type, empty="Choose…") }}
+          {{ ui.file("file", "File", accept="application/pdf,image/jpeg,image/png", required=True, error=doc_errors.file, help="PDF, JPG or PNG · up to " ~ max_upload_mb ~ " MB · max 30 pages") }}
+          <details class="group" {{ 'open' if doc_errors.issued_on or doc_errors.expires_on or doc_errors.document_number }}>
+            <summary class="cursor-pointer list-none text-sm font-medium text-accent">{{ icon("plus", "inline size-4 align-[-3px]") }} Number &amp; dates (optional)</summary>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              {{ ui.field("document_number", "Document number", value=doc_values.document_number, error=doc_errors.document_number, attrs='maxlength="80"', cls="sm:col-span-2") }}
+              {{ ui.field("issued_on", "Issued on", type="date", value=doc_values.issued_on, error=doc_errors.issued_on) }}
+              {{ ui.field("expires_on", "Valid until", type="date", value=doc_values.expires_on, error=doc_errors.expires_on) }}
+            </div>
+          </details>
+          <button type="submit" class="btn btn-primary w-full" {{ 'disabled' if in_progress }}>{{ icon("upload", "size-4") }} Upload securely</button>
+        </form>
+      </div>
+
+      <h3 class="mt-8 text-sm font-semibold">Uploaded <span class="muted font-normal">({{ documents | length }})</span></h3>
+      {% if documents %}
+      <ul class="mt-3 grid grid-cols-1 gap-2">
+        {% for row in documents %}
+        {% set d = row.doc %}
+        {% set is_pdf = d.content_type == 'application/pdf' %}
+        <li class="flex flex-col gap-3 rounded-2xl bg-zinc-50 p-3 sm:flex-row sm:items-center dark:bg-white/[0.03]">
+          <div class="flex min-w-0 flex-1 items-center gap-3">
+            <span class="grid size-11 shrink-0 place-items-center rounded-xl {{ 'bg-bad/10 text-[#d1281e] dark:text-[#ff6b61]' if is_pdf else 'bg-accent/10 text-accent' }}">{{ icon("document" if is_pdf else "photo", "size-5") }}</span>
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium">{{ row.label }}</p>
+              <p class="truncate text-xs muted">{{ d.original_filename }} · {{ row.size }} · {{ d.created_at | dt("%d %b %Y") }}{% if d.expires_on %} · valid until {{ d.expires_on | date }}{% endif %}</p>
+              {% if d.assessment and d.assessment.notes %}<p class="mt-0.5 truncate text-[11px] {{ 'text-[#d1281e] dark:text-[#ff6b61]' if d.accepted == false else 'muted' }}">{{ d.assessment.notes | join(" · ") }}</p>
+              {% elif d.ocr_engines %}<p class="mt-0.5 truncate text-[11px] muted">Read by {{ d.ocr_engines | join(", ") }}</p>{% endif %}
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 sm:justify-end">
+            {% if row.expired %}{{ ui.badge("Expired", "red", "alert") }}
+            {% elif row.state == 'processing' %}{{ ui.badge("Checking", "blue") }}
+            {% elif row.state == 'verified' %}{{ ui.badge("Accepted", "green", "check") }}
+            {% elif row.state == 'rejected' %}{{ ui.badge("Rejected", "red") }}
+            {% else %}{{ ui.badge("Uploaded", "zinc") }}{% endif %}
+            <a href="/owner/branches/{{ branch.id }}/documents/{{ d.id }}/file" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" aria-label="View {{ row.label }}">{{ icon("eye", "size-4") }}<span class="hidden sm:inline">View</span></a>
+            {% if row.can_delete %}
+              {{ delete_button("/owner/branches/" ~ branch.id ~ "/documents/" ~ d.id ~ "/delete", "Delete " ~ row.label ~ " (" ~ d.original_filename ~ ")?", "Delete " ~ row.label) }}
+            {% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+        <div class="mt-3 rounded-2xl border border-dashed border-zinc-300 px-4 py-8 text-center dark:border-white/15">
+          {{ icon("document", "mx-auto size-6 text-zinc-400") }}
+          <p class="mt-2 text-sm font-medium">No documents yet</p>
+          <p class="mt-0.5 text-xs muted">Start with the {{ rules.requirements[0].label | lower }}.</p>
+        </div>
+      {% endif %}
+    </section>
+
+    {# ============================================================ VERIFICATION #}
+    <section id="verification" class="card scroll-mt-24" aria-labelledby="verif-h"
+             data-component="verification-status" data-url="/api/owner/branches/{{ branch.id }}/status"
+             data-status="{{ status }}" data-branch-id="{{ branch.id }}">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="verif-h" class="section-title">AI verification</h2>
+          <p class="mt-0.5 text-sm muted">OCR engines read every document, rules check the numbers and the map, then the AI judges the whole file.</p>
+        </div>
+        {{ ui.ai_chip() }}
+      </div>
+
+      {% set hero = {
+        'verified': ('check-badge', 'bg-ok/12 text-[#1f8c3a] dark:text-[#4ade80]', 'Verified'),
+        'queued': ('clock', 'bg-accent/12 text-accent', 'Queued for verification'),
+        'processing': ('cpu', 'bg-accent/12 text-accent', 'Checking your documents…'),
+        'needs_review': ('eye', 'bg-warn/15 text-[#b45309] dark:text-[#fbbf24]', 'In manual review'),
+        'ai_unavailable': ('wifi-off', 'bg-warn/15 text-[#b45309] dark:text-[#fbbf24]', 'AI offline - retrying automatically'),
+        'rejected': ('x-circle', 'bg-bad/12 text-[#d1281e] dark:text-[#ff6b61]', 'Not verified'),
+        'draft': ('shield', 'bg-zinc-500/12 text-zinc-500 dark:text-zinc-300', 'Not submitted yet'),
+      }[status] %}
+      <div class="mt-6 flex items-start gap-4 rounded-[24px] bg-zinc-50 p-4 sm:p-5 dark:bg-white/[0.03]">
+        <span class="grid size-12 shrink-0 place-items-center rounded-2xl {{ hero[1] }}">
+          {% if in_progress %}<span class="spinner !size-5"></span>{% else %}{{ icon(hero[0], "size-6") }}{% endif %}
+        </span>
+        <div class="min-w-0 flex-1">
+          <p class="font-semibold" data-status-title>{{ hero[2] }}</p>
+          <p class="mt-0.5 text-sm muted" data-status-summary>
+            {% if branch.verification_summary %}{{ branch.verification_summary }}
+            {% elif status == 'draft' %}Complete the details and documents, then submit - most branches are verified within a minute.
+            {% endif %}
+          </p>
+          {% if status == 'verified' and branch.verified_at %}<p class="mt-1 text-xs muted">Verified {{ branch.verified_at | dt }}</p>{% endif %}
+          {% if in_progress %}
+            <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-accent/15" aria-hidden="true"><div class="owner-progress h-full rounded-full bg-accent"></div></div>
+            <p class="mt-2 text-xs muted">This page updates by itself.</p>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if checks %}
+      <ul class="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-2" aria-label="Automated checks">
+        {% for c in checks %}
+        {% set st = c.status or ('pass' if c.passed else 'fail') %}
+        <li class="flex items-start gap-3 rounded-2xl p-3 ring-1 ring-black/[0.04] dark:ring-white/[0.06]">
+          {% if st == 'pass' %}<span class="mt-0.5 text-ok">{{ icon("check-circle", "size-5", "Passed") }}</span>
+          {% elif st == 'warn' %}<span class="mt-0.5 text-warn">{{ icon("alert", "size-5", "Warning") }}</span>
+          {% elif st == 'fail' %}<span class="mt-0.5 text-bad">{{ icon("x-circle", "size-5", "Failed") }}</span>
+          {% else %}<span class="mt-0.5 text-zinc-400">{{ icon("info", "size-5", "Skipped") }}</span>{% endif %}
+          <div class="min-w-0">
+            <p class="text-sm font-medium">{{ c.label or (c.check | humanize) }}{% if c.critical and st == 'fail' %} <span class="badge badge-red ml-1 !py-0.5 !text-[10px]">Critical</span>{% endif %}</p>
+            {% if c.detail %}<p class="mt-0.5 text-xs muted">{{ c.detail }}</p>{% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+
+      {% if geo_points and geo_points.geocoded %}
+      <div class="mt-5">
+        <div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <p class="font-medium">Map pin vs. typed address</p>
+          <p class="flex items-center gap-3 muted">
+            <span class="flex items-center gap-1"><span class="size-2.5 rounded-full bg-accent"></span> Your pin</span>
+            <span class="flex items-center gap-1"><span class="size-2.5 rounded-full bg-violet"></span> Address</span>
+            <span class="font-semibold text-ink dark:text-white">{{ geo_points.distance_km }} km apart</span>
+          </p>
+        </div>
+        <div class="owner-map owner-map-sm" data-component="map-view" data-points="{{ geo_points | jsonattr }}" role="img" aria-label="Map comparing the pin with the geocoded address ({{ geo_points.distance_km }} km apart)">
+          <div class="owner-map-fallback">{{ icon("map", "size-6") }}<p class="text-xs">Map loading…</p></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="mt-6">
+        {% if status == 'verified' %}
+          <p class="flex items-center gap-2 text-sm text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("check-circle", "size-5") }} Verified. Changing the address or pin later resets verification.</p>
+        {% elif in_progress %}
+          <button type="button" class="btn btn-primary" disabled><span class="spinner"></span> Verification running…</button>
+        {% elif can_submit %}
+          <form method="post" action="/owner/branches/{{ branch.id }}/submit" class="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {{ ui.csrf() }}
+            <button type="submit" class="btn btn-primary btn-lg">{{ icon("sparkles", "size-4") }} {{ 'Submit again' if status in ('rejected', 'needs_review', 'ai_unavailable') else 'Submit for AI verification' }}</button>
+            <p class="text-xs muted">Your documents are read by several OCR engines and checked against {{ rules.name }} rules.</p>
+          </form>
+        {% else %}
+          <div class="rounded-2xl ring-1 ring-black/[0.05] dark:ring-white/[0.08]">
+            <p class="border-b border-black/[0.05] px-4 py-3 text-sm font-semibold dark:border-white/[0.08]">Before you can submit</p>
+            <ul class="divide-y divide-black/[0.04] dark:divide-white/[0.05]">
+              {% for b in blockers %}
+              <li><a href="{{ b.href }}" class="flex items-center gap-3 px-4 py-3 text-sm transition hover:bg-zinc-50 dark:hover:bg-white/[0.03]">
+                <span class="size-2 shrink-0 rounded-full bg-warn"></span><span class="flex-1">{{ b.text }}</span>{{ icon("chevron-right", "size-4 shrink-0 text-zinc-400") }}
+              </a></li>
+              {% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      </div>
+
+      {% if runs %}
+      <div class="divider"></div>
+      <h3 class="text-sm font-semibold">History</h3>
+      <ol class="owner-timeline mt-4">
+        {% for run in runs %}
+        <li class="owner-timeline-item">
+          <span class="owner-timeline-dot {{ tone_bg[run.outcome | tone] }}"></span>
+          <div class="flex flex-wrap items-center gap-2">
+            {{ om.vstatus(run.outcome) }}
+            {% if run.manual %}<span class="chip">{{ icon("user", "size-3") }} Manual review</span>{% endif %}
+            <span class="text-xs muted">{{ run.created_at | dt }}</span>
+          </div>
+          {% if run.summary %}<p class="mt-1.5 text-sm">{{ run.summary }}</p>{% endif %}
+          <p class="mt-0.5 text-xs muted">
+            {% if run.ai_provider %}AI: {{ run.ai_provider }}{% else %}Rules only{% endif %}{% if run.score is not none %} · confidence {{ (run.score * 100) | round | int }}%{% endif %}
+          </p>
+        </li>
+        {% endfor %}
+      </ol>
+      {% endif %}
+    </section>
+
+    {# ============================================================ PHOTOS #}
+    <section id="photos" class="card scroll-mt-24" aria-labelledby="photos-h">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="photos-h" class="section-title">Photos</h2>
+          <p class="mt-0.5 text-sm muted">At least {{ min_photos }} - the machines and the whole gym. Shown on the public branch page.</p>
+        </div>
+        <span class="chip tabular-nums">{{ photo_count }} / {{ max_photos }}</span>
+      </div>
+      {% if photo_errors.form %}<div class="mt-4">{{ ui.alert(photo_errors.form, "danger") }}</div>{% endif %}
+
+      {% if status != 'verified' %}
+        <div class="mt-6 flex flex-col items-center rounded-[24px] bg-zinc-50 px-6 py-10 text-center dark:bg-white/[0.03]">
+          <span class="grid size-12 place-items-center rounded-2xl bg-zinc-200/70 text-zinc-500 dark:bg-white/10 dark:text-zinc-300">{{ icon("lock", "size-5") }}</span>
+          <p class="mt-3 font-semibold">Unlocks after verification</p>
+          <p class="mt-1 max-w-sm text-sm muted">Once the AI verifies this branch you can upload up to {{ max_photos }} photos. {{ min_photos }} photos put it live on the website.</p>
+        </div>
+      {% else %}
+        <div class="mt-5 flex items-center gap-3">
+          <div class="flex flex-1 gap-1" aria-hidden="true">
+            {% for i in range(min_photos) %}<span class="h-1.5 flex-1 rounded-full {{ 'bg-ok' if i < photo_count else 'bg-zinc-200 dark:bg-white/10' }}"></span>{% endfor %}
+          </div>
+          <p class="shrink-0 text-xs font-medium {{ 'text-[#1f8c3a] dark:text-[#4ade80]' if photo_count >= min_photos else 'muted' }}">
+            {% if photo_count >= min_photos %}Enough to go live{% else %}{{ min_photos - photo_count }} more to go live{% endif %}
+          </p>
+        </div>
+
+        {% if photo_count < max_photos %}
+        <form method="post" action="/owner/branches/{{ branch.id }}/photos" enctype="multipart/form-data" class="card-muted mt-5 space-y-4"
+              data-component="photo-picker" data-remaining="{{ max_photos - photo_count }}" novalidate>
+          {{ ui.csrf() }}
+          <div>
+            <label class="label" for="f-photos">Photos <span class="text-bad">*</span></label>
+            <input id="f-photos" name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple class="peer sr-only" data-photo-input
+                   aria-describedby="h-photos">
+            <label for="f-photos" class="owner-dropzone peer-focus-visible:border-accent peer-focus-visible:ring-4 peer-focus-visible:ring-accent/20">
+              {{ icon("camera", "size-6") }}
+              <span class="text-sm font-medium">Choose photos</span>
+              <span class="text-xs muted" id="h-photos">JPG, PNG or WEBP · up to {{ max_photos - photo_count }} more · {{ max_upload_mb }} MB per upload</span>
+            </label>
+            <div class="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4" data-photo-previews></div>
+            {% if photo_errors.photos %}<p class="field-error">{{ photo_errors.photos }}</p>{% endif %}
+          </div>
+          <div class="fieldset">
+            {{ ui.select("kind", "They show", photo_kinds, value="machines" if photo_count == 0 else "overall", error=photo_errors.kind) }}
+            {{ ui.field("caption", "Caption (optional)", error=photo_errors.caption, placeholder="Free-weights area", attrs='maxlength="160"') }}
+          </div>
+          <button type="submit" class="btn btn-primary w-full sm:w-auto">{{ icon("upload", "size-4") }} Upload photos</button>
+        </form>
+        {% endif %}
+
+        {% if photos %}
+        <ul class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {% for p in photos %}
+          <li>
+            <figure class="overflow-hidden rounded-2xl bg-zinc-100 ring-1 ring-black/[0.04] dark:bg-white/[0.04] dark:ring-white/[0.06]">
+              <img src="{{ media_url(p.image_key) }}" alt="{{ p.caption or photo_kind_labels[p.kind.value] }}" class="aspect-[4/3] w-full object-cover" loading="lazy">
+              <figcaption class="flex items-center gap-2 p-2.5">
+                <div class="min-w-0 flex-1">
+                  <span class="badge badge-zinc !text-[10px]">{{ photo_kind_labels[p.kind.value] }}</span>
+                  {% if p.caption %}<p class="mt-1 truncate text-xs muted">{{ p.caption }}</p>{% endif %}
+                </div>
+                {{ delete_button("/owner/branches/" ~ branch.id ~ "/photos/" ~ p.id ~ "/delete", "Delete this photo?" ~ (" The branch goes offline below " ~ min_photos ~ " photos." if photo_count <= min_photos else ""), "Delete photo") }}
+              </figcaption>
+            </figure>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      {% endif %}
+    </section>
+  </div>
+
+  {# ============================================================ ASIDE #}
+  <aside class="space-y-6 lg:sticky lg:top-24">
+    <section id="status" class="card scroll-mt-24" aria-labelledby="status-h">
+      <h2 id="status-h" class="sr-only">Branch status</h2>
+      <div class="flex items-center gap-3">
+        <span class="owner-live-dot {{ 'owner-live-on' if live else '' }}" aria-hidden="true"></span>
+        <p class="font-semibold">{{ 'Live on the website' if live else 'Not live yet' }}</p>
+      </div>
+      <p class="mt-1.5 text-sm muted">{{ live_reason }}</p>
+
+      <dl class="mt-5 space-y-3 text-sm">
+        <div class="flex items-center justify-between gap-3"><dt class="muted">Verification</dt><dd>{{ om.vstatus(branch.verification_status) }}</dd></div>
+        <div class="flex items-center justify-between gap-3"><dt class="muted">Status</dt><dd>{{ ui.badge("Open", "green") if branch.is_open else ui.badge("Closed", "zinc") }}</dd></div>
+        <div class="flex items-center justify-between gap-3"><dt class="muted">Photos</dt><dd class="font-medium tabular-nums">{{ photo_count }} / {{ min_photos }} needed</dd></div>
+        <div class="flex items-center justify-between gap-3"><dt class="muted">Time zone</dt><dd class="truncate font-medium">{{ branch.timezone }}</dd></div>
+        <div class="flex items-center justify-between gap-3"><dt class="muted">Map pin</dt>
+          <dd class="font-mono text-xs">{% if branch.latitude is not none %}{{ '%.4f' | format(branch.latitude) }}, {{ '%.4f' | format(branch.longitude) }}{% else %}<span class="text-[#b45309] dark:text-[#fbbf24]">Not set</span>{% endif %}</dd></div>
+        {% if branch.verified_at %}<div class="flex items-center justify-between gap-3"><dt class="muted">Verified</dt><dd class="font-medium">{{ branch.verified_at | dt("%d %b %Y") }}</dd></div>{% endif %}
+      </dl>
+
+      {% if live %}
+        <a href="/gyms/{{ gym.slug }}/branches/{{ branch.id }}" class="btn btn-secondary mt-5 w-full">{{ icon("external", "size-4") }} View public page</a>
+      {% elif can_submit and status in ('rejected', 'needs_review', 'ai_unavailable') %}
+        <a href="#verification" class="btn btn-secondary mt-5 w-full">{{ icon("refresh", "size-4") }} Review the result &amp; resubmit</a>
+      {% elif can_submit %}
+        <a href="#verification" class="btn btn-primary mt-5 w-full">{{ icon("sparkles", "size-4") }} Ready - submit for verification</a>
+      {% elif status == 'verified' and photo_count < min_photos %}
+        <a href="#photos" class="btn btn-primary mt-5 w-full">{{ icon("camera", "size-4") }} Add photos to go live</a>
+      {% elif not gym.offline_enabled and status == 'verified' %}
+        <a href="/owner/gyms/{{ gym.id }}#modes" class="btn btn-secondary mt-5 w-full">{{ icon("map-pin", "size-4") }} Switch on physical locations</a>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="doors-h">
+      <h2 id="doors-h" class="section-title">{{ 'Temporarily close' if branch.is_open else 'Closed' }}</h2>
+      {% if branch.is_open %}
+        <p class="mt-1 text-sm muted">Hides the branch and notifies its members. Verification is kept - reopening is instant.</p>
+        <form method="post" action="/owner/branches/{{ branch.id }}/close" class="mt-4 space-y-3" data-confirm="Close {{ branch.name }}? It is hidden from the website and its members are notified.">
+          {{ ui.csrf() }}
+          {{ ui.textarea("reason", "Reason (shown to members)", error=close_errors.reason, rows=2, placeholder="Renovation until 15 March", attrs='maxlength="255" required') }}
+          <button type="submit" class="btn btn-secondary w-full">{{ icon("lock", "size-4") }} Close branch</button>
+        </form>
+      {% else %}
+        <p class="mt-1 text-sm muted">Closed {{ branch.closed_at | timeago }}{% if branch.closed_reason %} - “{{ branch.closed_reason }}”{% endif %}.</p>
+        <form method="post" action="/owner/branches/{{ branch.id }}/reopen" class="mt-4">
+          {{ ui.csrf() }}
+          <button type="submit" class="btn btn-success w-full">{{ icon("refresh", "size-4") }} Reopen - no re-verification</button>
+        </form>
+      {% endif %}
+    </section>
+  </aside>
+</div>
+{% endblock %}
+{% block scripts %}<script nonce="{{ csp_nonce }}" src="{{ static('vendor/leaflet/leaflet.js') }}" defer></script>{% endblock %}

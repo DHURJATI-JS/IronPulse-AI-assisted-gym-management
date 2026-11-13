@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}Your check-in{% endblock %}
+{% block content %}
+{% set sl = check.stress_level.value %}
+{% set face = check.face_analysis %}
+{% call ui.page_header("Your check-in", check.created_at | dt("%A %d %B %Y, %H:%M"), eyebrow="Wellness", back="/me/wellness") %}
+  {{ ui.ai_chip(provider_label) }}
+  <a href="/me/wellness" class="btn btn-secondary">{{ icon("refresh", "size-4") }} New check-in</a>
+{% endcall %}
+
+{% if red_flags %}
+<section class="mb-6 overflow-hidden rounded-[28px] bg-bad p-6 text-white shadow-xl shadow-bad/25 sm:p-8 animate-fade-up" role="alert" aria-labelledby="emergency-title">
+  <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
+    <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-white/20">{{ icon("phone", "size-6") }}</span>
+    <div>
+      <h2 id="emergency-title" class="text-2xl font-semibold tracking-tight">Seek emergency care now</h2>
+      <p class="mt-2 text-[15px] leading-relaxed text-white/90">You reported {{ red_flags | join(", ") }}. These can be signs of a medical emergency. Call your local emergency number (112 in India and the EU, 911 in the US) or go to the nearest emergency department{% if minor %}, and tell a parent or guardian right away{% endif %}.</p>
+      <p class="mt-3 text-sm text-white/80">Your gym activities are paused for your safety until a gym admin reactivates them.</p>
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+  <div class="min-w-0 space-y-6 lg:col-span-2">
+    <section class="card animate-fade-up" aria-labelledby="result-title">
+      <div class="flex flex-col items-center gap-6 sm:flex-row sm:items-center">
+        {# score ring: circumference of r=52 is 326.73 #}
+        <div class="relative size-36 shrink-0">
+          <svg viewBox="0 0 120 120" class="size-full -rotate-90" aria-hidden="true" focusable="false">
+            <circle cx="60" cy="60" r="52" fill="none" stroke-width="10" class="stroke-zinc-200 dark:stroke-white/10"/>
+            <circle cx="60" cy="60" r="52" fill="none" stroke-width="10" stroke-linecap="round"
+                    stroke-dasharray="{{ ring_dash }} 326.73"
+                    class="{{ 'stroke-bad' if sl == 'high' else ('stroke-warn' if sl == 'moderate' else 'stroke-ok') }}"/>
+          </svg>
+          <div class="absolute inset-0 grid place-items-center text-center">
+            <div><p class="text-4xl font-semibold tracking-tight">{{ check.pss_score }}</p><p class="text-xs muted">of 16</p></div>
+          </div>
+        </div>
+        <div class="text-center sm:text-left">
+          <p class="eyebrow">PSS-4 result</p>
+          <h2 id="result-title" class="mt-1 text-3xl font-semibold tracking-tight">{{ sl | humanize }} stress</h2>
+          <p class="mt-2 text-[15px] muted">{{ {'high': 'Your answers suggest a lot is weighing on you right now.', 'moderate': 'Some pressure is building - worth a little extra care this week.'}.get(sl, 'You seem to be handling things well at the moment.') }}</p>
+          {% if base_level != sl %}<p class="mt-2 text-xs muted">Raised from {{ base_level | humanize | lower }} by the selfie read-out (strong signs of tiredness).</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <section class="card animate-fade-up" aria-labelledby="recs-title">
+      <h2 id="recs-title" class="section-title">What might help</h2>
+      <ul class="mt-4 space-y-3">
+        {% for r in recommendations %}
+        <li class="flex gap-3 text-sm leading-relaxed">
+          <span class="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full {{ 'bg-bad/12 text-bad' if loop.first and red_flags else 'bg-accent/10 text-accent' }}">{{ icon("alert" if loop.first and red_flags else "check", "size-3.5") }}</span>
+          <span>{{ r }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      <a href="{{ breathing_video }}" class="group mt-6 flex items-center gap-4 rounded-2xl bg-gradient-to-br from-accent/10 via-indigo/10 to-violet/10 p-4 transition hover:from-accent/15 hover:to-violet/15">
+        <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-white text-accent shadow-sm transition group-hover:scale-105 dark:bg-white/10">{{ icon("play", "size-6") }}</span>
+        <span class="min-w-0 flex-1"><span class="block font-semibold">Box breathing · 4 minutes</span><span class="block text-sm muted">In 4 · hold 4 · out 4 · hold 4. Works anywhere.</span></span>
+        {{ icon("chevron-right", "size-5 text-zinc-400") }}
+      </a>
+    </section>
+  </div>
+
+  <aside class="min-w-0 space-y-6">
+    <section class="card" aria-labelledby="face-title">
+      <div class="flex items-center gap-3">
+        <span class="grid size-10 place-items-center rounded-2xl bg-violet/12 text-violet">{{ icon("camera", "size-5") }}</span>
+        <h2 id="face-title" class="section-title">Selfie read-out</h2>
+      </div>
+      {% if face and face.status == 'ok' %}
+        <div class="mt-4 flex items-center gap-2 text-sm"><span class="muted">Visible fatigue</span>{{ ui.status(face.fatigue_signs) }}</div>
+        {% if face.observations %}
+        <ul class="mt-3 space-y-2 text-sm">{% for o in face.observations %}<li class="flex gap-2">{{ icon("eye", "mt-0.5 size-4 shrink-0 text-zinc-400") }}<span>{{ o }}</span></li>{% endfor %}</ul>
+        {% endif %}
+        {% if face.stress_indicators %}
+        <div class="mt-3 flex flex-wrap gap-1.5">{% for s in face.stress_indicators %}<span class="chip">{{ s }}</span>{% endfor %}</div>
+        {% endif %}
+        <p class="mt-4 text-xs leading-relaxed muted">{{ face.disclaimer }} The photo was analysed in memory and not stored.</p>
+      {% elif face and face.status == 'unavailable' %}
+        <div class="mt-4 flex items-start gap-3 rounded-2xl bg-zinc-100/80 p-4 text-sm dark:bg-white/[0.05]">
+          <span class="ai-dot mt-1.5 shrink-0" data-state="offline"></span>
+          <p><span class="font-semibold">AI unavailable.</span> Your result is based on the questionnaire only. The photo was discarded without being stored.</p>
+        </div>
+      {% elif face and face.status == 'refused' %}
+        {% set why = {'quota': 'your AI photo checks for now were used up', 'cooldown': 'AI was paused on your account', 'too_many': 'other AI requests of yours were still running'}.get(face.code, 'the AI limit for your account was reached') %}
+        <div class="mt-4 flex items-start gap-3 rounded-2xl bg-zinc-100/80 p-4 text-sm dark:bg-white/[0.05]">
+          {{ icon("clock", "mt-0.5 size-4 shrink-0 text-warn") }}
+          <p><span class="font-semibold">Selfie not analysed</span> because {{ why }}. Your result is based on the questionnaire only. The photo was discarded without being stored.</p>
+        </div>
+      {% elif face and face.status == 'skipped' %}
+        <div class="mt-4 flex items-start gap-3 rounded-2xl bg-zinc-100/80 p-4 text-sm dark:bg-white/[0.05]">
+          {{ icon("alert", "mt-0.5 size-4 shrink-0 text-bad") }}
+          <p><span class="font-semibold">Selfie not analysed</span> - the symptoms you reported come first. Your result is based on the questionnaire only. The photo was discarded without being read or stored.</p>
+        </div>
+      {% elif face and face.status == 'cancelled' %}
+        <div class="mt-4 flex items-start gap-3 rounded-2xl bg-zinc-100/80 p-4 text-sm dark:bg-white/[0.05]">
+          {{ icon("info", "mt-0.5 size-4 shrink-0 text-zinc-400") }}
+          <p><span class="font-semibold">Selfie read-out stopped</span> - the page was closed or the connection dropped before it finished. Your result is based on the questionnaire only. The photo was discarded without being stored.</p>
+        </div>
+      {% else %}
+        <p class="mt-4 text-sm muted">No selfie this time - that's fine. Your result is based on your answers.</p>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="answers-title">
+      <h2 id="answers-title" class="section-title">Your answers</h2>
+      <dl class="mt-4 space-y-3 text-sm">
+        {% for q, a in answers %}
+        <div><dt class="muted">{{ q }}</dt><dd class="mt-0.5 font-medium">{{ a }}</dd></div>
+        {% endfor %}
+        <div><dt class="muted">Symptoms</dt><dd class="mt-0.5 font-medium">{{ symptom_labels | join(", ") if symptom_labels else "None" }}</dd></div>
+      </dl>
+    </section>
+
+    {% if history | length > 1 %}
+    <section class="card" aria-labelledby="hist-title">
+      <h2 id="hist-title" class="section-title">Earlier check-ins</h2>
+      <ul class="mt-3 space-y-1">
+        {% for c in history if c.id != check.id %}
+        <li><a href="/me/wellness/{{ c.id }}" class="-mx-2 flex items-center justify-between gap-3 rounded-xl px-2 py-2 text-sm transition hover:bg-zinc-900/[0.04] dark:hover:bg-white/[0.05]">
+          <span>{{ c.created_at | dt("%d %b") }}</span>{{ ui.status(c.stress_level) }}</a></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

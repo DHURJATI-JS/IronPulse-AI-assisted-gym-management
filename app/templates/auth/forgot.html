@@ -1,0 +1,39 @@
+{% extends "auth/_center.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "auth/_macros.html" as am with context %}
+{% block title %}Reset your password{% endblock %}
+{% block card %}
+<div class="card p-7 sm:p-10">
+  {% if sent %}
+    {{ am.card_icon("envelope", "green") }}
+    <h1 class="mt-6 text-[28px] font-semibold leading-tight tracking-tight">Check your inbox</h1>
+    <p class="mt-2 text-[15px] leading-relaxed muted">If an account matches what you entered, we've just e-mailed a secure link to choose a new password to the address on that account.</p>
+    <ul class="mt-6 space-y-3 text-sm">
+      {% for ico, text in [
+        ("clock", "The link works once and expires after 1 hour."),
+        ("search", "Nothing after a few minutes? Check your spam or promotions folder."),
+        ("refresh", "Asked more than once? Only the newest link works."),
+      ] %}
+      <li class="flex items-start gap-3"><span class="mt-0.5 text-accent">{{ icon(ico, "size-4") }}</span><span class="muted">{{ text }}</span></li>
+      {% endfor %}
+    </ul>
+    <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+      <a href="/auth/login" class="btn btn-primary">{{ icon("arrow-left", "size-4") }} Back to sign in</a>
+      <a href="/auth/forgot" class="btn btn-secondary">Use another address</a>
+    </div>
+  {% else %}
+    {{ am.card_icon("key") }}
+    <h1 class="mt-6 text-[28px] font-semibold leading-tight tracking-tight">Forgot your password?</h1>
+    <p class="mt-2 text-[15px] leading-relaxed muted">Enter your e-mail address, username or phone number and we'll e-mail you a link to choose a new password.</p>
+    <form method="post" action="/auth/forgot" class="mt-8 space-y-5">
+      {{ ui.csrf() }}
+      {{ ui.field("identifier", "E-mail, username or phone number", value=form.identifier, required=True, error=errors.identifier, autocomplete="username",
+                  placeholder="you@example.com", attrs='maxlength="254" autocapitalize="off" spellcheck="false" autofocus', help="We'll send the link to the e-mail address on the account.") }}
+      <button type="submit" class="btn btn-primary btn-lg w-full" data-busy-label="Sending…">Send reset link {{ icon("send", "size-4") }}</button>
+    </form>
+    <div class="divider"></div>
+    <p class="flex flex-wrap justify-center gap-x-4 gap-y-1 text-center text-sm muted"><span>Remembered it? <a href="/auth/login" class="font-semibold text-accent hover:underline">Back to sign in</a></span>
+      <a href="/auth/forgot-username" class="font-semibold text-accent hover:underline">Forgot your username?</a></p>
+  {% endif %}
+</div>
+{% endblock %}

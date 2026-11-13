@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/finance/_macros.html" as fin with context %}
+{% block title %}{{ 'Final settlement' if st.is_final_settlement else 'Salary' }} · {{ employee.display_name }}{% endblock %}
+{% block content %}
+{% set cur = st.currency %}
+{% set status = st.status.value %}
+{% call ui.page_header(employee.display_name, (period ~ " · " ~ gym.name ~ " · " ~ rules_name), eyebrow=("Final settlement" if st.is_final_settlement else "Salary statement"), back="/owner/payroll") %}
+  {{ fin.statement_status(st) }}
+  {% if st.is_final_settlement %}<a href="/owner/staff/{{ employee.id }}/settlement" class="btn btn-secondary btn-sm">{{ icon("briefcase", "size-4") }} Settlement &amp; termination</a>{% endif %}
+{% endcall %}
+{{ fin.finance_nav("payroll") }}
+{{ ui.form_errors(errors) }}
+
+<div class="grid gap-6 lg:grid-cols-3" data-component="payroll-status" data-status="{{ status }}" data-explaining="{{ '1' if explaining else '0' }}" data-url="/owner/payroll/{{ st.id }}/status">
+  {# ================================================================ left column #}
+  <div class="grid content-start gap-6 lg:col-span-2">
+    {# ---- hero: what to do now #}
+    <section class="fin-hero {{ 'fin-hero-paid' if status == 'paid' else ('fin-hero-overdue' if overdue else '') }} animate-fade-up" aria-labelledby="net-title">
+      <div class="flex flex-wrap items-start justify-between gap-6">
+        <div>
+          <p id="net-title" class="text-sm font-medium text-white/80">{{ 'Paid' if status == 'paid' else 'Net pay to transfer' }}</p>
+          <p class="mt-1 break-words text-[34px] font-semibold leading-none tracking-tight sm:text-5xl">{{ st.net_pay | money(cur) }}</p>
+          <p class="mt-3 text-sm text-white/85">
+            {% if status == 'paid' %}
+              Paid {{ st.paid_at | dt("%d %b %Y") }}{% if payment and payment.proof_verified is sameas true %} · proof verified{% elif payment and payment.proof_verified is sameas false %} · confirmed manually{% endif %}
+            {% elif status == 'proof_review' %}
+              Proof received - verifying amount, reference and date…
+            {% elif status == 'awaiting_proof' %}
+              Payment started - upload the proof of transaction to finish.
+            {% elif overdue %}
+              Overdue since {{ st.due_date | date("%d %b %Y") }} - please pay now.
+            {% else %}
+              Due by {{ st.due_date | date("%d %b %Y") }}
+            {% endif %}
+          </p>
+        </div>
+        <dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:text-right">
+          <div><dt class="text-white/70">Gross</dt><dd class="font-semibold tabular-nums">{{ st.gross_pay | money(cur) }}</dd></div>
+          <div><dt class="text-white/70">Days paid</dt><dd class="font-semibold tabular-nums">{{ st.days_worked }}{% if st.unpaid_leave_days %} <span class="text-white/70">(−{{ st.unpaid_leave_days }} leave)</span>{% endif %}</dd></div>
+          <div><dt class="text-white/70">Deductions</dt><dd class="font-semibold tabular-nums">{{ (deductions_total + st.tax_withholding) | money(cur) }}</dd></div>
+          <div><dt class="text-white/70">{{ (rules.gratuity.label if rules.gratuity else 'Gratuity') }}</dt><dd class="font-semibold tabular-nums">{{ st.gratuity | money(cur) }}</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    {# ---- breakdown #}
+    <section class="card animate-fade-up" aria-labelledby="breakdown-title">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 id="breakdown-title" class="section-title">Breakdown</h2>
+          <p class="mt-0.5 text-xs muted">{{ rules.rule_set or rules_name }}</p>
+        </div>
+        <span class="badge badge-amber shrink-0" title="Tax, contributions and gratuity are estimates">{{ icon("info", "size-3.5") }}Estimates</span>
+      </div>
+      <div class="mt-4">
+        <p class="eyebrow mb-1">Salary by days</p>
+        {% if rules.proration %}
+          {{ fin.proration_rows(rules.proration, st.monthly_salary, cur) }}
+        {% else %}
+          <div class="fin-row"><span class="muted">No salary days - already paid on earlier statements</span><span>{{ 0 | money(cur) }}</span></div>
+        {% endif %}
+        <div class="fin-row fin-row-total"><span>Gross pay</span><span>{{ st.gross_pay | money(cur) }}</span></div>
+      </div>
+
+      <div class="mt-6">
+        <p class="eyebrow mb-1">Deducted from the employee</p>
+        {% for code, v in st.employee_deductions.items() %}
+          <div class="fin-row">
+            <span>{{ v.label }}<span class="block text-xs muted">{{ v.explanation }}</span></span>
+            <span>&minus;{{ v.amount | money(cur) }}</span>
+          </div>
+        {% endfor %}
+        {% if rules.withholding %}
+          <div class="fin-row">
+            <span>{{ rules.withholding.label }}<span class="block text-xs muted">{{ rules.withholding.explanation }}</span></span>
+            <span>&minus;{{ st.tax_withholding | money(cur) }}</span>
+          </div>
+        {% endif %}
+        {% if not st.employee_deductions and not rules.withholding %}
+          <div class="fin-row"><span class="muted">No statutory deductions for {{ rules_name }}</span><span>{{ 0 | money(cur) }}</span></div>
+        {% endif %}
+      </div>
+
+      {% if rules.gratuity %}
+      <div class="mt-6">
+        <p class="eyebrow mb-1">{{ rules.gratuity.label }}</p>
+        <div class="fin-row">
+          <span>{{ rules.gratuity.explanation }}
+            {% if rules.gratuity.steps %}
+              <ul class="mt-1.5 grid gap-1 text-xs muted">{% for s in rules.gratuity.steps %}<li class="flex gap-1.5"><span aria-hidden="true">·</span>{{ s }}</li>{% endfor %}</ul>
+            {% endif %}
+          </span>
+          <span>+{{ st.gratuity | money(cur) }}</span>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="mt-4 rounded-2xl bg-zinc-100/80 px-4 dark:bg-white/[0.05]">
+        <div class="fin-row fin-row-total"><span>Net pay</span><span>{{ st.net_pay | money(cur) }}</span></div>
+      </div>
+
+      {% if st.employer_contributions %}
+      <details class="group mt-5">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 text-sm">
+          <span class="inline-flex items-center gap-1 font-medium text-accent">{{ icon("chevron-right", "size-4 transition group-open:rotate-90") }} Employer contributions (your cost on top)</span>
+          <span class="font-semibold tabular-nums">{{ employer_total | money(cur) }}</span>
+        </summary>
+        <div class="mt-2">
+          {% for code, v in st.employer_contributions.items() %}
+            <div class="fin-row"><span>{{ v.label }}<span class="block text-xs muted">{{ v.explanation }}</span></span><span>{{ v.amount | money(cur) }}</span></div>
+          {% endfor %}
+          <div class="fin-row fin-row-total"><span>Total employer cost</span><span>{{ (st.gross_pay + employer_total + st.gratuity) | money(cur) }}</span></div>
+        </div>
+      </details>
+      {% endif %}
+    </section>
+
+    {# ---- explanation (AI or deterministic) #}
+    <section id="explanation" class="card scroll-mt-24 animate-fade-up" aria-labelledby="expl-title">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <span class="grid size-10 place-items-center rounded-2xl bg-violet/10 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("sparkles", "size-5") }}</span>
+          <div>
+            <h2 id="expl-title" class="section-title">How this was calculated</h2>
+            <p class="text-xs muted">{% if explanation_provider %}Explained by AI · numbers come from the payroll engine{% else %}Standard explanation from the payroll engine{% endif %}</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          {{ ui.ai_chip() }}
+          {% if explaining %}
+            <span class="badge badge-blue"><span class="spinner size-3"></span>Writing…</span>
+          {% elif ai_status.available %}
+            <form method="post" action="/owner/payroll/{{ st.id }}/explain">{{ ui.csrf() }}<button class="btn btn-secondary btn-sm">{{ icon("sparkles", "size-4") }}{{ 'Re-explain' if explanation_provider else 'Explain with AI' }}</button></form>
+          {% endif %}
+        </div>
+      </div>
+      <p class="mt-4 text-[15px] leading-relaxed">{{ explanation.summary }}</p>
+      {% if explanation.steps %}
+        <ol class="mt-4 grid gap-2 text-sm">
+          {% for s in explanation.steps %}
+            <li class="flex gap-3"><span class="fin-step !size-6 !text-xs">{{ loop.index }}</span><span class="pt-0.5">{{ s }}</span></li>
+          {% endfor %}
+        </ol>
+      {% endif %}
+      {% if explanation.country_notes %}
+        <div class="mt-5">
+          <p class="eyebrow mb-2">{{ rules_name }} notes</p>
+          <ul class="grid gap-1.5 text-sm muted">{% for n in explanation.country_notes %}<li class="flex gap-2">{{ icon("globe", "size-4 mt-0.5 shrink-0") }}<span>{{ n }}</span></li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+      {% if explanation.warnings %}
+        <div class="alert alert-warning mt-5">
+          {{ icon("alert", "size-5 shrink-0") }}
+          <ul class="grid gap-1">{% for w in explanation.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+    </section>
+  </div>
+
+  {# ================================================================ right column #}
+  <aside class="grid content-start gap-6">
+    {# ---- actions #}
+    <section id="proof" class="card scroll-mt-24 animate-fade-up" aria-labelledby="actions-title">
+      <h2 id="actions-title" class="section-title">{% if status == 'paid' %}Payment recorded{% elif status == 'proof_review' %}Verifying proof{% else %}Pay &amp; record{% endif %}</h2>
+
+      {% if status == 'paid' %}
+        <div class="mt-4 flex items-start gap-3 rounded-2xl bg-ok/10 p-4 text-sm text-[#166534] dark:text-[#86efac]">
+          {{ icon("check-circle", "size-5 shrink-0") }}
+          <p>Paid {{ st.paid_at | dt }}.{% if payment and payment.proof_verified is sameas false %} The proof did not match automatically and was confirmed manually by you.{% elif payment %} The proof matched the amount, reference and date.{% else %} Nothing had to be transferred.{% endif %}</p>
+        </div>
+      {% elif status == 'proof_review' %}
+        <div class="mt-4 flex items-start gap-3 rounded-2xl bg-accent/10 p-4 text-sm text-[#0b5cad] dark:text-[#8cc8ff]" role="status">
+          <span class="spinner mt-0.5 shrink-0"></span>
+          <p>Our OCR engines are reading the proof and comparing the amount (±1%), the reference and the date. This page refreshes automatically.</p>
+        </div>
+      {% endif %}
+
+      {# -- online payout #}
+      {% if status == 'due' %}
+        <div class="mt-4 rounded-2xl ring-1 ring-black/[0.06] p-4 dark:ring-white/[0.08]">
+          <p class="flex items-center gap-2 text-sm font-semibold">{{ icon("bolt", "size-4 text-accent") }} {{ 'Simulated payout' if test_mode else 'Instant payout' }}</p>
+          <p class="mt-1 text-xs muted">{{ pay_mode_reason }}</p>
+          {% if pay_mode %}
+            <form method="post" action="/owner/payroll/{{ st.id }}/pay" class="mt-3" data-confirm="{{ ('Simulate a payout of ' ~ (st.net_pay | money(cur)) ~ ' to ' ~ employee.display_name ~ '? (TEST MODE - no money moves)') if test_mode else ('Send ' ~ (st.net_pay | money(cur)) ~ ' to ' ~ employee.display_name ~ ' through Cashfree Payouts now?') }}">
+              {{ ui.csrf() }}
+              <button class="btn {{ 'btn-dark' if test_mode else 'btn-primary' }} w-full">{{ icon("send", "size-4") }} {{ 'Simulate payout (test mode)' if test_mode else 'Pay via Cashfree Payouts' }}</button>
+            </form>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {# -- last verification result #}
+      {% if check and check.checks and status != 'paid' %}
+        <div class="mt-4 rounded-2xl bg-bad/[0.07] p-4">
+          <p class="flex items-center gap-2 text-sm font-semibold text-[#991b1b] dark:text-[#fca5a5]">{{ icon("x-circle", "size-4") }} The last proof didn't match</p>
+          <ul class="mt-2 grid gap-1.5 text-xs">
+            {% for c in check.checks %}
+              <li class="flex items-start gap-2 {{ 'fin-check-pass' if c.passed else 'fin-check-fail' }}">{{ icon("check" if c.passed else "x", "size-3.5 mt-0.5 shrink-0") }}<span>{{ c.detail }}</span></li>
+            {% endfor %}
+          </ul>
+          {% if check.engines %}<p class="mt-2 text-[11px] muted">OCR engines: {{ check.engines | join(", ") }}</p>{% endif %}
+        </div>
+      {% endif %}
+
+      {# -- upload proof #}
+      {% if can_upload %}
+        <form method="post" action="/owner/payroll/{{ st.id }}/proof" enctype="multipart/form-data" class="mt-5 grid gap-4" data-component="proof-upload" data-max-mb="{{ app.max_upload_mb }}">
+          {{ ui.csrf() }}
+          <p class="text-sm font-semibold">{{ 'Upload a new proof' if check else ('Upload the proof of transaction' if payment else 'Paid by bank transfer? Upload the proof') }}</p>
+          {% if payment and payment.provider == 'test' and app.payments_test_mode %}
+            <div class="flex items-start gap-3 rounded-2xl bg-warn/10 p-3 text-xs text-[#92400e] dark:text-[#fcd34d]">
+              {{ icon("info", "size-4 shrink-0") }}
+              <div class="min-w-0">
+                <p>No money moved in test mode. Download the simulated receipt and upload it to try the OCR verification.</p>
+                <a href="/owner/payroll/{{ st.id }}/test-receipt.png" download class="mt-2 inline-flex items-center gap-1 font-semibold underline underline-offset-2">{{ icon("download", "size-3.5") }} Simulated receipt (PNG)</a>
+              </div>
+            </div>
+          {% endif %}
+          {% if errors.get("proof") %}<p class="field-error !mt-0" role="alert">{{ errors.proof }}</p>{% endif %}
+          <div>
+            <label class="label" for="f-proof">Screenshot or PDF <span class="text-bad">*</span></label>
+            <input id="f-proof" name="proof" type="file" accept="image/*,application/pdf" class="peer sr-only" required
+                   aria-describedby="proof-hint"{% if errors.get('proof') %} aria-invalid="true"{% endif %}>
+            <label for="f-proof" class="flex cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-4 py-6 text-center transition hover:border-accent hover:bg-accent/[0.04] peer-focus-visible:border-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent/50 dark:border-white/15 dark:bg-white/[0.03] {{ 'ring-2 ring-bad/60' if errors.get('proof') }}" data-dropzone>
+              <span class="text-accent">{{ icon("upload", "size-6") }}</span>
+              <span class="text-sm font-medium" data-file-label>Choose a file</span>
+              <span id="proof-hint" class="text-xs muted">JPG, PNG or PDF · up to {{ app.max_upload_mb }} MB · amount, reference and date visible</span>
+            </label>
+          </div>
+          {{ ui.field("reference", "Bank reference / UTR", value=form.reference, required=True, error=errors.get("reference"), placeholder="e.g. 412345678901", attrs='maxlength="40" spellcheck="false" autocapitalize="characters"', autocomplete="off") }}
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            {{ ui.field("amount", "Amount paid (" ~ cur ~ ")", type="number", value=form.amount, required=True, error=errors.get("amount"), attrs='step="0.01" min="0.01" inputmode="decimal"') }}
+            {{ ui.field("paid_on", "Paid on", type="date", value=form.paid_on, error=errors.get("paid_on"), attrs='max="' ~ today.isoformat() ~ '"') }}
+          </div>
+          <button class="btn btn-primary w-full">{{ icon("shield", "size-4") }} Upload &amp; verify</button>
+          <p class="text-xs muted">The file is encrypted at rest and only visible to you. Payment is recorded once the proof matches.</p>
+        </form>
+      {% endif %}
+
+      {# -- confirm despite mismatch #}
+      {% if can_confirm %}
+        <form method="post" action="/owner/payroll/{{ st.id }}/confirm" class="mt-6 grid gap-3 border-t border-black/[0.06] pt-5 dark:border-white/[0.08]">
+          {{ ui.csrf() }}
+          <p class="text-sm font-semibold">Confirm despite the mismatch</p>
+          <p class="text-xs muted">Only if you are sure the money reached {{ employee.display_name }}. The payment is marked “proof unverified” and your justification is written to the audit log.</p>
+          {% if errors.get("confirm") %}<p class="field-error !mt-0" role="alert">{{ errors.confirm }}</p>{% endif %}
+          {{ ui.textarea("justification", "Justification", value=form.justification, required=True, rows=3, error=errors.get("justification"), placeholder="e.g. Bank screenshot is cropped; the transfer appears on our statement dated 3 Nov", attrs='minlength="15" maxlength="500"') }}
+          <button class="btn btn-dark w-full">{{ icon("check-badge", "size-4") }} Confirm payment</button>
+        </form>
+      {% endif %}
+
+      {% if status == 'paid' and payment and payment.proof_key %}
+        <a href="/owner/payroll/{{ st.id }}/proof" target="_blank" rel="noopener" class="btn btn-secondary mt-4 w-full">{{ icon("eye", "size-4") }} View proof</a>
+      {% endif %}
+    </section>
+
+    {# ---- adjust unpaid leave #}
+    {% if can_adjust %}
+    <section class="card-flat animate-fade-up" aria-labelledby="adjust-title">
+      <h2 id="adjust-title" class="text-sm font-semibold">Unpaid leave</h2>
+      <p class="mt-1 text-xs muted">Recalculates gross, deductions and net by days. Allowed until a payment starts.</p>
+      <form method="post" action="/owner/payroll/{{ st.id }}/adjust" class="mt-4 flex items-end gap-2">
+        {{ ui.csrf() }}
+        {{ ui.field("unpaid_leave_days", "Days of unpaid leave", type="number", value=form.unpaid_leave_days, error=errors.get("unpaid_leave_days"), attrs='min="0" max="' ~ st.days_in_period ~ '" step="1" inputmode="numeric"', cls="flex-1") }}
+        <button class="btn btn-secondary {{ 'mb-6' if errors.get('unpaid_leave_days') }}">Update</button>
+      </form>
+    </section>
+    {% endif %}
+
+    {# ---- payout instructions #}
+    <section class="card animate-fade-up" aria-labelledby="payout-title">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="payout-title" class="section-title">Payout instructions</h2>
+        {% if payout.international %}{{ ui.badge("International", "violet", "globe") }}{% else %}{{ ui.badge("Domestic", "blue", "map-pin") }}{% endif %}
+      </div>
+      <dl class="mt-4 grid gap-2 text-sm">
+        <div class="flex justify-between gap-3"><dt class="muted">Method</dt><dd class="text-right font-medium capitalize">{{ payout.method }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="muted">Rail</dt><dd class="text-right font-medium">{{ payout.rail }}</dd></div>
+        {% for label, value in payout.details %}
+          <div class="flex justify-between gap-3"><dt class="muted">{{ label }}</dt><dd class="text-right font-mono text-[13px]">{{ value }}</dd></div>
+        {% endfor %}
+      </dl>
+      {% if not payout.has_details %}
+        <p class="mt-3 rounded-2xl bg-warn/10 px-3 py-2 text-xs text-[#92400e] dark:text-[#fcd34d]">No bank / UPI details on file - ask {{ employee.display_name }} to add them, or pay using the details you already have.</p>
+      {% endif %}
+      <ol class="mt-4 grid gap-2 text-sm">
+        {% for s in payout.steps %}<li class="flex gap-2"><span class="fin-step !size-5 !text-[11px]">{{ loop.index }}</span><span>{{ s }}</span></li>{% endfor %}
+      </ol>
+      {% if payout.paperwork %}
+        <div class="mt-4 card-muted !p-4">
+          <p class="text-xs font-semibold uppercase tracking-wider muted">Paperwork</p>
+          <ul class="mt-2 grid gap-1.5 text-xs">{% for p in payout.paperwork %}<li class="flex gap-2">{{ icon("document", "size-3.5 mt-0.5 shrink-0 muted") }}<span>{{ p }}</span></li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+    </section>
+
+    {# ---- ledger entries #}
+    <section class="card-flat animate-fade-up" aria-labelledby="ledger-title">
+      <h2 id="ledger-title" class="text-sm font-semibold">Ledger</h2>
+      {% if txs %}
+        <ul class="mt-3 grid gap-3">
+          {% for tx in txs %}
+            <li class="flex items-start justify-between gap-3 text-sm">
+              <div class="min-w-0">
+                <p class="font-medium">{{ tx.category | humanize }} <span class="muted font-normal">· {{ tx.provider | humanize }}{% if tx.provider == 'test' %} (simulated){% endif %}</span></p>
+                <p class="truncate font-mono text-xs muted" title="{{ tx.provider_reference or '' }}">{{ tx.provider_reference or 'No reference yet' }}</p>
+                <p class="text-xs muted">{{ tx.created_at | dt("%d %b %Y, %H:%M") }}</p>
+              </div>
+              <div class="flex shrink-0 flex-col items-end gap-1">
+                <span class="font-semibold tabular-nums">&minus;{{ tx.amount | money(tx.currency) }}</span>
+                {{ ui.status(tx.status) }}
+                {% if tx.proof_key %}<a href="/owner/payroll/{{ st.id }}/proof?tx={{ tx.id }}" target="_blank" rel="noopener" class="text-xs font-medium text-accent">Proof</a>{% endif %}
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="mt-2 text-sm muted">No payment recorded yet.</p>
+      {% endif %}
+      <dl class="mt-4 grid gap-1.5 border-t border-black/[0.06] pt-4 text-xs dark:border-white/[0.08]">
+        <div class="flex justify-between"><dt class="muted">Statement</dt><dd>#{{ st.id }}</dd></div>
+        <div class="flex justify-between"><dt class="muted">Created</dt><dd>{{ st.created_at | dt("%d %b %Y") }}</dd></div>
+        <div class="flex justify-between"><dt class="muted">Monthly salary</dt><dd class="tabular-nums">{{ st.monthly_salary | money(cur) }}</dd></div>
+        {% if settlement %}<div class="flex justify-between gap-3"><dt class="muted">Leaving</dt><dd class="text-right">{{ settlement.reason_label }} · {{ settlement.termination_date }}</dd></div>{% endif %}
+      </dl>
+    </section>
+  </aside>
+</div>
+{% endblock %}

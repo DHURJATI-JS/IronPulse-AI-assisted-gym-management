@@ -1,0 +1,96 @@
+/* coach work-package styles (WP-E2): coach plan, video library, calendar/tasks, AI assistant sheet.
+   Utility classes are preferred in templates; these components cover repeated or JS-built markup. */
+@layer components {
+  /* ---------- coach plan */
+  .coach-step { @apply grid size-9 shrink-0 place-items-center rounded-xl text-sm font-semibold tabular-nums; }
+  .coach-step[data-cat="strength"] { @apply bg-accent/12 text-accent-strong dark:text-[#64b5ff]; }
+  .coach-step[data-cat="calisthenics"] { @apply bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]; }
+  .coach-step[data-cat="cardio"] { @apply bg-warn/15 text-[#b45309] dark:text-[#fbbf24]; }
+  .coach-step[data-cat="mobility"] { @apply bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]; }
+  .coach-step[data-cat="breathing"] { @apply bg-indigo/15 text-indigo dark:text-[#a5a4ff]; }
+  .rx { @apply inline-flex items-center gap-1 rounded-full bg-zinc-900/[0.05] px-2.5 py-1 text-xs font-medium text-zinc-700 tabular-nums dark:bg-white/[0.08] dark:text-zinc-200; }
+  .coach-day[hidden] { display: none; }
+
+  /* ---------- video library */
+  .video-tile { @apply relative block aspect-video overflow-hidden rounded-[22px] bg-gradient-to-br from-accent/80 via-indigo/80 to-violet/80 ring-1 ring-black/[0.05] dark:ring-white/[0.08]; }
+  .video-tile img { @apply size-full object-cover transition duration-700 ease-spring; }
+  .group:hover .video-tile img { @apply scale-[1.04]; }
+  .video-duration { @apply absolute bottom-2.5 right-2.5 rounded-full bg-black/65 px-2 py-0.5 text-[11px] font-semibold text-white tabular-nums backdrop-blur; }
+  .video-locked { @apply absolute inset-0 grid place-items-center bg-black/45 text-white backdrop-blur-[2px]; }
+
+  /* ---------- calendar */
+  .cal-grid { @apply grid grid-cols-7; }
+  .cal-head { @apply py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400; }
+  .cal-cell {
+    @apply relative flex min-h-16 min-w-0 flex-col gap-1 border-t border-black/[0.05] p-1.5 text-left transition-colors
+      hover:bg-zinc-900/[0.03] focus-visible:z-10 sm:min-h-28 sm:p-2 dark:border-white/[0.06] dark:hover:bg-white/[0.04];
+  }
+  .cal-cell[data-out="1"] { @apply bg-zinc-900/[0.02] text-zinc-400 dark:bg-white/[0.015] dark:text-zinc-600; }
+  .cal-cell[aria-current="date"] .cal-num { @apply bg-accent text-white; }
+  .cal-cell[data-selected="1"] { @apply bg-accent/[0.07] ring-2 ring-inset ring-accent/50 dark:bg-accent/[0.12]; }
+  .cal-num { @apply grid size-7 place-items-center rounded-full text-sm font-semibold tabular-nums; }
+  .cal-pill { @apply hidden truncate rounded-md px-1.5 py-0.5 text-[11px] font-medium leading-tight sm:block; }
+  .cal-pill[data-done="1"] { @apply line-through opacity-50; }
+  .cal-dot { @apply size-1.5 rounded-full sm:hidden; }
+  .tone-blue { @apply bg-accent/12 text-accent-strong dark:text-[#64b5ff]; }
+  .tone-violet { @apply bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]; }
+  .tone-green { @apply bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]; }
+  .tone-amber { @apply bg-warn/15 text-[#b45309] dark:text-[#fbbf24]; }
+  .tone-zinc { @apply bg-zinc-500/15 text-zinc-600 dark:text-zinc-300; }
+  .tone-red { @apply bg-bad/15 text-[#d1281e] dark:text-[#ff6b61]; }
+  .dot-blue { @apply bg-accent; }
+  .dot-violet { @apply bg-violet; }
+  .dot-green { @apply bg-ok; }
+  .dot-amber { @apply bg-warn; }
+  .dot-zinc { @apply bg-zinc-400; }
+  .dot-red { @apply bg-bad; }
+  .task-check {
+    @apply grid size-6 shrink-0 place-items-center rounded-full text-transparent ring-2 ring-zinc-300 transition duration-300 ease-spring
+      hover:text-zinc-400 hover:ring-accent active:scale-90 dark:ring-zinc-600;
+  }
+  .task-check[aria-pressed="true"] { @apply bg-ok text-white ring-ok hover:text-white; }
+  [data-component~="task-form"] select.input {
+    @apply cursor-pointer appearance-none bg-no-repeat pr-10;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-position: right 0.9rem center;
+    background-size: 1rem;
+  }
+  [data-component~="task-form"] input[type="date"].input,
+  [data-component~="task-form"] input[type="time"].input,
+  [data-component~="task-form"] input[type="datetime-local"].input { @apply min-h-[46px]; }
+
+  /* ---------- AI assistant sheet (FAB + bottom sheet on phones, floating panel on larger screens) */
+  .sheet[data-component="assistant"] {
+    @apply bg-white sm:bottom-24 sm:max-h-[min(640px,calc(100vh-8rem))] sm:w-[400px] dark:bg-surface-dark;
+    transition: transform 0.5s var(--ease-snappy), opacity 0.3s ease, visibility 0.5s;
+  }
+  .sheet[data-component="assistant"][data-open="0"] { @apply pointer-events-none invisible sm:translate-y-6 sm:opacity-0; }
+  .sheet[data-component="assistant"][data-open="1"] { @apply visible sm:opacity-100; }
+  .sheet-backdrop { @apply fixed inset-0 z-[64] bg-black/30 opacity-0 backdrop-blur-[2px] transition-opacity duration-300 sm:hidden; }
+  .sheet-backdrop[data-open="1"] { @apply opacity-100; }
+  .sheet-backdrop[hidden] { display: none; }
+  .fab[aria-expanded="true"] { @apply scale-95; }
+  .bubble { @apply max-w-[85%] whitespace-pre-wrap break-words rounded-[20px] px-3.5 py-2.5 text-sm leading-relaxed; }
+  .bubble-user { @apply ml-auto rounded-br-md bg-accent text-white; }
+  .bubble-ai { @apply mr-auto rounded-bl-md bg-zinc-900/[0.05] text-ink dark:bg-white/[0.08] dark:text-zinc-100; }
+  .bubble-note { @apply mx-auto max-w-[90%] text-center text-xs text-zinc-500 dark:text-zinc-400; }
+  .action-chip { @apply inline-flex max-w-full items-center gap-1.5 rounded-full px-3 py-1.5 text-left text-xs font-semibold ring-1 transition; }
+  .action-chip[data-ok="1"] { @apply bg-ok/12 text-[#166534] ring-ok/25 dark:text-[#86efac]; }
+  .action-chip[data-ok="0"] { @apply bg-bad/10 text-[#991b1b] ring-bad/25 dark:text-[#fca5a5]; }
+  a.action-chip:hover { @apply brightness-95; }
+  .suggestion-chip {
+    @apply shrink-0 rounded-full bg-zinc-900/[0.05] px-3 py-1.5 text-xs font-medium text-zinc-700 transition
+      hover:bg-accent/10 hover:text-accent dark:bg-white/[0.08] dark:text-zinc-200 dark:hover:bg-accent/20;
+  }
+  .typing-dots { @apply inline-flex items-center gap-1 px-1 py-1; }
+  .typing-dots span { @apply size-1.5 rounded-full bg-zinc-400; animation: ip-typing 1.2s infinite ease-in-out; }
+  .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.3s; }
+  .no-scrollbar { scrollbar-width: none; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+}
+
+@keyframes ip-typing {
+  0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-3px); }
+}

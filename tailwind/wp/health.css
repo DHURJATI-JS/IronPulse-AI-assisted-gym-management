@@ -1,0 +1,36 @@
+/* health work-package styles (WP-E1: Today dashboard, metrics, wellness). Prefer utilities in templates;
+   these cover selectors utilities can't express (styled radio/checkbox pills) and one ambient animation. */
+@layer components {
+  /* answer pill for a visually-hidden radio/checkbox placed right before it: <input class="peer sr-only"><span class="hp-option"> */
+  .hp-option {
+    @apply inline-flex min-h-10 cursor-pointer select-none items-center justify-center gap-1.5 rounded-full
+      bg-zinc-900/[0.05] px-3.5 py-2 text-sm font-medium text-zinc-700 transition duration-200 ease-spring sm:px-4
+      hover:bg-zinc-900/[0.09] active:scale-[0.97] dark:bg-white/[0.07] dark:text-zinc-200 dark:hover:bg-white/[0.12];
+  }
+  .hp-option .hp-check { @apply hidden; }
+  .peer:checked + .hp-option {
+    @apply bg-accent text-white shadow-sm shadow-accent/30 hover:bg-accent-strong dark:bg-accent dark:text-white dark:hover:bg-accent-strong;
+  }
+  .peer:checked + .hp-option .hp-check { @apply inline-block; }
+  .peer:checked + .hp-option-danger { @apply bg-bad shadow-bad/30 hover:bg-bad dark:bg-bad dark:hover:bg-bad; }
+  .peer:focus-visible + .hp-option { @apply outline-2 outline-offset-2 outline-accent; }
+
+  /* native selects ignore padding/background in WebKit: give them the .input look on WP-E1 forms */
+  .hp-form select.input {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 2.75rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1rem;
+  }
+
+  /* slow "breathing" glow on the bedtime card */
+  .hp-glow { animation: hp-breathe 7s ease-in-out infinite; }
+}
+
+@keyframes hp-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.95; transform: scale(1.08); }
+}

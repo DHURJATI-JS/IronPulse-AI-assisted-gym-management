@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "public/_macros.html" as pub with context %}
+{% block title %}Plans{% endblock %}
+{% block description %}Compare IronPulse's 12 plan types: in-person, online and combo memberships, each with optional trainer and AI coach. Videos included in every plan.{% endblock %}
+{% block content %}
+<div class="relative isolate">
+  <div class="pub-page-glow" aria-hidden="true"></div>
+
+  <header class="mx-auto max-w-3xl text-center animate-fade-up">
+    <p class="eyebrow mb-2">Plans</p>
+    <h1 class="pub-h2 sm:!text-5xl">One idea, <span class="gradient-text">twelve ways</span> to train.</h1>
+    <p class="mx-auto mt-4 max-w-2xl text-[15px] leading-relaxed muted">Choose where you train - at a branch, online, or both - then add a personal trainer, the AI coach, or both. Every gym sets its own prices and can switch any plan off.</p>
+    <div class="mt-6 flex flex-wrap justify-center gap-2">
+      <span class="chip">{{ icon("play", "size-3.5") }}Pre-recorded videos in every plan</span>
+      <span class="chip">{{ icon("map-pin", "size-3.5") }}Offline within {{ app.offline_max_distance_km | int }} km</span>
+      <span class="chip">{{ icon("key", "size-3.5") }}Desk OTP for offline purchases</span>
+    </div>
+  </header>
+
+  {# ================================================================= modes #}
+  <section class="mx-auto mt-14 grid max-w-6xl gap-4 lg:grid-cols-3" aria-label="Training modes">
+    {% for key, tone, facts in [
+        ("offline", "bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]", ["Access to the branch you choose", "Needs a published branch within " ~ (app.offline_max_distance_km | int) ~ " km of you", "Completed at the branch desk with an OTP sent to the owner"]),
+        ("online", "bg-accent/12 text-accent dark:text-[#64b5ff]", ["Live online sessions with the gym", "Available wherever you are", "Activated as soon as checkout completes"]),
+        ("combo", "bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]", ["Branch access and online sessions", "Same " ~ (app.offline_max_distance_km | int) ~ " km rule and desk OTP as offline", "Perfect for travel weeks and busy days"]),
+    ] %}
+    {% set m = modes[key] %}
+    <article class="card flex flex-col">
+      <span class="grid size-12 place-items-center rounded-2xl {{ tone }}">{{ icon(m.icon, "size-6") }}</span>
+      <h2 class="mt-5 text-xl font-semibold tracking-tight">{{ m.long }}</h2>
+      <p class="mt-2 text-sm leading-relaxed muted">{{ m.blurb }}</p>
+      <ul class="mt-5 grid gap-2.5 text-sm">
+        {% for f in facts %}<li class="flex gap-2">{{ icon("check", "mt-0.5 size-4 shrink-0 text-ok") }}<span>{{ f }}</span></li>{% endfor %}
+      </ul>
+    </article>
+    {% endfor %}
+  </section>
+
+  {# ================================================================= add-ons #}
+  <section class="mx-auto mt-6 grid max-w-6xl gap-4 md:grid-cols-2" aria-label="Add-ons">
+    <article class="pub-bento flex items-start gap-4">
+      <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-warn/15 text-[#b45309] dark:text-[#fbbf24]">{{ icon("user", "size-6") }}</span>
+      <div>
+        <h2 class="text-lg font-semibold tracking-tight">+ Personal trainer</h2>
+        <p class="mt-1.5 text-sm leading-relaxed muted">A verified trainer is assigned to you - at the branch, online, or both depending on your mode. Chat with them live in the app.</p>
+      </div>
+    </article>
+    <article class="pub-bento flex items-start gap-4">
+      <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-accent/12 text-accent dark:text-[#64b5ff]">{{ icon("sparkles", "size-6") }}</span>
+      <div>
+        <div class="flex flex-wrap items-center gap-2"><h2 class="text-lg font-semibold tracking-tight">+ AI coach</h2>{{ ui.ai_chip() }}</div>
+        <p class="mt-1.5 text-sm leading-relaxed muted">Workout plans and advice that adapt to your goals, level and health conditions. If AI is offline, videos and every non-AI feature keep working.</p>
+      </div>
+    </article>
+  </section>
+
+  {# ================================================================= matrix #}
+  <section class="mx-auto mt-16 max-w-6xl" aria-labelledby="matrix-title">
+    {{ pub.section_head("Compare", "All 12 plan types side by side", "What each plan includes. Gyms decide prices and which plans they offer.") }}
+    <div class="table-wrap">
+      <table class="table pub-matrix min-w-[720px]">
+        <caption class="sr-only">Comparison of the 12 IronPulse plan types</caption>
+        <thead>
+          <tr>
+            <th scope="col">Plan</th>
+            <th scope="col">Branch access</th>
+            <th scope="col">Online sessions</th>
+            <th scope="col">Personal trainer</th>
+            <th scope="col">AI coach</th>
+            <th scope="col">Videos</th>
+            <th scope="col">How you buy</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for pt in plan_types %}
+          {% if loop.first or pt.mode != loop.previtem.mode %}
+          <tr class="!bg-zinc-50 dark:!bg-white/[0.03]">
+            <th scope="rowgroup" colspan="7" class="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{{ icon(modes[pt.mode].icon, "mr-1 inline size-3.5 align-[-2px]") }} {{ modes[pt.mode].long }}</th>
+          </tr>
+          {% endif %}
+          <tr data-plan-code="{{ pt.code }}">
+            <th scope="row" class="px-5 py-3.5 text-left font-semibold">{{ pt.title }}<span class="block text-[11px] font-normal text-zinc-500 dark:text-zinc-400">{{ pt.code }}</span></th>
+            {% for flag, label in [(pt.gym_access, "Branch access"), (pt.online_sessions, "Online sessions"), (pt.trainer, "Personal trainer"), (pt.ai, "AI coach"), (True, "Videos")] %}
+            <td>{% if flag %}<span class="pub-yes" role="img" aria-label="{{ label }}: included">{{ icon("check", "size-3.5") }}</span>{% else %}<span class="pub-no" role="img" aria-label="{{ label }}: not included">{{ icon("x", "size-3") }}</span>{% endif %}</td>
+            {% endfor %}
+            <td class="whitespace-nowrap text-xs muted">{{ 'Branch desk + owner OTP' if pt.needs_branch else 'Online checkout' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-3 text-xs muted sm:hidden">Swipe the table sideways to see every column.</p>
+  </section>
+
+  {# ================================================================= notes #}
+  <section class="mx-auto mt-16 grid max-w-6xl gap-4 md:grid-cols-3" aria-label="Good to know">
+    <div class="card-flat">
+      <span class="grid size-10 place-items-center rounded-2xl bg-accent/10 text-accent dark:text-[#64b5ff]">{{ icon("play", "size-5") }}</span>
+      <h3 class="mt-4 font-semibold">Videos in every plan</h3>
+      <p class="mt-1.5 text-sm leading-relaxed muted">Pre-recorded workout videos are included in every plan - they keep working even when AI is unavailable.</p>
+    </div>
+    <div class="card-flat">
+      <span class="grid size-10 place-items-center rounded-2xl bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("map-pin", "size-5") }}</span>
+      <h3 class="mt-4 font-semibold">The {{ app.offline_max_distance_km | int }} km rule</h3>
+      <p class="mt-1.5 text-sm leading-relaxed muted">Offline and combo plans need a published (AI-verified, open) branch within {{ app.offline_max_distance_km | int }} km of you. Farther away? Visit the gym owner directly for offline registration.</p>
+    </div>
+    <div class="card-flat">
+      <span class="grid size-10 place-items-center rounded-2xl bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("key", "size-5") }}</span>
+      <h3 class="mt-4 font-semibold">Desk OTP for offline purchases</h3>
+      <p class="mt-1.5 text-sm leading-relaxed muted">Offline purchases are completed at the branch desk: a 6-digit code is sent to the gym owner and you enter it in the app. It proves you were really there.</p>
+    </div>
+  </section>
+
+  {# ================================================================= FAQ #}
+  <section class="mx-auto mt-16 max-w-3xl" aria-labelledby="faq-title">
+    <h2 id="faq-title" class="pub-h2 text-center">Questions, answered</h2>
+    <div class="mt-8 grid gap-3">
+      {% for question, answer in [
+          ("Can I switch from online to combo later?", "Yes - buy the new plan when you're ready. Combo needs a branch within " ~ (app.offline_max_distance_km | int) ~ " km of you and finishes at the branch desk with the owner's code."),
+          ("What happens if AI is unavailable?", "IronPulse fails over between three AI providers. If all of them are down you'll see an \"AI unavailable\" notice; videos, chat, bookings and rule-based safety checks keep working."),
+          ("Do I need an ID card?", "Yes. Every member, trainer and gym owner verifies an ID card once. It's encrypted at rest and never shown publicly."),
+          ("Who sets the prices?", "Each gym sets its own prices and decides which of the 12 plan types it offers. You'll see them on the gym's page."),
+          ("Is any of this medical advice?", "No. IronPulse is a student-grade project and nothing here is medical advice. Always consult a professional - see the Terms & disclaimer."),
+      ] %}
+      <details class="card-flat pub-faq group !p-0">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-semibold">
+          {{ question }}
+          <span class="grid size-7 shrink-0 place-items-center rounded-full bg-zinc-900/5 transition-transform duration-300 ease-spring group-open:rotate-180 dark:bg-white/10">{{ icon("chevron-down", "size-4") }}</span>
+        </summary>
+        <p class="px-5 pb-5 text-sm leading-relaxed muted">{{ answer }}</p>
+      </details>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="mx-auto mt-14 max-w-3xl">
+    {% with ask_endpoint="/api/plans/ask", ask_extra={}, ask_title="Not sure which plan fits you? Ask AI",
+            ask_suggestions=["Which plan is best for weight loss?", "Do I need a trainer with asthma?", "What's the difference between online and combo?"] %}
+      {% include "partials/ask_ai.html" %}
+    {% endwith %}
+  </div>
+
+  <div class="mx-auto mt-14 flex max-w-xl flex-col items-center gap-3 text-center">
+    <a href="/gyms" class="btn btn-primary btn-lg">{{ icon("map-pin", "size-4") }} Find a gym and see prices</a>
+    {% if app.payments_test_mode %}<p class="text-xs muted">Payments currently run in TEST MODE - no real money is charged.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

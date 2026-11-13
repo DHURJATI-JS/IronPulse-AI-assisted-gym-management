@@ -1,0 +1,314 @@
+{#- Shared building blocks of the public site (WP-A1).
+    Import WITH CONTEXT:  {% import "public/_macros.html" as pub with context %}
+-#}
+{% import "_ui.html" as ui with context %}
+
+{#- Live AI status chip: the dot follows the island's AI state ([data-ai-dot]); the label is refreshed by
+    the "ai-live" component (WebSocket events when signed in, /api/ai/status polling otherwise). -#}
+{% macro ai_live_chip(extra="") -%}
+<span class="chip pub-ai-chip {{ extra }}" data-component="ai-live" data-online-prefix="AI online" aria-live="polite">
+  <span class="ai-dot" data-ai-dot data-state="{{ ai_status.state }}"></span>
+  <span data-ai-live-text>{% if ai_status.available %}AI online · {{ ai_status.active_label }}{% else %}AI unavailable · videos &amp; safety rules still work{% endif %}</span>
+</span>
+{%- endmacro %}
+
+{% macro section_head(eyebrow, title, subtitle=None, link_label=None, link_href=None, center=False) %}
+<div class="mb-8 flex flex-col gap-3 {{ 'items-center text-center' if center else 'sm:flex-row sm:items-end sm:justify-between' }}">
+  <div class="{{ 'max-w-2xl' if center else 'max-w-2xl min-w-0' }}">
+    <p class="eyebrow mb-2">{{ eyebrow }}</p>
+    <h2 class="pub-h2">{{ title }}</h2>
+    {% if subtitle %}<p class="mt-3 text-[15px] leading-relaxed muted">{{ subtitle }}</p>{% endif %}
+  </div>
+  {% if link_label %}
+    <a href="{{ link_href }}" class="group inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-accent hover:underline">{{ link_label }} <span class="transition-transform duration-300 ease-spring group-hover:translate-x-0.5">{{ icon("arrow-right", "size-4") }}</span></a>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{#- Gym card used on the home page and in the directory. `card` is a routers.public.GymCard: per-gym aggregates
+    (branch_count, the first 3 cities + more_cities, one cover), never the chain's branches -#}
+{% macro gym_card(card) %}
+{% set g = card.gym %}
+<a href="/gyms/{{ g.slug }}{{ loc.qs if loc is defined and loc else '' }}" class="pub-gym-card group">
+  <div class="pub-cover aspect-[16/10]">
+    {% if card.cover_key %}
+      <img src="{{ media_url(card.cover_key) }}" alt="Inside {{ g.name }}" loading="lazy" decoding="async" class="pub-cover-img">
+    {% else %}
+      <div class="pub-cover-fallback">
+        {% if g.logo_key %}
+          <img src="{{ media_url(g.logo_key) }}" alt="" loading="lazy" class="size-16 rounded-2xl object-cover shadow-lg ring-4 ring-white/60 dark:ring-white/10">
+        {% else %}
+          <span class="grid size-16 place-items-center rounded-2xl bg-white/80 text-xl font-semibold text-ink shadow-lg dark:bg-white/10 dark:text-white">{{ g.name | initials }}</span>
+        {% endif %}
+      </div>
+    {% endif %}
+    <div class="absolute inset-x-0 top-0 flex flex-wrap gap-1.5 p-3">
+      {% if card.online_open %}<span class="pub-photo-badge">{{ icon("video", "size-3.5 text-accent dark:text-[#64b5ff]") }}Online</span>{% endif %}
+      {% if card.branch_count %}<span class="pub-photo-badge">{{ icon("check-badge", "size-3.5 text-[#1f8c3a] dark:text-[#4ade80]") }}{{ card.branch_count }} verified {{ 'branch' if card.branch_count == 1 else 'branches' }}</span>{% endif %}
+    </div>
+    {% if card.distance_label %}
+      <span class="pub-photo-badge absolute bottom-3 right-3">{{ icon("map-pin", "size-3.5 text-accent dark:text-[#64b5ff]") }}{{ card.distance_label }}</span>
+    {% endif %}
+  </div>
+  <div class="flex flex-1 flex-col p-5">
+    <h3 class="text-lg font-semibold tracking-tight transition-colors group-hover:text-accent">{{ g.name }}</h3>
+    {% if g.tagline %}<p class="mt-1 line-clamp-2 text-sm muted">{{ g.tagline }}</p>{% endif %}
+    {% if card.cities %}
+      <div class="mt-3 flex flex-wrap gap-1.5">
+        {% for c in card.cities %}<span class="chip">{{ icon("map-pin", "size-3") }}{{ c }}</span>{% endfor %}
+        {% if card.more_cities %}<span class="chip">+{{ card.more_cities }} more</span>{% endif %}
+      </div>
+    {% elif card.online_open %}
+      <div class="mt-3 flex flex-wrap gap-1.5"><span class="chip">{{ icon("globe", "size-3") }}Train from anywhere</span></div>
+    {% endif %}
+    <div class="mt-auto flex items-center justify-between gap-3 pt-5">
+      <span class="flex min-w-0 items-center gap-2 text-xs muted">
+        {{ ui.avatar(g.owner.photo_key, g.owner.display_name, "size-7", "text-[10px]") }}
+        <span class="truncate">by {{ g.owner.display_name }}</span>
+      </span>
+      {% if card.from_price %}<span class="shrink-0 text-sm"><span class="muted">from</span> <span class="font-semibold">{{ card.from_price }}</span></span>{% endif %}
+    </div>
+  </div>
+</a>
+{% endmacro %}
+
+{#- Owner / admin card with the compulsory photo -#}
+{% macro owner_card(owner, gym, compact=False) %}
+<div class="card {{ 'p-5' if compact }}">
+  <p class="eyebrow mb-4">Gym owner</p>
+  <div class="flex items-center gap-4">
+    {{ ui.avatar(owner.photo_key, owner.display_name, "size-16", "text-lg") }}
+    <div class="min-w-0">
+      <p class="truncate text-lg font-semibold tracking-tight">{{ owner.display_name }}</p>
+      <p class="text-sm muted">Owner &amp; admin · {{ gym.name }}</p>
+    </div>
+  </div>
+  <p class="mt-4 text-sm leading-relaxed muted">The owner approves desk sign-ups with a one-time code, reviews safety alerts and is your contact for anything about this gym.</p>
+  {% if gym.contact_email or gym.contact_phone or gym.website %}
+  <div class="mt-4 grid gap-2 text-sm">
+    {% if gym.contact_email %}<a href="mailto:{{ gym.contact_email }}" class="flex items-center gap-2 text-accent hover:underline">{{ icon("envelope", "size-4") }}<span class="truncate">{{ gym.contact_email }}</span></a>{% endif %}
+    {% if gym.contact_phone %}<a href="tel:{{ gym.contact_phone | replace(' ', '') }}" class="flex items-center gap-2 text-accent hover:underline">{{ icon("phone", "size-4") }}{{ gym.contact_phone }}</a>{% endif %}
+    {% if gym.website and (gym.website.startswith('https://') or gym.website.startswith('http://')) %}<a href="{{ gym.website }}" rel="noopener noreferrer nofollow" target="_blank" class="flex items-center gap-2 text-accent hover:underline">{{ icon("external", "size-4") }}<span class="truncate">{{ gym.website.split('://', 1)[1].rstrip('/') }}</span></a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{#- Team member (TeamMember view model) -#}
+{% macro member_card(m, show_gym=False) %}
+{% set e = m.employee %}
+<article class="card-flat flex h-full flex-col">
+  <div class="flex items-center gap-3.5">
+    <span class="pub-portrait size-16">
+      {% if media_url(e.photo_key) %}<img src="{{ media_url(e.photo_key) }}" alt="Photo of {{ e.display_name }}" loading="lazy" decoding="async">{% else %}<span>{{ e.display_name | initials }}</span>{% endif %}
+    </span>
+    <div class="min-w-0">
+      <h3 class="truncate font-semibold tracking-tight">{{ e.display_name }}</h3>
+      <p class="truncate text-sm muted">{{ m.title }}</p>
+      {% if show_gym and e.gym %}<a href="/gyms/{{ e.gym.slug }}" class="mt-0.5 block truncate text-xs font-medium text-accent hover:underline">{{ e.gym.name }}</a>{% endif %}
+    </div>
+  </div>
+  {% if e.bio %}<p class="mt-3 line-clamp-3 text-sm leading-relaxed muted">{{ e.bio }}</p>{% endif %}
+  {% if m.specialties or e.years_experience %}
+  <div class="mt-3 flex flex-wrap gap-1.5">
+    {% if e.years_experience %}<span class="badge badge-violet">{{ icon("star", "size-3") }}{{ e.years_experience }} yr{{ 's' if e.years_experience != 1 }} experience</span>{% endif %}
+    {% for s in m.specialties %}<span class="chip">{{ s }}</span>{% endfor %}
+  </div>
+  {% endif %}
+  {% if m.schedule %}
+  <ul class="mt-auto grid gap-1 pt-4 text-xs muted" aria-label="Shifts at this branch">
+    {% for line in m.schedule[:3] %}<li class="flex items-center gap-1.5">{{ icon("clock", "size-3.5 shrink-0") }}{{ line }}</li>{% endfor %}
+    {% if m.schedule | length > 3 %}<li class="pl-5">+{{ m.schedule | length - 3 }} more slots</li>{% endif %}
+  </ul>
+  {% endif %}
+</article>
+{% endmacro %}
+
+{#- "Use my location" (GET form + foundation geolocate button; the geo-form component submits it) -#}
+{% macro locate_form(label="Use my location", variant="primary", size="sm", anchor="plans") %}
+<form method="get" action="{{ request.url.path }}{{ '#' ~ anchor if anchor }}" class="inline-flex" data-component="geo-form">
+  <input type="hidden" name="lat" value="">
+  <input type="hidden" name="lon" value="">
+  <button type="button" class="btn btn-{{ variant }}{{ ' btn-' ~ size if size }}" data-component="geolocate">{{ label }}</button>
+  <noscript><span class="ml-2 self-center text-xs muted">Enable JavaScript to share your location.</span></noscript>
+</form>
+{% endmacro %}
+
+{#- 30 km eligibility panel for offline / combo plans -#}
+{% macro location_gate(elig, loc, branch_name=None) %}
+{% set km = app.offline_max_distance_km | int %}
+{% if elig is none %}
+{% elif elig.eligible %}
+  <div class="alert alert-success" role="status">
+    {{ icon("check-circle", "size-5 shrink-0") }}
+    <div class="flex-1">
+      <p class="font-semibold">In-person plans are available to you</p>
+      <p>{{ elig.message }}{% if elig.method == 'city' %} We matched your city - share your exact location for a precise {{ km }} km check.{% endif %}</p>
+      {% if elig.method == 'city' %}<div class="mt-3">{{ locate_form("Use my exact location", "secondary") }}</div>{% endif %}
+    </div>
+  </div>
+{% elif elig.method == 'unknown' %}
+  <div class="alert alert-info" role="status">
+    {{ icon("map-pin", "size-5 shrink-0") }}
+    <div class="flex-1">
+      <p class="font-semibold">Where are you training from?</p>
+      <p>{{ elig.message }}</p>
+      <div class="mt-3 flex flex-wrap items-center gap-3">
+        {{ locate_form() }}
+        {% if not user %}<a href="/auth/login?next={{ (request.url.path ~ '#plans') | urlencode }}" class="text-sm font-semibold underline-offset-2 hover:underline">or sign in to use your saved city</a>{% endif %}
+      </div>
+    </div>
+  </div>
+{% else %}
+  <div class="alert alert-warning" role="status">
+    {{ icon("alert", "size-5 shrink-0") }}
+    <div class="flex-1">
+      <p class="font-semibold">In-person plans aren't sold in your area</p>
+      <p>{{ elig.message }}</p>
+      <div class="mt-3">{{ locate_form("Check a different location", "secondary") }}</div>
+    </div>
+  </div>
+{% endif %}
+{% endmacro %}
+
+{#- Plan cards grouped by mode (PlanGroup view models) -#}
+{% macro plan_groups(groups, gym) %}
+<div class="grid gap-10">
+  {% for grp in groups %}
+  <section aria-labelledby="mode-{{ grp.mode }}">
+    <div class="mb-4 flex items-start gap-3">
+      <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent dark:bg-accent/15 dark:text-[#64b5ff]">{{ icon(grp.icon, "size-5") }}</span>
+      <div class="min-w-0">
+        <h3 id="mode-{{ grp.mode }}" class="text-lg font-semibold tracking-tight">{{ grp.label }}</h3>
+        <p class="text-sm muted">{{ grp.blurb }}</p>
+      </div>
+    </div>
+    {% if grp.notice %}<div class="mb-4">{{ ui.alert(grp.notice, "warning") }}</div>{% endif %}
+    <div class="grid gap-4 sm:grid-cols-2">
+      {% for o in grp.offers %}
+      {% set p = o.plan %}
+      <article class="pub-plan {{ 'pub-plan-featured' if p.includes_trainer and p.includes_ai }}">
+        {% if p.includes_trainer and p.includes_ai %}<span class="pub-plan-ribbon">Most complete</span>{% endif %}
+        <h4 class="pr-16 font-semibold tracking-tight">{{ p.name }}</h4>
+        <p class="mt-3"><span class="text-3xl font-semibold tracking-tight tabular-nums">{{ p.price | money(p.currency) }}</span></p>
+        <p class="text-xs muted">for {{ p.duration_days }} day{{ 's' if p.duration_days != 1 }}</p>
+        {% if p.description %}<p class="mt-3 line-clamp-3 text-sm muted">{{ p.description }}</p>{% endif %}
+        <ul class="mt-4 grid gap-2 text-sm">
+          {% for ico, perk in o.perks %}<li class="flex items-center gap-2"><span class="grid size-5 place-items-center rounded-full bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("check", "size-3") }}</span>{{ perk }}</li>{% endfor %}
+        </ul>
+        <div class="mt-auto pt-5">
+          {% if o.available %}
+            <a href="{{ o.href }}" class="btn btn-primary w-full">Subscribe {{ icon("arrow-right", "size-4") }}</a>
+            {% if p.mode.value != 'online' %}<p class="mt-2 text-center text-[11px] muted">Completed at the branch desk with an owner OTP</p>{% endif %}
+          {% elif o.needs_location %}
+            <a href="#plans" class="btn btn-secondary w-full">{{ icon("map-pin", "size-4") }} Share location first</a>
+            <p class="mt-2 text-center text-[11px] muted">{{ o.note }}</p>
+          {% elif o.limited %}
+            <a href="/me/subscriptions" class="btn btn-secondary w-full" data-gym-limit>{{ icon("lock", "size-4") }} My memberships</a>
+            <p class="mt-2 text-center text-[11px] muted">{{ o.note }}</p>
+          {% else %}
+            <span class="btn btn-secondary w-full cursor-not-allowed opacity-60" aria-disabled="true">Unavailable</span>
+            <p class="mt-2 text-center text-[11px] muted">{{ o.note }}</p>
+          {% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{#- Branch summary card (BranchCard view model: cover, the first 5 features + more_features, open state) -#}
+{% macro branch_card(bc, gym) %}
+{% set b = bc.branch %}
+<a href="/gyms/{{ gym.slug }}/branches/{{ b.id }}{{ loc.qs if loc is defined and loc else '' }}" class="pub-gym-card group sm:flex-row" data-lat="{{ b.latitude if b.latitude is not none else '' }}" data-lon="{{ b.longitude if b.longitude is not none else '' }}">
+  <div class="pub-cover aspect-[16/10] sm:aspect-auto sm:min-h-44 sm:w-56 sm:shrink-0">
+    {% if bc.cover_key %}<img src="{{ media_url(bc.cover_key) }}" alt="{{ b.name }}" loading="lazy" decoding="async" class="pub-cover-img sm:absolute sm:inset-0">{% else %}<div class="pub-cover-fallback">{{ icon("building", "size-8 text-accent") }}</div>{% endif %}
+    {% if bc.distance_label %}<span class="pub-photo-badge absolute bottom-3 left-3">{{ icon("map-pin", "size-3.5 text-accent dark:text-[#64b5ff]") }}<span data-distance>{{ bc.distance_label }}</span></span>{% endif %}
+  </div>
+  <div class="flex min-w-0 flex-1 flex-col p-5">
+    <div class="flex flex-wrap items-center gap-2">
+      <h3 class="font-semibold tracking-tight transition-colors group-hover:text-accent">{{ b.name }}</h3>
+      <span class="badge badge-green">{{ icon("check-badge", "size-3.5") }}Verified</span>
+    </div>
+    <p class="mt-1 text-sm muted">{{ b.address_line1 }}{% if b.address_line2 %}, {{ b.address_line2 }}{% endif %}, {{ b.city }}</p>
+    <p class="mt-2 flex items-center gap-1.5 text-xs font-medium {{ 'text-[#1f8c3a] dark:text-[#4ade80]' if bc.open_now else 'text-zinc-500 dark:text-zinc-400' }}">
+      <span class="dot {{ 'bg-ok' if bc.open_now else 'bg-zinc-400' }}"></span>{{ bc.hours_text }}
+    </p>
+    {% if bc.features %}
+    <div class="mt-3 flex flex-wrap gap-1.5">
+      {% for f in bc.features %}<span class="chip">{{ f }}</span>{% endfor %}
+      {% if bc.more_features %}<span class="chip">+{{ bc.more_features }}</span>{% endif %}
+    </div>
+    {% endif %}
+    <span class="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-semibold text-accent">View branch {{ icon("chevron-right", "size-4") }}</span>
+  </div>
+</a>
+{% endmacro %}
+
+{#- Prev / next pager (dict from the router) -#}
+{% macro pager(p, noun="results") %}
+{% if p.pages > 1 %}
+<nav class="mt-10 flex items-center justify-between gap-3" aria-label="Pagination">
+  {% if p.prev %}<a href="{{ p.prev }}" class="btn btn-secondary btn-sm" rel="prev">{{ icon("arrow-left", "size-4") }} Previous</a>{% else %}<span class="btn btn-secondary btn-sm pointer-events-none opacity-40" aria-hidden="true">{{ icon("arrow-left", "size-4") }} Previous</span>{% endif %}
+  <span class="text-sm muted">Page <span class="font-semibold text-ink dark:text-white">{{ p.page }}</span> of {{ p.pages }} · {{ p.total }} {{ noun }}</span>
+  {% if p.next %}<a href="{{ p.next }}" class="btn btn-secondary btn-sm" rel="next">Next {{ icon("arrow-right", "size-4") }}</a>{% else %}<span class="btn btn-secondary btn-sm pointer-events-none opacity-40" aria-hidden="true">Next {{ icon("arrow-right", "size-4") }}</span>{% endif %}
+</nav>
+{% endif %}
+{% endmacro %}
+
+{#- Hidden inputs ({name: value}) that carry the rest of a query through a GET form -#}
+{% macro hidden_fields(fields) -%}
+{% for name, value in fields.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+{%- endmacro %}
+
+{#- Distance chip of a job posting (routers.public.JobView): "3.2 km away", plus the branch it was measured to when
+    the posting is for the whole gym (the gym's nearest published branch). The server only sets a distance within
+    the 30 km limit; nothing for remote / farther / unknown (an unpublished own branch is unknown). -#}
+{% macro job_distance(jv) -%}
+{% if jv.distance_label %}
+  {% set text = jv.distance_label ~ " away" ~ (" · nearest branch: " ~ jv.nearest_branch if jv.nearest_branch else "") %}
+  <span class="badge badge-blue max-w-full" title="{{ text }}" data-job-distance>{{ icon("map-pin", "size-3.5 shrink-0") }}<span class="min-w-0 truncate leading-tight">{{ text }}</span></span>
+{% endif %}
+{%- endmacro %}
+
+{#- Job posting card of the jobs board (routers.public.JobView); `heading` is the title's tag (h2 / h3); `qs` is the
+    query string the job link carries (the list's whole search, so the job page links back to it; default: location) -#}
+{% macro job_card(jv, heading="h2", qs=none) %}
+{% set j = jv.job %}
+<a href="/jobs/{{ j.id }}{{ qs if qs is not none else (loc.qs if loc is defined and loc else '') }}" class="group card card-hover flex flex-col gap-4 sm:flex-row sm:items-start">
+  <span class="pub-portrait size-14 !rounded-2xl">
+    {% if media_url(j.gym.logo_key) %}<img src="{{ media_url(j.gym.logo_key) }}" alt="">{% else %}<span class="text-base">{{ j.gym.name | initials }}</span>{% endif %}
+  </span>
+  <div class="min-w-0 flex-1">
+    <div class="flex flex-wrap items-start justify-between gap-2">
+      <div class="min-w-0">
+        <{{ heading }} class="text-lg font-semibold tracking-tight transition-colors group-hover:text-accent">{{ j.title }}</{{ heading }}>
+        <p class="text-sm muted">{{ j.gym.name }}</p>
+      </div>
+      <span class="text-xs muted">{{ j.created_at | timeago }}</span>
+    </div>
+    <div class="mt-3 flex flex-wrap gap-1.5">
+      {% if jv.remote %}<span class="badge badge-violet">{{ icon("globe", "size-3.5") }}Remote</span>
+      {% else %}<span class="badge badge-zinc">{{ icon("map-pin", "size-3.5") }}{{ jv.location }}</span>{% endif %}
+      {{ job_distance(jv) }}
+      <span class="badge badge-blue">{{ icon("briefcase", "size-3.5") }}{{ jv.type_label }}</span>
+      <span class="badge badge-zinc">{{ jv.role_label }}</span>
+      {% if jv.salary %}<span class="badge badge-green">{{ icon("banknotes", "size-3.5") }}{{ jv.salary }} <span class="opacity-70">{{ j.currency }}</span></span>{% endif %}
+    </div>
+    <p class="mt-3 line-clamp-2 text-sm leading-relaxed muted">{{ jv.excerpt }}</p>
+  </div>
+  <span class="hidden self-center text-zinc-300 transition-transform duration-300 ease-spring group-hover:translate-x-1 group-hover:text-accent sm:block dark:text-zinc-600">{{ icon("chevron-right", "size-5") }}</span>
+</a>
+{% endmacro %}
+
+{#- Legal pages: table of contents + section wrapper -#}
+{% macro toc(items) %}
+<nav class="card-flat sticky top-24 hidden text-sm lg:block" aria-label="On this page">
+  <p class="mb-3 text-xs font-semibold uppercase tracking-wider muted">On this page</p>
+  <ol class="grid gap-1.5">
+    {% for anchor, label in items %}<li><a href="#{{ anchor }}" class="block rounded-lg px-2 py-1 text-zinc-600 hover:bg-zinc-900/5 hover:text-ink dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-white">{{ label }}</a></li>{% endfor %}
+  </ol>
+</nav>
+{% endmacro %}

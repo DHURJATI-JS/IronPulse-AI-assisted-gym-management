@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% block title %}Checkout · {{ gym.name }}{% endblock %}
+{% block content %}
+{% set cur = gym.currency %}
+{% set fval = form.get("fulfillment") or plan.fulfillment %}
+{% set mode = fval if fval in plan.methods else plan.fulfillment %}
+<div class="relative isolate">
+  <div class="shop-glow" aria-hidden="true"></div>
+  {{ shop.toolbar("cart", cart_count) }}
+  {% call ui.page_header("Checkout", subtitle="Your order from " ~ gym.name ~ ". Prices, stock and coupons are re-checked when you place it.", eyebrow="Secure checkout", back="/shop/cart") %}{% endcall %}
+
+  {% if payments_mode == "test" %}
+    <div class="shop-test-banner mb-6" role="note">{{ icon("flag", "size-5 shrink-0") }}<p><strong>Test mode.</strong> Online payments aren't configured, so you'll use a clearly labelled simulated gateway - no real money moves.</p></div>
+  {% elif payments_mode == "unavailable" %}
+    {{ ui.alert("Online payments are temporarily unavailable. You can still place the order and pay from the order page once payments are back.", "warning", "Payments unavailable") }}
+  {% endif %}
+  {% if errors %}<div class="mb-6">{{ ui.form_errors(errors) }}</div>{% endif %}
+  {% if plan.problems and not errors %}
+    <div class="alert alert-danger mb-6" role="alert">
+      {{ icon("alert", "size-5 shrink-0") }}
+      <div class="flex-1"><p class="font-semibold">A few things need fixing in your bag</p>
+        <ul class="mt-1 list-disc pl-5">{% for p in plan.problems %}<li>{{ p }}</li>{% endfor %}</ul>
+        <a href="/shop/cart" class="mt-2 inline-flex font-semibold underline">Back to your bag</a></div>
+    </div>
+  {% endif %}
+
+  <div class="grid gap-8 lg:grid-cols-[1fr_400px]" data-component="shop-checkout">
+    <form id="checkout-form" method="post" action="/shop/checkout" class="grid content-start gap-6" novalidate>
+      {{ ui.csrf() }}
+      <input type="hidden" name="gym" value="{{ gym.id }}">
+      <input type="hidden" name="coupon" value="{{ plan.coupon.code if plan.coupon else '' }}">
+      <input type="hidden" name="quote" value="{{ quote_fp }}">
+
+      {# ------------------------------------------------ 1. how #}
+      <section class="card" aria-labelledby="how-title">
+        <h2 id="how-title" class="shop-section-title"><span class="grid size-7 place-items-center rounded-full bg-accent text-xs font-semibold text-white">1</span>How would you like to get it?</h2>
+        <div class="mt-5 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Fulfilment">
+          <label class="shop-option" {% if "pickup" not in plan.methods %}aria-disabled="true"{% endif %}>
+            <input type="radio" name="fulfillment" value="pickup" class="peer sr-only" {{ 'checked' if mode == 'pickup' }} {{ 'disabled' if 'pickup' not in plan.methods }}>
+            <span class="shop-radio" aria-hidden="true"></span>
+            <span class="min-w-0">
+              <span class="flex items-center gap-2 font-semibold">{{ icon("map-pin", "size-4 text-accent") }}Pick up at the gym</span>
+              <span class="mt-1 block text-sm muted">{% if "pickup" in plan.methods %}Free · we'll notify you when it's ready{% else %}Not available for these items{% endif %}</span>
+            </span>
+          </label>
+          <label class="shop-option" {% if "delivery" not in plan.methods %}aria-disabled="true"{% endif %}>
+            <input type="radio" name="fulfillment" value="delivery" class="peer sr-only" {{ 'checked' if mode == 'delivery' }} {{ 'disabled' if 'delivery' not in plan.methods }}>
+            <span class="shop-radio" aria-hidden="true"></span>
+            <span class="min-w-0">
+              <span class="flex items-center gap-2 font-semibold">{{ shop.svg("truck", "size-4 text-violet") }}Home delivery</span>
+              <span class="mt-1 block text-sm muted">{% if "delivery" in plan.methods %}{{ plan.delivery_quote.shipping_fee | money(cur) if plan.delivery_quote.shipping_fee else "Free" }} · free on orders from {{ free_from | money(cur) }}{% else %}Not available for these items{% endif %}</span>
+            </span>
+          </label>
+        </div>
+        {% if errors.fulfillment %}<p class="field-error">{{ errors.fulfillment }}</p>{% endif %}
+
+        {% if "pickup" in plan.methods %}
+          <div class="mt-6" data-show-for="pickup" {{ 'hidden' if mode != 'pickup' }}>
+            {% set branch_opts = [] %}
+            {% for b in plan.branches %}{% set _ = branch_opts.append((b.id, b.name ~ " · " ~ b.address_line1 ~ ", " ~ b.city)) %}{% endfor %}
+            {{ ui.select("branch_id", "Pickup branch", branch_opts, value=form.get("branch_id") or (plan.branches[0].id if plan.branches | length == 1 else None), required=True, error=errors.branch, empty="Choose a branch" if plan.branches | length > 1 else None, attrs='data-required' ~ (' disabled' if mode != 'pickup' else '')) }}
+            <p class="help">Bring your order number to the front desk. Only verified, open branches are listed.</p>
+          </div>
+        {% endif %}
+        {% if "delivery" in plan.methods %}
+          <div class="mt-6 grid gap-4 sm:grid-cols-2" data-show-for="delivery" {{ 'hidden' if mode != 'delivery' }}>
+            {% set dis = ' disabled' if mode != 'delivery' else '' %}
+            {{ ui.field("ship_name", "Full name", value=form.get("ship_name") or user.full_name, required=True, error=errors.ship_name, autocomplete="name", attrs='maxlength="120" data-required' ~ dis) }}
+            {{ ui.field("ship_phone", "Phone", type="tel", value=form.get("ship_phone") or user.phone or "", required=True, error=errors.ship_phone, autocomplete="tel", attrs='maxlength="32" data-required' ~ dis, help="For the courier only") }}
+            {{ ui.field("ship_line1", "Address", value=form.get("ship_line1") or "", required=True, error=errors.ship_line1, autocomplete="street-address", placeholder="House / flat, street, area", attrs='maxlength="200" data-required' ~ dis, cls="sm:col-span-2") }}
+            {{ ui.field("ship_city", "City", value=form.get("ship_city") or user.city or "", required=True, error=errors.ship_city, autocomplete="address-level2", attrs='maxlength="120" data-required' ~ dis) }}
+            {{ ui.field("ship_postal", "Postal / PIN code", value=form.get("ship_postal") or "", required=True, error=errors.ship_postal, autocomplete="postal-code", attrs='maxlength="12" data-required' ~ dis) }}
+          </div>
+        {% endif %}
+      </section>
+
+      {# ------------------------------------------------ 2. safety #}
+      {% if warnings %}
+        <section class="shop-safety" data-tone="{{ safety_tone }}" aria-labelledby="safety-title">
+          <h2 id="safety-title" class="shop-section-title"><span class="grid size-7 place-items-center rounded-full bg-warn text-xs font-semibold text-white">2</span>Safety notes for your items</h2>
+          <p class="mt-1 text-sm muted">Based on your health profile. Please read them before ordering - check with your doctor if unsure.</p>
+          <div class="mt-4 grid gap-4">
+            {% for p, report in warnings %}
+              <div>
+                <p class="mb-2 text-sm font-semibold">{{ p.name }}</p>
+                <ul class="grid gap-2">{% for f in report.warnings %}{{ shop.flag(f) }}{% endfor %}</ul>
+              </div>
+            {% endfor %}
+          </div>
+          <label class="mt-5 flex items-start gap-3 text-sm">
+            <input type="checkbox" name="safety_ack" value="1" class="checkbox mt-0.5" required {{ 'checked' if form.get("safety_ack") }}>
+            <span><span class="font-medium">I've read these safety notes</span><span class="block text-xs muted">The gym is not giving medical advice. If you have a condition, ask your doctor before using these products.</span></span>
+          </label>
+          {% if errors.safety_ack %}<p class="field-error">{{ errors.safety_ack }}</p>{% endif %}
+        </section>
+      {% endif %}
+
+      <p class="text-xs muted lg:hidden">By placing the order you agree to the store's 7-day refund policy and the <a href="/terms" class="text-accent hover:underline">terms</a>.</p>
+    </form>
+
+    {# ------------------------------------------------ summary #}
+    <aside class="shop-summary h-fit" aria-label="Order summary">
+      <div class="card">
+        <h2 class="section-title">Order summary</h2>
+        <ul class="mt-4 grid gap-3">
+          {% for ln in plan.lines %}
+            <li class="flex items-center gap-3">
+              <span class="relative">{{ shop.thumb(ln.cover_key, ln.product.name, ln.product.category.value) }}<span class="absolute -right-1.5 -top-1.5 grid min-w-5 place-items-center rounded-full bg-zinc-900 px-1 text-[11px] font-semibold leading-5 text-white dark:bg-white dark:text-black">{{ ln.quantity }}</span></span>
+              <span class="min-w-0 flex-1"><span class="line-clamp-2 text-sm font-medium leading-snug">{{ ln.product.name }}</span>{% if ln.problem %}<span class="block text-xs font-semibold text-bad">{{ ln.problem }}</span>{% endif %}</span>
+              <span class="text-sm font-semibold tabular-nums">{{ ln.subtotal | money(cur) }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+        <form method="get" action="/shop/checkout" class="mt-5">
+          <input type="hidden" name="gym" value="{{ gym.id }}">
+          <input type="hidden" name="fulfillment" value="{{ mode }}">
+          <label for="co-coupon" class="label">Coupon code</label>
+          <div class="flex gap-2">
+            <input id="co-coupon" name="coupon" value="{{ plan.coupon_code }}" maxlength="32" autocomplete="off" placeholder="e.g. STRONG10" class="input uppercase placeholder:normal-case {{ 'input-error' if plan.coupon_error }}">
+            <button type="submit" class="btn btn-secondary shrink-0">Apply</button>
+          </div>
+          {% if plan.coupon_error %}<p class="field-error">{{ plan.coupon_error }}</p>
+          {% elif plan.coupon %}<p class="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("check-circle", "size-3.5") }}{{ plan.coupon.code }} applied</p>{% endif %}
+        </form>
+        <div class="divider !my-5"></div>
+        {% if "pickup" in plan.methods or not plan.methods %}
+          <div data-show-for="pickup" {{ 'hidden' if mode != 'pickup' }}>{{ shop.totals(plan.pickup_quote, cur, plan.coupon.code if plan.coupon else None, shipping_label="Pickup") }}</div>
+        {% endif %}
+        {% if "delivery" in plan.methods %}
+          <div data-show-for="delivery" {{ 'hidden' if mode != 'delivery' }}>{{ shop.totals(plan.delivery_quote, cur, plan.coupon.code if plan.coupon else None) }}</div>
+        {% endif %}
+        <button type="submit" form="checkout-form" class="btn btn-primary btn-lg mt-6 w-full" {{ 'disabled' if not plan.ok }}>{{ icon("lock", "size-4") }}Place order &amp; pay</button>
+        <p class="mt-3 flex items-center justify-center gap-1.5 text-center text-xs muted">{{ icon("shield", "size-3.5") }}{{ "Simulated payment (test mode)" if payments_mode == "test" else "Payments secured by Cashfree" }}</p>
+        <p class="mt-4 hidden text-xs muted lg:block">By placing the order you agree to the store's 7-day refund policy and the <a href="/terms" class="text-accent hover:underline">terms</a>.</p>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}

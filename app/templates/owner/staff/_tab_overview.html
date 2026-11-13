@@ -1,0 +1,151 @@
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_macros.html" as sm with context %}
+<div class="grid gap-6 lg:grid-cols-3">
+  <div class="space-y-6 lg:col-span-2">
+    {% if emp.status.value in ("invited", "pending_verification") or (emp.status.value == "active" and not all_met) %}
+    <section class="card">
+      {{ sm.card_title("Activation checklist", "Approved automatically the moment every item is complete.", "check-badge") }}
+      {{ sm.requirements(reqs, "owner") }}
+      <div class="mt-5 flex flex-wrap items-center gap-2 border-t border-black/[0.05] pt-4 dark:border-white/[0.06]">
+        <form method="post" action="/owner/staff/{{ emp.id }}/recheck">{{ ui.csrf() }}<button class="btn btn-primary btn-sm">{{ icon("refresh", "size-4") }} Re-check now</button></form>
+        {% if not linked %}
+          <form method="post" action="/owner/staff/{{ emp.id }}/resend-invite">{{ ui.csrf() }}<button class="btn btn-secondary btn-sm">{{ icon("send", "size-4") }} Resend invite</button></form>
+        {% endif %}
+        {% if emp.is_trainer and emp.verification_status.value == "needs_review" %}
+          <a href="/owner/staff/{{ emp.id }}?tab=documents" class="btn btn-secondary btn-sm">{{ icon("document", "size-4") }} Review certification</a>
+        {% endif %}
+        <p class="text-xs muted sm:ml-auto">Checks also run automatically when they link their account or their ID is verified.</p>
+      </div>
+    </section>
+    {% elif emp.status.value == "active" %}
+    <div class="alert alert-success">
+      {{ icon("check-circle", "size-5 shrink-0") }}
+      <div><p class="font-semibold">Approved</p><p>Own account linked, photo and ID verified{{ ", certification checked" if emp.is_trainer }}.</p></div>
+    </div>
+    {% endif %}
+
+    <section class="card">
+      <div class="mb-5 flex items-start justify-between gap-4">
+        <div class="flex items-start gap-3">
+          <span class="grid size-9 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">{{ icon("calendar", "size-[18px]") }}</span>
+          <div>
+            <h2 class="section-title">This week</h2>
+            <p class="mt-0.5 text-sm muted">{{ S.fmt_hours(week_minutes) }} h across {{ emp.shifts | length }} shift{{ 's' if emp.shifts | length != 1 }}</p>
+          </div>
+        </div>
+        <a href="/owner/staff/{{ emp.id }}?tab=schedule" class="btn btn-ghost btn-sm shrink-0">Manage {{ icon("chevron-right", "size-4") }}</a>
+      </div>
+      {% if emp.shifts or busy_slots %}
+        {% call sm.week_strip(week_days, today_wd) %}{% if busy_slots %}<span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-zinc-400 dark:bg-zinc-500"></span>Busy elsewhere</span>{% endif %}{% endcall %}
+      {% else %}
+        <p class="rounded-2xl bg-zinc-100/70 px-4 py-6 text-center text-sm muted dark:bg-white/[0.04]">No shifts scheduled yet. <a href="/owner/staff/{{ emp.id }}?tab=schedule" class="font-medium text-accent hover:underline">Add the first shift</a></p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      {{ sm.card_title("Details", None, "document") }}
+      <dl class="divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+        {{ sm.fact("Role", emp.role_title or S.ROLE_LABELS[emp.role.value]) }}
+        {{ sm.fact("Employment", S.EMPLOYMENT_TYPE_LABELS[emp.employment_type.value]) }}
+        {{ sm.fact("Work mode", S.WORK_MODE_LABELS[emp.work_mode.value]) }}
+        {{ sm.fact("Hire date", emp.hire_date | date) }}
+        {{ sm.fact("Invite e-mail", emp.invite_email) }}
+        {% if emp.phone %}{{ sm.fact("Phone", emp.phone) }}{% endif %}
+        {% if emp.years_experience is not none %}{{ sm.fact("Experience", emp.years_experience ~ " year" ~ ("s" if emp.years_experience != 1 else "")) }}{% endif %}
+        {{ sm.fact("Public profile", "Visible on the gym page" if emp.is_public else "Hidden") }}
+      </dl>
+      {% if emp.specialties %}
+        <p class="mt-5 text-xs font-semibold uppercase tracking-wider muted">Specialties</p>
+        <div class="mt-2 flex flex-wrap gap-1.5">{% for s in emp.specialties %}<span class="chip">{{ s }}</span>{% endfor %}</div>
+      {% endif %}
+      {% if emp.bio %}
+        <p class="mt-5 text-xs font-semibold uppercase tracking-wider muted">Bio</p>
+        <p class="mt-1.5 whitespace-pre-line text-sm leading-relaxed">{{ emp.bio }}</p>
+      {% endif %}
+      {% if emp.certifications %}
+        <p class="mt-5 text-xs font-semibold uppercase tracking-wider muted">Certifications</p>
+        <p class="mt-1.5 whitespace-pre-line text-sm leading-relaxed">{{ emp.certifications }}</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <aside class="space-y-6">
+    <section class="card">
+      {{ sm.card_title("IronPulse account", None, "user") }}
+      {% if linked %}
+        <div class="flex items-center gap-3">
+          {{ ui.avatar(staff_user.photo_key, staff_user.display_name, "size-12") }}
+          <div class="min-w-0">
+            <p class="truncate font-semibold">{{ staff_user.display_name }}</p>
+            <p class="truncate text-sm muted">{{ staff_user.email }}</p>
+          </div>
+        </div>
+        <dl class="mt-4 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+          {{ sm.fact("ID card", ui.status(staff_user.id_status)) }}
+          {{ sm.fact("Profile photo", "Added" if staff_user.photo_key else "Missing") }}
+          {{ sm.fact("Last sign-in", staff_user.last_login_at | timeago if staff_user.last_login_at else "Never") }}
+        </dl>
+      {% else %}
+        <div class="rounded-2xl bg-zinc-100/70 p-4 text-sm dark:bg-white/[0.04]">
+          <p class="font-medium">Not linked yet</p>
+          <p class="mt-1 muted">Invitation sent to <span class="font-medium text-ink dark:text-white">{{ emp.invite_email }}</span>.</p>
+          {% if invite %}
+            <p class="mt-2 text-xs muted">Last link sent {{ invite.created_at | timeago }} ·
+              {% if invite.expired %}<span class="font-semibold text-bad">expired</span>{% else %}expires {{ invite.expires_at | timeago }}{% endif %}</p>
+          {% endif %}
+        </div>
+        <form method="post" action="/owner/staff/{{ emp.id }}/resend-invite" class="mt-4">{{ ui.csrf() }}<button class="btn btn-secondary w-full">{{ icon("send", "size-4") }} Send a fresh link</button></form>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      {{ sm.card_title("Payroll", None, "banknotes") }}
+      <p class="kpi">{{ emp.monthly_salary | money(emp.currency) }}</p>
+      <p class="mt-1 text-xs muted">per month · {{ emp.currency }} · {{ S.COUNTRIES.get(emp.country_code, emp.country_code) }}</p>
+      {% if dues is not none %}
+        {% if dues %}
+          <p class="mt-4 flex items-center gap-2 rounded-xl bg-warn/10 px-3 py-2 text-xs font-medium text-[#92400e] dark:text-[#fcd34d]">{{ icon("alert", "size-4 shrink-0") }} {{ dues | length }} unpaid salary statement{{ 's' if dues | length != 1 }}</p>
+        {% else %}
+          <p class="mt-4 flex items-center gap-2 rounded-xl bg-ok/10 px-3 py-2 text-xs font-medium text-[#166534] dark:text-[#86efac]">{{ icon("check-circle", "size-4 shrink-0") }} Salary is up to date</p>
+        {% endif %}
+      {% endif %}
+      <div class="mt-4 grid gap-2">
+        <a href="/owner/payroll?employee={{ emp.id }}" class="btn btn-secondary">{{ icon("receipt", "size-4") }} Salary statements</a>
+        <a href="/owner/staff/{{ emp.id }}/settlement" class="btn btn-ghost">{{ icon("briefcase", "size-4") }} Settlement &amp; removal</a>
+      </div>
+      <p class="mt-3 text-xs muted">Staff are removed only after every salary (and gratuity where due) is paid with proof.</p>
+    </section>
+
+    {% if emp.is_trainer %}
+    <a href="/owner/staff/{{ emp.id }}?tab=clients" class="card card-hover flex items-center gap-4">
+      <span class="grid size-11 shrink-0 place-items-center rounded-2xl bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("users", "size-5") }}</span>
+      <div class="min-w-0 flex-1">
+        <p class="font-semibold">{{ client_total }} assigned client{{ 's' if client_total != 1 }}</p>
+        <p class="text-xs muted">{{ eligible_total }} member{{ 's' if eligible_total != 1 }} with a trainer plan can be assigned</p>
+      </div>
+      {{ icon("chevron-right", "size-5 text-zinc-400") }}
+    </a>
+    {% endif %}
+
+    {% if current %}
+    <section class="card">
+      {{ sm.card_title("Access", None, "lock") }}
+      {% if emp.status.value in ("active", "pending_verification", "invited") %}
+      <details class="group">
+        <summary class="btn btn-secondary w-full cursor-pointer list-none text-bad [&::-webkit-details-marker]:hidden">{{ icon("lock", "size-4") }} Suspend access</summary>
+        <form method="post" action="/owner/staff/{{ emp.id }}/suspend" class="mt-4 space-y-3" data-confirm="Suspend {{ emp.full_name }}? They keep their record but lose access to clients until reactivated.">
+          {{ ui.csrf() }}
+          {{ ui.textarea("reason", "Reason (shared with them)", rows=2, placeholder="e.g. Pending investigation of a member complaint", attrs='maxlength="255"') }}
+          <button class="btn btn-danger w-full">Suspend now</button>
+        </form>
+      </details>
+      {% endif %}
+      <div class="mt-2 grid gap-2">
+        {% if can_change_position %}<a href="/owner/staff/{{ emp.id }}/change-position" class="btn btn-secondary w-full">{{ icon("refresh", "size-4") }} Change position</a>{% endif %}
+        <a href="/owner/staff/{{ emp.id }}/remove" class="btn btn-secondary w-full text-bad">{{ icon("logout", "size-4") }} End employment</a>
+      </div>
+      <p class="mt-3 text-xs muted">Suspending never deletes data. A position change ends this employment and re-adds them in the new role; ending an employment needs a reason from the list.</p>
+    </section>
+    {% endif %}
+  </aside>
+</div>

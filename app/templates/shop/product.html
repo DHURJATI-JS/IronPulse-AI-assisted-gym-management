@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% block title %}{{ product.name }}{% endblock %}
+{% block description %}{{ product.description[:155] }}{% endblock %}
+{% block content %}
+{% set cat = product.category.value %}
+<div class="relative isolate">
+  <div class="shop-glow" aria-hidden="true"></div>
+  {{ shop.toolbar("product", cart_count) }}
+
+  <nav class="mb-6 flex min-w-0 items-center gap-1.5 text-sm muted" aria-label="Breadcrumb">
+    <a href="/shop" class="hover:text-accent">Shop</a>{{ icon("chevron-right", "size-3.5 shrink-0") }}
+    <a href="/shop?category={{ cat }}" class="hover:text-accent">{{ cat | humanize }}</a>{{ icon("chevron-right", "size-3.5 shrink-0") }}
+    <span class="truncate text-ink dark:text-zinc-200" aria-current="page">{{ product.name }}</span>
+  </nav>
+
+  {% if owner_view %}
+    <div class="alert {{ 'alert-warning' if not product.is_active else 'alert-info' }} mb-6">
+      {{ icon("eye", "size-5 shrink-0") }}
+      <div class="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p>{% if not product.is_active %}<strong>Hidden from customers.</strong> This is a preview of your inactive product.{% else %}You're viewing your own product as customers see it.{% endif %}</p>
+        <a href="/owner/shop/products/{{ product.id }}" class="btn btn-dark btn-sm shrink-0">{{ icon("pencil", "size-4") }}Edit product</a>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="grid gap-8 lg:grid-cols-[1.05fr_1fr] lg:gap-14">
+    {# ---------------------------------------------------------------- gallery #}
+    <section aria-label="Product photos" data-component="shop-gallery" data-images="{{ image_urls | jsonattr }}" data-title="{{ product.name }}" class="animate-fade-up">
+      <div class="relative">
+        {% if image_urls %}
+          <button type="button" class="shop-gallery-main group cursor-zoom-in" data-gallery-open aria-label="Open the photo viewer">
+            <img src="{{ image_urls[0] }}" alt="{{ product.name }}" data-gallery-img decoding="async">
+            <span class="absolute bottom-4 right-4 grid size-10 place-items-center rounded-full bg-white/85 text-zinc-700 opacity-0 shadow-sm ring-1 ring-black/5 backdrop-blur transition duration-300 group-hover:opacity-100 group-focus-visible:opacity-100 dark:bg-black/60 dark:text-zinc-200">{{ shop.svg("maximize", "size-4") }}</span>
+          </button>
+        {% else %}
+          <div class="shop-gallery-main">{{ shop.media(None, "", cat, fallback_cls="size-20") }}</div>
+        {% endif %}
+        <div class="pointer-events-none absolute left-4 top-4 flex flex-wrap gap-1.5">
+          {% if percent_off %}<span class="shop-tag shop-tag-deal">−{{ percent_off }}%</span>{% endif %}
+          {% if product.age_restricted %}<span class="shop-tag">18+ only</span>{% endif %}
+          {% if product.is_supplement %}<span class="shop-tag">{{ icon("bolt", "size-3") }}Supplement</span>{% endif %}
+        </div>
+      </div>
+      {% if image_urls | length > 1 %}
+        <div class="mt-3 flex gap-2.5 overflow-x-auto pb-1" role="list" aria-label="Choose a photo">
+          {% for url in image_urls %}
+            <button type="button" class="shop-thumb" data-gallery-thumb data-index="{{ loop.index0 }}" aria-current="{{ 'true' if loop.first else 'false' }}" aria-label="Show photo {{ loop.index }} of {{ image_urls | length }}" role="listitem">
+              <img src="{{ url }}" alt="" loading="lazy">
+            </button>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </section>
+
+    {# ---------------------------------------------------------------- buy box #}
+    <section aria-labelledby="product-title" class="flex flex-col animate-fade-up">
+      <a href="/shop/gym/{{ gym.slug }}" class="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-accent hover:underline">{{ shop.svg("store", "size-4") }}{{ gym.name }}</a>
+      {% if product.brand %}<p class="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500 dark:text-zinc-400">{{ product.brand }}</p>{% endif %}
+      <h1 id="product-title" class="mt-1 text-3xl font-semibold leading-tight tracking-tight sm:text-[40px]">{{ product.name }}</h1>
+      <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+        {% if rating.count %}
+          <a href="#reviews" class="inline-flex items-center gap-2 hover:underline">{{ shop.stars(rating.average, "size-4") }}<span class="tabular-nums">{{ rating.average }} · {{ rating.count }} review{{ 's' if rating.count != 1 }}</span></a>
+        {% else %}
+          <span class="muted">No reviews yet</span>
+        {% endif %}
+        <span class="muted" aria-hidden="true">·</span>
+        <span class="chip">{{ icon(shop.CATEGORY_ICONS.get(cat, "sparkles"), "size-3.5") }}{{ cat | humanize }}</span>
+      </div>
+
+      <div class="mt-6">
+        {{ shop.price(product, percent_off, "text-3xl") }}
+        <p class="mt-1.5 text-sm muted">
+          {% if product.tax_rate | float > 0 %}+ {{ '%g' | format(product.tax_rate | float) }}% GST/tax added at checkout{% else %}No tax added at checkout{% endif %}{% if percent_off %} · you save {{ (product.compare_at_price - product.price) | money(product.currency) }}{% endif %}
+        </p>
+      </div>
+
+      <div class="mt-5 flex flex-wrap items-center gap-2">
+        {{ shop.stock_badge(stock_state, product.stock) }}
+        {% if pickup_branches %}<span class="shop-pill">{{ icon("map-pin", "size-3.5") }}Pickup{% if pickup_total == 1 %} at {{ pickup_branches[0].name }}{% else %} at {{ pickup_total }} branches{% endif %}</span>{% endif %}
+        {% if delivery %}<span class="shop-pill">{{ shop.svg("truck", "size-3.5") }}Delivery {{ delivery_fee | money(product.currency) }} · free from {{ free_from | money(product.currency) }}</span>{% endif %}
+      </div>
+
+      {# purchase #}
+      <div class="mt-6">
+        {% if not product.is_active %}
+          {{ ui.alert("This product is hidden, so it can't be bought right now.", "warning") }}
+        {% elif user and purchase_problem %}
+          <div class="alert {{ 'alert-danger' if safety.blocked else 'alert-info' }}" role="status">
+            {{ icon("lock" if safety.blocked else "info", "size-5 shrink-0") }}
+            <div><p class="font-semibold">{{ "Not available on your account" if safety.blocked else ("Out of stock" if product.stock <= 0 else "Members only") }}</p><p>{{ purchase_problem }}</p></div>
+          </div>
+          {% if product.stock <= 0 and not safety.blocked %}<div class="mt-3">{{ shop.wish_button(product, wished) }}</div>{% endif %}
+        {% elif user %}
+          <form method="post" action="/shop/cart/add" class="flex flex-wrap items-center gap-3" data-component="shop-add">
+            {{ ui.csrf() }}
+            <input type="hidden" name="product_id" value="{{ product.id }}">
+            <input type="hidden" name="next" value="{{ request.url.path }}">
+            <div class="shop-qty" data-component="shop-qty">
+              <button type="button" data-step="-1" aria-label="Decrease quantity">{{ shop.svg("minus", "size-4") }}</button>
+              <input type="number" name="quantity" value="1" min="1" max="{{ max_qty }}" inputmode="numeric" aria-label="Quantity">
+              <button type="button" data-step="1" aria-label="Increase quantity">{{ icon("plus", "size-4") }}</button>
+            </div>
+            <button type="submit" class="btn btn-primary btn-lg flex-1 sm:flex-none">{{ shop.svg("bag", "size-5") }}Add to bag</button>
+            {{ shop.wish_button(product, wished) }}
+          </form>
+          <p class="mt-3 text-xs muted">Up to {{ max_qty }} per order · secure checkout · {{ "pickup or delivery" if pickup_branches and delivery else ("pickup at the gym" if pickup_branches else "home delivery") }}</p>
+        {% else %}
+          <div class="flex flex-wrap items-center gap-3">
+            <a href="/auth/login?next={{ request.url.path | urlencode }}" class="btn btn-primary btn-lg">{{ shop.svg("bag", "size-5") }}Sign in to buy</a>
+            {{ shop.wish_button(product, False) }}
+          </div>
+          <p class="mt-3 text-xs muted">New here? <a href="/auth/signup" class="font-semibold text-accent hover:underline">Create an account</a> to shop and get a personalised safety check.</p>
+        {% endif %}
+      </div>
+
+      {# personalised safety panel #}
+      {% set tone = safety.tone if (user and safety.personalised) else "neutral" %}
+      <section class="shop-safety mt-7" data-tone="{{ tone }}" aria-labelledby="safety-title">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <span class="grid size-9 shrink-0 place-items-center rounded-xl {{ 'bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]' if tone == 'ok' else ('bg-bad/15 text-[#d1281e] dark:text-[#ff6b61]' if tone == 'danger' else ('bg-warn/15 text-[#b45309] dark:text-[#fbbf24]' if tone == 'warning' else 'bg-accent/12 text-accent')) }}">{{ icon("shield", "size-5") }}</span>
+            <div>
+              <h2 id="safety-title" class="font-semibold tracking-tight">{{ "Your safety check" if user else "Safety information" }}</h2>
+              <p class="text-xs muted">{{ "Checked against your health profile, allergies and age" if user else "General notes for this product" }}</p>
+            </div>
+          </div>
+          {% if user and user.role.value == "customer" %}<a href="/me/health/profile" class="shrink-0 text-xs font-semibold text-accent hover:underline">Edit profile</a>{% endif %}
+        </div>
+        {% if user and not safety.warnings %}
+          <p class="mt-4 flex items-center gap-2 text-sm font-medium text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("check-circle", "size-4") }}No conflicts with your health profile.</p>
+        {% endif %}
+        {% if safety.flags %}
+          <ul class="mt-4 grid gap-2">{% for f in safety.flags %}{{ shop.flag(f) }}{% endfor %}</ul>
+        {% endif %}
+        {% if allergen_labels %}<p class="mt-4 text-sm"><span class="font-semibold">Contains:</span> {{ allergen_labels | join(", ") }}</p>{% endif %}
+        {% if not user %}
+          <a href="/auth/login?next={{ request.url.path | urlencode }}" class="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline">Sign in for a personalised safety check {{ icon("arrow-right", "size-4") }}</a>
+        {% endif %}
+      </section>
+    </section>
+  </div>
+
+  {# ---------------------------------------------------------------- AI product Q&A #}
+  {% if product.is_active %}
+  <section id="ask" class="shop-ai mt-12 animate-fade-up" aria-labelledby="ask-title">
+    <div class="relative flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div class="flex items-center gap-3">
+        <span class="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-accent via-indigo to-violet text-white shadow-md shadow-indigo/30">{{ icon("sparkles", "size-5") }}</span>
+        <div>
+          <h2 id="ask-title" class="text-xl font-semibold tracking-tight">Ask AI about this product</h2>
+          <p class="text-sm muted">Ingredients, how to use it, and whether it suits you{% if user %} - checked against your profile{% endif %}.</p>
+        </div>
+      </div>
+      <div class="shrink-0">{{ ui.ai_chip(disclaimer=False) }}</div>
+    </div>
+    {% if user %}
+      <div class="relative mt-5" data-component="shop-ask" data-stream-url="/api/shop/products/{{ product.id }}/ask/stream" data-url="/api/shop/products/{{ product.id }}/ask">
+        <div class="shop-ai-log" data-ask-log aria-live="polite" aria-label="Conversation with the product assistant">
+          <div class="shop-bubble shop-bubble-ai">Hi {{ user.full_name.split()[0] }}! Ask me anything about {{ product.name }}. Safety notes from your health profile always come first.</div>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2" data-ask-ideas>
+          {% for q in question_ideas %}<button type="button" class="shop-idea" data-ask-idea>{{ q }}</button>{% endfor %}
+        </div>
+        <form class="mt-4 flex items-center gap-2" data-ask-form action="#ask" data-no-busy>
+          <label for="ask-q" class="sr-only">Your question about {{ product.name }}</label>
+          <input id="ask-q" name="question" maxlength="500" required class="input !rounded-full !py-3.5" placeholder="Ask about {{ product.name }}…" autocomplete="off" data-ask-input>
+          <button type="submit" class="btn btn-primary btn-icon !size-12 shrink-0" aria-label="Send question" data-ask-send>{{ icon("send", "size-4") }}</button>
+        </form>
+        <p class="mt-2 text-xs font-medium text-[#b45309] dark:text-[#fbbf24]" data-ask-wait hidden></p>
+        <p class="mt-2 text-right text-[11px] muted"><span data-ask-count>0</span>/500</p>
+        {{ ui.ai_disclaimer() }}
+      </div>
+    {% else %}
+      <div class="relative mt-6 flex flex-col items-start gap-4 rounded-[22px] bg-zinc-100/80 p-5 sm:flex-row sm:items-center sm:justify-between dark:bg-white/[0.05]">
+        <div class="flex items-start gap-3">
+          <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-white text-accent shadow-sm dark:bg-white/10">{{ icon("lock", "size-5") }}</span>
+          <div>
+            <p class="font-semibold">Sign in to ask the AI</p>
+            <p class="text-sm muted">The product assistant is available to signed-in members only, so answers can respect your health profile.</p>
+          </div>
+        </div>
+        <a href="/auth/login?next={{ (request.url.path ~ '#ask') | urlencode }}" class="btn btn-dark shrink-0">{{ icon("login", "size-4") }}Sign in</a>
+      </div>
+    {% endif %}
+  </section>
+  {% endif %}
+
+  {# ---------------------------------------------------------------- details #}
+  <div class="mt-12 grid gap-6 lg:grid-cols-3">
+    <section class="card h-fit lg:col-span-2" aria-labelledby="about-title">
+      <h2 id="about-title" class="section-title">About this product</h2>
+      <div class="mt-3 whitespace-pre-line text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-300">{{ product.description }}</div>
+      {% if product.ingredients %}
+        <h3 class="mt-7 text-sm font-semibold">Ingredients</h3>
+        <p class="mt-1.5 text-sm leading-relaxed muted">{{ product.ingredients }}</p>
+      {% endif %}
+      <div class="mt-7 grid gap-3 sm:grid-cols-2">
+        <div class="card-muted !p-4">
+          <p class="flex items-center gap-2 text-sm font-semibold">{{ icon("alert", "size-4 text-warn") }}Allergens</p>
+          <p class="mt-1 text-sm muted">{{ allergen_labels | join(", ") if allergen_labels else "None declared by the store" }}</p>
+        </div>
+        <div class="card-muted !p-4">
+          <p class="flex items-center gap-2 text-sm font-semibold">{{ icon("shield", "size-4 text-accent") }}Not advised for</p>
+          <p class="mt-1 text-sm muted">{{ caution_labels | join(", ") if caution_labels else "No specific cautions listed" }}</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid content-start gap-6">
+      {% if nutrition or serving_size %}
+        <section class="card" aria-labelledby="nutrition-title">
+          <h2 id="nutrition-title" class="section-title">Nutrition facts</h2>
+          {% if serving_size %}<p class="mt-1 text-sm muted">Per serving · {{ serving_size }}</p>{% endif %}
+          <div class="mt-3">
+            {% for label, value in nutrition %}
+              <div class="shop-spec"><span class="{{ 'pl-4 muted' if label.startswith('of which') else '' }}">{{ label | capitalize }}</span><span class="font-semibold tabular-nums">{{ value }}</span></div>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+      <section class="card" aria-labelledby="getting-title">
+        <h2 id="getting-title" class="section-title">Getting it</h2>
+        <ul class="mt-3 grid gap-3 text-sm">
+          {% for b in pickup_branches[:3] %}
+            <li class="flex gap-3"><span class="grid size-9 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">{{ icon("map-pin", "size-4") }}</span><span><span class="font-semibold">Pickup · {{ b.name }}</span><span class="block muted">{{ b.address_line1 }}, {{ b.city }}</span></span></li>
+          {% endfor %}
+          {% if pickup_total > pickup_branches | length %}
+            <li class="text-xs muted" data-more-pickup>… and {{ pickup_total - pickup_branches | length }} more {{ 'branch' if pickup_total - pickup_branches | length == 1 else 'branches' }} - choose yours at checkout</li>
+          {% endif %}
+          {% if delivery %}
+            <li class="flex gap-3"><span class="grid size-9 shrink-0 place-items-center rounded-xl bg-violet/12 text-[#9333ea] dark:text-[#d8a4ff]">{{ shop.svg("truck", "size-4") }}</span><span><span class="font-semibold">Home delivery</span><span class="block muted">{{ delivery_fee | money(product.currency) }} · free on orders from {{ free_from | money(product.currency) }}</span></span></li>
+          {% endif %}
+          <li class="flex gap-3"><span class="grid size-9 shrink-0 place-items-center rounded-xl bg-ok/12 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("refresh", "size-4") }}</span><span><span class="font-semibold">7-day returns</span><span class="block muted">Request a refund within 7 days of receiving it.</span></span></li>
+        </ul>
+      </section>
+    </div>
+  </div>
+
+  {# ---------------------------------------------------------------- reviews #}
+  <section id="reviews" class="mt-14 scroll-mt-24" aria-labelledby="reviews-title">
+    <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <p class="eyebrow mb-1">Reviews</p>
+        <h2 id="reviews-title" class="text-2xl font-semibold tracking-tight sm:text-3xl">From verified buyers</h2>
+      </div>
+    </div>
+    <div class="grid gap-6 lg:grid-cols-3">
+      <div class="card h-fit">
+        {% if rating.count %}
+          <p class="text-5xl font-semibold tracking-tight tabular-nums">{{ rating.average }}</p>
+          <div class="mt-2">{{ shop.stars(rating.average, "size-5") }}</div>
+          <p class="mt-1 text-sm muted">{{ rating.count }} review{{ 's' if rating.count != 1 }}</p>
+          <div class="mt-5 grid gap-2">
+            {% for s in [5, 4, 3, 2, 1] %}
+              <div class="flex items-center gap-3 text-xs"><span class="w-3 tabular-nums muted">{{ s }}</span><progress class="shop-progress" max="100" value="{{ rating.percent(s) }}" aria-label="{{ rating.percent(s) }}% gave {{ s }} stars">{{ rating.percent(s) }}%</progress><span class="w-8 text-right tabular-nums muted">{{ rating.distribution.get(s, 0) }}</span></div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="font-semibold">No reviews yet</p>
+          <p class="mt-1 text-sm muted">Only members who bought this product (with a completed order) can review it.</p>
+        {% endif %}
+        {% if can_review %}
+          <form method="post" action="/shop/p/{{ product.id }}/review" class="mt-6 grid gap-4 border-t border-black/[0.06] pt-6 dark:border-white/[0.08]">
+            {{ ui.csrf() }}
+            <p class="font-semibold">{{ "Edit your review" if my_review else "Write a review" }}</p>
+            <fieldset>
+              <legend class="label">Your rating</legend>
+              <div class="flex flex-wrap gap-1.5">
+                {% for s in range(1, 6) %}
+                  <label class="shop-rate">
+                    <input type="radio" name="rating" value="{{ s }}" class="sr-only" required {{ 'checked' if my_review and my_review.rating == s }}>
+                    <span class="inline-flex items-center gap-1">{{ icon("star", "size-3.5") }}{{ s }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </fieldset>
+            {{ ui.field("title", "Title", value=my_review.title if my_review else "", placeholder="Sums it up in a few words", attrs='maxlength="120"') }}
+            {{ ui.textarea("body", "Your review", value=my_review.body if my_review else "", rows=4, placeholder="How was the taste, fit or quality?", attrs='maxlength="2000"') }}
+            <button type="submit" class="btn btn-primary">{{ "Update review" if my_review else "Post review" }}</button>
+          </form>
+        {% endif %}
+      </div>
+      <div class="grid content-start gap-4 lg:col-span-2">
+        {% for r in reviews %}
+          <article class="card-flat">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-center gap-3">
+                {{ ui.avatar(r.user.photo_key, r.user.display_name, "size-9", "text-xs") }}
+                <div>
+                  <p class="text-sm font-semibold">{{ r.user.display_name }}</p>
+                  <p class="flex items-center gap-1 text-xs text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("check-badge", "size-3.5") }}Verified purchase</p>
+                </div>
+              </div>
+              <span class="text-xs muted">{{ r.created_at | timeago }}</span>
+            </div>
+            <div class="mt-3">{{ shop.stars(r.rating, "size-4") }}</div>
+            {% if r.title %}<p class="mt-2 font-semibold">{{ r.title }}</p>{% endif %}
+            {% if r.body %}<p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{{ r.body }}</p>{% endif %}
+          </article>
+        {% else %}
+          <div class="card-muted flex items-center gap-4 py-8">
+            <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-white text-[#ff9f0a] dark:bg-white/10">{{ icon("star", "size-6") }}</span>
+            <p class="text-sm muted">Be the first to share how it worked for you - reviews open after your order is completed.</p>
+          </div>
+        {% endfor %}
+        {#- 20 reviews at a time (keyset: ?before_id= the last one shown), never all of them -#}
+        {% if older_reviews_href or newest_reviews_href %}
+          <nav class="flex flex-wrap items-center gap-2" aria-label="More reviews">
+            {% if newest_reviews_href %}<a href="{{ newest_reviews_href }}" class="btn btn-ghost btn-sm">{{ icon("arrow-left", "size-4") }}Newest reviews</a>{% endif %}
+            {% if older_reviews_href %}<a href="{{ older_reviews_href }}" class="btn btn-secondary btn-sm" rel="next" data-older-reviews>Older reviews{{ icon("arrow-right", "size-4") }}</a>{% endif %}
+          </nav>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  {% if related %}
+    <section class="mt-16" aria-labelledby="related-title">
+      <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p class="eyebrow mb-1">More from {{ gym.name }}</p>
+          <h2 id="related-title" class="text-2xl font-semibold tracking-tight sm:text-3xl">You might also like</h2>
+        </div>
+        <a href="/shop/gym/{{ gym.slug }}" class="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">Visit the store {{ icon("arrow-right", "size-4") }}</a>
+      </div>
+      {{ shop.grid(related, show_gym=False, cols="grid-cols-2 lg:grid-cols-4") }}
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

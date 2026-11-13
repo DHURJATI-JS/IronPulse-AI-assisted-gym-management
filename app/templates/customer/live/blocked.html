@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "customer/live/_macros.html" as lv with context %}
+{% block title %}Live coach{% endblock %}
+{% block content %}
+{% call ui.page_header("Live coach", "Voice-guided workouts with an AI companion that listens, adapts and keeps you safe.", eyebrow="Live workout") %}{% endcall %}
+
+{% if reason == "suspended" %}
+<section class="card relative mx-auto max-w-3xl overflow-hidden p-0 animate-fade-up" aria-labelledby="live-blocked-title">
+  <div class="live-safety-glow"></div>
+  <div class="relative flex flex-col items-center px-6 py-12 text-center sm:px-12">
+    <span class="grid size-16 place-items-center rounded-[22px] bg-bad/12 text-bad">{{ icon("shield", "size-8") }}</span>
+    <h2 id="live-blocked-title" class="mt-5 text-2xl font-semibold tracking-tight">Live workouts are paused for your safety</h2>
+    <p class="mt-3 max-w-xl text-[15px] muted">
+      {{ suspension_reason or "A recent health report needs attention." }}
+      Your gym activities stay paused until a gym admin checks in with you and reactivates your account - this keeps you safe while you recover.
+    </p>
+    <div class="mt-8 grid w-full max-w-xl gap-3 text-left sm:grid-cols-3">
+      <div class="card-muted !p-4">
+        <p class="text-sm font-semibold">1. Rest</p>
+        <p class="mt-1 text-xs muted">Avoid strenuous exercise for now.</p>
+      </div>
+      <div class="card-muted !p-4">
+        <p class="text-sm font-semibold">2. Get checked</p>
+        <p class="mt-1 text-xs muted">Talk to a doctor{% if user.is_minor %} and your guardian{% endif %} about what happened.</p>
+      </div>
+      <div class="card-muted !p-4">
+        <p class="text-sm font-semibold">3. Reactivation</p>
+        <p class="mt-1 text-xs muted">A gym admin reviews it and turns training back on.</p>
+      </div>
+    </div>
+    <div class="mt-8 flex flex-wrap justify-center gap-3">
+      <a href="{{ emergency.tel }}" class="btn btn-danger">{{ icon("phone", "size-4") }} Emergency: call {{ emergency.number }}</a>
+      <a href="/chat" class="btn btn-secondary">{{ icon("chat", "size-4") }} Message your gym</a>
+    </div>
+    <p class="mt-4 text-xs muted">If you feel unwell right now - chest pain, trouble breathing, fainting - call {{ emergency.number }} immediately.{% if emergency.note %} {{ emergency.note }}{% endif %}</p>
+  </div>
+</section>
+{% else %}
+<section class="card relative overflow-hidden p-0 animate-fade-up">
+  <div class="hero-gradient grid gap-8 p-6 sm:p-10 lg:grid-cols-[1.2fr_1fr] lg:items-center">
+    <div>
+      <span class="grid size-12 place-items-center rounded-2xl bg-ink text-white dark:bg-white dark:text-black">{{ icon("lock", "size-5") }}</span>
+      <h2 class="mt-5 text-2xl font-semibold tracking-tight sm:text-3xl">Live coaching comes with your membership</h2>
+      <p class="mt-3 max-w-xl text-[15px] muted">Join a gym to train with Pulse: an animated coach that talks you through every set, listens when you speak, adapts the intensity and stops immediately if anything feels wrong.</p>
+      <div class="mt-6 flex flex-wrap gap-2">
+        <a href="/gyms" class="btn btn-primary">{{ icon("map-pin", "size-4") }} Find a gym</a>
+        <a href="/plans" class="btn btn-secondary">Compare plans</a>
+      </div>
+    </div>
+    <ul class="grid gap-3">
+      {% for ico, title, body in [
+          ("activity", "Voice-guided sets", "Timers, rest countdowns and spoken cues for every exercise."),
+          ("chat", "Talk to your coach", "Say easier, next or pause - AI plans add free conversation."),
+          ("shield", "Safety first", "Red-flag symptoms stop the session and alert your gym team."),
+      ] %}
+      <li class="card-flat flex items-start gap-3">
+        <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">{{ icon(ico, "size-5") }}</span>
+        <div><p class="font-semibold">{{ title }}</p><p class="text-sm muted">{{ body }}</p></div>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,179 @@
+{#- Shared UI macros. Always import WITH CONTEXT so csrf_token is available:
+      {% import "_ui.html" as ui with context %}
+-#}
+
+{#- CSRF token + a one-time submit id per form render: the server processes a double click, a resent POST or Back +
+    submit of the same form once and replays the outcome (app/core/submit_guard.py) - works without JavaScript -#}
+{% macro csrf() -%}
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+{%- if new_submit_id is defined %}<input type="hidden" name="submit_id" value="{{ new_submit_id() }}" data-submit-id>{% endif %}
+{%- endmacro %}
+
+{% macro page_header(title, subtitle=None, eyebrow=None, back=None) %}
+<header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between animate-fade-up">
+  <div class="min-w-0">
+    {% if back %}<a href="{{ back }}" class="mb-3 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">{{ icon("arrow-left", "size-4") }} Back</a>{% endif %}
+    {% if eyebrow %}<p class="eyebrow mb-1.5">{{ eyebrow }}</p>{% endif %}
+    <h1 class="text-3xl font-semibold tracking-tight sm:text-[40px] sm:leading-tight">{{ title }}</h1>
+    {% if subtitle %}<p class="mt-2 max-w-2xl text-[15px] muted">{{ subtitle }}</p>{% endif %}
+  </div>
+  {% if caller %}<div class="flex flex-wrap items-center gap-2">{{ caller() }}</div>{% endif %}
+</header>
+{% endmacro %}
+
+{% macro badge(text, tone="zinc", ico=None) -%}
+<span class="badge badge-{{ tone }}">{% if ico %}{{ icon(ico, "size-3.5") }}{% endif %}{{ text }}</span>
+{%- endmacro %}
+
+{% macro status(value) -%}
+<span class="badge badge-{{ value | tone }}"><span class="dot bg-current opacity-70"></span>{{ value | humanize }}</span>
+{%- endmacro %}
+
+{% macro button(label, href=None, variant="primary", type="submit", ico=None, size=None, extra="", attrs="") -%}
+{% set cls = "btn btn-" ~ variant ~ (" btn-" ~ size if size else "") ~ (" " ~ extra if extra else "") %}
+{% if href %}<a href="{{ href }}" class="{{ cls }}" {{ attrs | safe }}>{% if ico %}{{ icon(ico, "size-4") }}{% endif %}{{ label }}</a>
+{% else %}<button type="{{ type }}" class="{{ cls }}" {{ attrs | safe }}>{% if ico %}{{ icon(ico, "size-4") }}{% endif %}{{ label }}</button>{% endif %}
+{%- endmacro %}
+
+{% macro field(name, label, type="text", value="", required=False, help=None, error=None, placeholder="", attrs="", autocomplete=None, cls="") %}
+<div class="{{ cls }}">
+  <label class="label" for="f-{{ name }}">{{ label }}{% if required %} <span class="text-bad">*</span>{% endif %}</label>
+  <input id="f-{{ name }}" name="{{ name }}" type="{{ type }}" value="{{ value if value is not none else '' }}" class="input {{ 'input-error' if error }}"
+         {% if required %}required{% endif %} {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+         {% if autocomplete %}autocomplete="{{ autocomplete }}"{% endif %} {{ attrs | safe }}
+         {% if error %}aria-invalid="true" aria-describedby="e-{{ name }}"{% endif %}>
+  {% if error %}<p class="field-error" id="e-{{ name }}">{{ error }}</p>{% elif help %}<p class="help">{{ help }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro textarea(name, label, value="", required=False, help=None, error=None, rows=4, placeholder="", attrs="", cls="") %}
+<div class="{{ cls }}">
+  <label class="label" for="f-{{ name }}">{{ label }}{% if required %} <span class="text-bad">*</span>{% endif %}</label>
+  <textarea id="f-{{ name }}" name="{{ name }}" rows="{{ rows }}" class="input {{ 'input-error' if error }}" {% if required %}required{% endif %}
+            {% if placeholder %}placeholder="{{ placeholder }}"{% endif %} {{ attrs | safe }}>{{ value if value is not none else '' }}</textarea>
+  {% if error %}<p class="field-error">{{ error }}</p>{% elif help %}<p class="help">{{ help }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{#- options: list of (value, label) tuples -#}
+{% macro select(name, label, options, value=None, required=False, help=None, error=None, attrs="", cls="", empty=None) %}
+<div class="{{ cls }}">
+  <label class="label" for="f-{{ name }}">{{ label }}{% if required %} <span class="text-bad">*</span>{% endif %}</label>
+  <select id="f-{{ name }}" name="{{ name }}" class="input {{ 'input-error' if error }}" {% if required %}required{% endif %} {{ attrs | safe }}>
+    {% if empty %}<option value="">{{ empty }}</option>{% endif %}
+    {% for v, l in options %}<option value="{{ v }}" {{ 'selected' if (value is not none and v | string == value | string) }}>{{ l }}</option>{% endfor %}
+  </select>
+  {% if error %}<p class="field-error">{{ error }}</p>{% elif help %}<p class="help">{{ help }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro checkbox(name, label, checked=False, help=None, value="1", attrs="") %}
+<label class="flex items-start gap-3 text-sm">
+  <input type="checkbox" name="{{ name }}" value="{{ value }}" class="checkbox mt-0.5" {{ 'checked' if checked }} {{ attrs | safe }}>
+  <span><span class="font-medium">{{ label }}</span>{% if help %}<span class="block text-xs muted">{{ help }}</span>{% endif %}</span>
+</label>
+{% endmacro %}
+
+{% macro file(name, label, accept="image/*", required=False, help=None, error=None, multiple=False, capture=None) %}
+<div>
+  <label class="label" for="f-{{ name }}">{{ label }}{% if required %} <span class="text-bad">*</span>{% endif %}</label>
+  <input id="f-{{ name }}" name="{{ name }}" type="file" accept="{{ accept }}" class="block w-full text-sm muted"
+         {% if required %}required{% endif %} {% if multiple %}multiple{% endif %} {% if capture %}capture="{{ capture }}"{% endif %}>
+  {% if error %}<p class="field-error">{{ error }}</p>{% elif help %}<p class="help">{{ help }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro form_errors(errors) %}
+{% if errors %}
+<div class="alert alert-danger mb-6" role="alert">
+  {{ icon("alert", "size-5 shrink-0") }}
+  <div>
+    <p class="font-semibold">Please fix the following:</p>
+    <ul class="mt-1 list-disc pl-5">
+      {% if errors is mapping %}{% for k, v in errors.items() %}<li>{{ v }}</li>{% endfor %}
+      {% else %}{% for e in errors %}<li>{{ e }}</li>{% endfor %}{% endif %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro stat(label, value, hint=None, ico=None, tone="blue") %}
+<div class="card-flat">
+  <div class="flex items-center justify-between">
+    <p class="text-sm muted">{{ label }}</p>
+    {% if ico %}<span class="grid size-8 place-items-center rounded-xl badge-{{ tone }}">{{ icon(ico, "size-4") }}</span>{% endif %}
+  </div>
+  <p class="kpi mt-2">{{ value }}</p>
+  {% if hint %}<p class="mt-1 text-xs muted">{{ hint }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro empty(title, body=None, ico="sparkles", action_label=None, action_href=None) %}
+<div class="card flex flex-col items-center px-6 py-14 text-center">
+  <span class="grid size-14 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon(ico, "size-7") }}</span>
+  <h3 class="mt-4 text-lg font-semibold">{{ title }}</h3>
+  {% if body %}<p class="mt-1 max-w-md text-sm muted">{{ body }}</p>{% endif %}
+  {% if action_label %}<a href="{{ action_href }}" class="btn btn-primary mt-6">{{ action_label }}</a>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro avatar(key, name, size="size-10", text="text-sm") -%}
+<span class="avatar {{ size }} {{ text }}">{% if key %}<img src="{{ media_url(key) }}" alt="{{ name }}" loading="lazy">{% else %}{{ name | initials }}{% endif %}</span>
+{%- endmacro %}
+
+{% macro alert(message, tone="info", title=None) %}
+<div class="alert alert-{{ tone }}">
+  {{ icon({'success': 'check-circle', 'danger': 'x-circle', 'warning': 'alert'}.get(tone, 'info'), "size-5 shrink-0") }}
+  <div>{% if title %}<p class="font-semibold">{{ title }}</p>{% endif %}<p>{{ message }}</p></div>
+</div>
+{% endmacro %}
+
+{% macro ai_chip(result_provider=None, disclaimer=True) -%}
+<span class="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+{% if ai_status.available %}
+<span class="chip"><span class="ai-dot" data-state="{{ ai_status.state }}"></span>{{ result_provider or ai_status.active_label }}</span>
+{% else %}
+<span class="chip"><span class="ai-dot" data-state="offline"></span>AI unavailable</span>
+{% endif %}
+{% if disclaimer %}<span class="text-[11px] muted">{{ icon("info", "inline size-3 -mt-0.5") }} AI can make mistakes - double-check important info.</span>{% endif %}
+</span>
+{%- endmacro %}
+
+{#- Standalone disclaimer for any AI-generated content (answers, plans, explanations, summaries). -#}
+{% macro ai_disclaimer(extra=None) -%}
+<p class="mt-3 flex items-start gap-1.5 text-xs muted" role="note">{{ icon("info", "size-3.5 shrink-0 mt-0.5") }}
+  <span>AI can make mistakes. Double-check important information - this is not medical, legal or financial advice.{% if extra %} {{ extra }}{% endif %}</span></p>
+{%- endmacro %}
+
+{% macro confirm_button(action, label, message, variant="danger", size="sm", ico=None, extra_fields=None) %}
+<form method="post" action="{{ action }}" class="inline" data-confirm="{{ message }}">
+  {{ csrf() }}
+  {% if extra_fields %}{% for k, v in extra_fields.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}{% endif %}
+  <button class="btn btn-{{ variant }} btn-{{ size }}">{% if ico %}{{ icon(ico, "size-4") }}{% endif %}{{ label }}</button>
+</form>
+{% endmacro %}
+
+{#- Numbered pager for an app.core.pagination.Page: Previous · 1 … 4 5 [6] 7 8 … 40 · Next (a window of pages, never
+    every page). With `noun`, also "Page 6 of 40 · 987 orders". Links keep every other query parameter (filters,
+    search, per_page ...) of the current request; pass `params` (a dict or QueryParams) and/or `path` to build them
+    from something else, or `url` (page number -> href) to build them yourself. Renders nothing for a single page. -#}
+{% macro pager(p, url=None, params=None, path=None, noun=None, label="Pagination") %}
+{% if p.pages > 1 %}
+{% set base = path or request.url.path %}
+{% set query = request.query_params if params is none else params %}
+<nav class="mt-10 flex flex-col items-center gap-3" aria-label="{{ label }}" data-pager>
+  <div class="flex flex-wrap items-center justify-center gap-1.5">
+    {% if p.has_prev %}<a href="{{ url(p.page - 1) if url else p.url(p.page - 1, base, query) }}" class="btn btn-secondary btn-sm" rel="prev">{{ icon("arrow-left", "size-4") }}Previous</a>
+    {% else %}<span class="btn btn-secondary btn-sm pointer-events-none opacity-40" aria-disabled="true">{{ icon("arrow-left", "size-4") }}Previous</span>{% endif %}
+    {% for n in p.window() %}
+      {% if n is none %}<span class="px-1 muted" aria-hidden="true">…</span>
+      {% else %}<a href="{{ url(n) if url else p.url(n, base, query) }}" class="grid size-9 place-items-center rounded-full text-sm font-semibold tabular-nums transition {{ 'bg-ink text-white dark:bg-white dark:text-black' if n == p.page else 'hover:bg-zinc-900/5 dark:hover:bg-white/10' }}" aria-label="Page {{ n }}"{% if n == p.page %} aria-current="page"{% endif %}>{{ n }}</a>{% endif %}
+    {% endfor %}
+    {% if p.has_next %}<a href="{{ url(p.page + 1) if url else p.url(p.page + 1, base, query) }}" class="btn btn-secondary btn-sm" rel="next">Next{{ icon("arrow-right", "size-4") }}</a>
+    {% else %}<span class="btn btn-secondary btn-sm pointer-events-none opacity-40" aria-disabled="true">Next{{ icon("arrow-right", "size-4") }}</span>{% endif %}
+  </div>
+  {% if noun %}<p class="text-sm muted">Page <span class="font-semibold text-ink dark:text-white">{{ p.page }}</span> of {{ p.pages }} · {{ "{:,}".format(p.total) }}{{ "+" if p.total_capped }} {{ noun }}</p>{% endif %}
+</nav>
+{% endif %}
+{% endmacro %}

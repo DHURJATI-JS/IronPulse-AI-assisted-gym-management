@@ -1,0 +1,42 @@
+{#- Reusable "Ask AI" box (streamed answers). Usage:
+      {% with ask_endpoint="/api/plans/ask", ask_extra={"gym_slug": gym.slug}, ask_title="Ask AI about these plans",
+              ask_suggestions=["Which plan fits weight loss?", "Is a trainer worth it for me?"] %}
+        {% include "partials/ask_ai.html" %}
+      {% endwith %}
+   Only signed-in users can use AI: guests see a sign-in prompt instead. -#}
+{% set _title = ask_title if ask_title is defined else "Ask AI" %}
+<section class="card" aria-label="{{ _title }}">
+  <div class="flex items-center gap-3">
+    <span class="grid size-10 place-items-center rounded-2xl bg-gradient-to-br from-accent via-indigo to-violet text-white shadow-md shadow-indigo/30">{{ icon("sparkles", "size-5") }}</span>
+    <div>
+      <h2 class="section-title">{{ _title }}</h2>
+      <p class="text-xs muted">Answers stream in real time{% if user %} · <span data-ask-provider>{{ ai_status.active_label or 'AI unavailable - automatic answers' }}</span>{% endif %}</p>
+    </div>
+  </div>
+  {% if user %}
+    <div data-component="ask-ai" data-endpoint="{{ ask_endpoint }}" data-extra="{{ (ask_extra if ask_extra is defined else {}) | jsonattr }}">
+      {% if ask_suggestions is defined and ask_suggestions %}
+      <div class="mt-4 flex flex-wrap gap-2">
+        {% for s in ask_suggestions %}<button type="button" class="chip hover:bg-accent/15" data-ask-suggest="{{ s }}">{{ s }}</button>{% endfor %}
+      </div>
+      {% endif %}
+      <form class="mt-4 flex items-end gap-2" data-ask-form data-no-busy>
+        <label class="sr-only" for="ask-{{ ask_endpoint | replace('/', '-') }}">Your question</label>
+        <input id="ask-{{ ask_endpoint | replace('/', '-') }}" class="input" name="question" maxlength="500" minlength="2" required autocomplete="off" placeholder="Type your question…" data-ask-input>
+        <button class="btn btn-primary btn-icon shrink-0" aria-label="Ask">{{ icon("send", "size-4") }}</button>
+      </form>
+      <p class="mt-2 text-xs font-medium text-[#b45309] dark:text-[#fbbf24]" data-ask-wait hidden></p>
+      <div class="mt-4 hidden rounded-2xl bg-zinc-100/80 p-4 text-[15px] leading-relaxed dark:bg-white/[0.05]" data-ask-answer aria-live="polite">
+        <p class="whitespace-pre-line" data-ask-text></p>
+        <span class="mt-1 inline-flex gap-1" data-ask-typing hidden><span class="size-1.5 animate-pulse rounded-full bg-zinc-400"></span><span class="size-1.5 animate-pulse rounded-full bg-zinc-400 [animation-delay:150ms]"></span><span class="size-1.5 animate-pulse rounded-full bg-zinc-400 [animation-delay:300ms]"></span></span>
+        <p class="mt-2 text-xs font-medium text-[#b45309] dark:text-[#fbbf24]" data-ask-note hidden></p>
+      </div>
+      <p class="mt-3 flex items-start gap-1.5 text-xs muted" role="note">{{ icon("info", "size-3.5 shrink-0 mt-0.5") }}<span>AI can make mistakes. Double-check important information - this is not medical, legal or financial advice.</span></p>
+    </div>
+  {% else %}
+    <div class="mt-4 rounded-2xl bg-zinc-100/80 p-4 text-sm dark:bg-white/[0.05]">
+      <p><strong>Sign in to ask the AI.</strong> AI answers are available to signed-in members only.</p>
+      <a href="/auth/login?next={{ request.url.path | urlencode }}" class="btn btn-primary btn-sm mt-3">{{ icon("login", "size-4") }} Sign in</a>
+    </div>
+  {% endif %}
+</section>

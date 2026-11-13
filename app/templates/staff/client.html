@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_macros.html" as sm with context %}
+{% import "chat/_safety.html" as sp with context %}
+{% block title %}{{ customer.display_name }} · Client{% endblock %}
+{% block content %}
+<a href="/staff/clients" class="mb-4 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">{{ icon("arrow-left", "size-4") }} My clients</a>
+
+<header class="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between animate-fade-up">
+  <div class="flex min-w-0 items-center gap-4">
+    {{ ui.avatar(customer.photo_key, customer.display_name, "size-16 sm:size-20", "text-xl") }}
+    <div class="min-w-0">
+      <p class="eyebrow mb-1">{{ emp.gym.name }}</p>
+      <h1 class="truncate text-[28px] font-semibold leading-tight tracking-tight sm:text-[40px]">{{ customer.display_name }}</h1>
+      <div class="mt-2 flex flex-wrap items-center gap-1.5">
+        {% if age is not none %}<span class="chip">{{ age }} years{% if customer.is_minor %} · minor{% endif %}</span>{% endif %}
+        {% if profile %}
+          <span class="chip">{{ icon("bolt", "size-3.5") }}{{ profile.goal | humanize }}</span>
+          <span class="chip">{{ icon("trending-up", "size-3.5") }}{{ profile.fitness_level | humanize }}</span>
+        {% endif %}
+        {{ sm.mode_chip(link.mode.value) }}
+      </div>
+    </div>
+  </div>
+  <a href="/chat" class="btn btn-primary self-start sm:self-auto">{{ icon("chat", "size-4") }} Message</a>
+</header>
+
+{% if profile and profile.activity_suspended %}
+  <div class="alert alert-danger mb-6 animate-fade-up" role="alert">
+    {{ icon("alert", "size-5 shrink-0") }}
+    <div>
+      <p class="font-semibold">Gym activity is paused for safety</p>
+      <p>{% if health_shared %}{{ profile.suspension_reason or "A health reading needs attention." }} {% endif %}Do not train this client until a gym admin reactivates them{% if profile.suspended_at %} (paused {{ profile.suspended_at | timeago }}){% endif %}.</p>
+    </div>
+  </div>
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-3">
+  <div class="min-w-0 space-y-6 lg:col-span-2">
+    {{ sp.panel(safety, id="client-safety", open=True, compact=True) }}
+    {% if health_shared %}
+    <section class="card">
+      {{ sm.card_title("Safety notes", "Conditions, allergies, medication and injuries - always check before a session.", "shield") }}
+      {% if has_conditions %}
+        <div class="grid gap-4 sm:grid-cols-2">
+          {% for kind, label in kind_labels.items() %}
+            {% if grouped[kind] %}
+            <div class="rounded-2xl bg-zinc-100/70 p-4 dark:bg-white/[0.04]">
+              <p class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider muted">{{ icon(kind_icons[kind], "size-3.5") }} {{ label }}</p>
+              <ul class="mt-2.5 space-y-2">
+                {% for c in grouped[kind] %}
+                <li>
+                  <p class="text-sm font-medium">{{ c.name }}</p>
+                  {% if c.notes %}<p class="text-xs muted">{{ c.notes }}</p>{% endif %}
+                </li>
+                {% endfor %}
+              </ul>
+              {% if more_conditions.get(kind) %}<p class="mt-2.5 text-xs font-medium text-[#b45309] dark:text-[#fbbf24]">+ {{ more_conditions.get(kind) }} more recorded - ask the gym admin for the full list.</p>{% endif %}
+            </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% else %}
+        <p class="flex items-center gap-2 rounded-2xl bg-ok/10 px-4 py-3 text-sm text-[#166534] dark:text-[#86efac]">{{ icon("check-circle", "size-4 shrink-0") }} No conditions, allergies or injuries recorded.</p>
+      {% endif %}
+      {% if profile and profile.health_notes %}
+        <p class="mt-5 text-xs font-semibold uppercase tracking-wider muted">Health notes</p>
+        <p class="mt-1.5 whitespace-pre-line text-sm leading-relaxed">{{ profile.health_notes }}</p>
+      {% endif %}
+    </section>
+    {% endif %}
+    {% include "partials/gear_card.html" %}
+
+    <section class="card">
+      {{ sm.card_title("Workout plan", plan.title if plan else "No active plan", "dumbbell") }}
+      {% if plan %}
+        <div class="mb-4 flex flex-wrap gap-1.5 text-xs">
+          <span class="chip">{{ (plan.source | humanize) if plan.source != "ai" else "AI plan" }}</span>
+          <span class="chip">{{ plan.goal | humanize }}</span>
+          <span class="chip">Updated {{ plan.updated_at | timeago }}</span>
+        </div>
+        {% if plan_days %}
+          <div class="grid gap-3 sm:grid-cols-2">
+            {% for day in plan_days %}
+            <div class="rounded-2xl bg-zinc-100/70 p-4 dark:bg-white/[0.04]">
+              <p class="text-sm font-semibold">{{ day.name }}</p>
+              <ul class="mt-2 space-y-1.5">
+                {% for it in day["items"] %}
+                <li class="flex items-baseline justify-between gap-3 text-sm">
+                  <span class="min-w-0 truncate">{{ it.get("exercise") or it.get("name") or "Exercise" }}</span>
+                  <span class="shrink-0 text-xs tabular-nums muted">{% if it.get("sets") %}{{ it.get("sets") }} × {{ it.get("reps") or "—" }}{% elif it.get("duration") %}{{ it.get("duration") }}{% endif %}</span>
+                </li>
+                {% endfor %}
+              </ul>
+              {% if day.more %}<p class="mt-2 text-xs muted">+ {{ day.more }} more</p>{% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="text-sm muted">The plan has no sessions yet.</p>
+        {% endif %}
+        {% if plan.safety_notes and health_shared %}
+          <div class="mt-4 rounded-2xl bg-warn/10 p-4">
+            <p class="text-xs font-semibold uppercase tracking-wider text-[#92400e] dark:text-[#fcd34d]">Safety adjustments</p>
+            <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-[#92400e] dark:text-[#fcd34d]">
+              {% for n in plan.safety_notes[:6] %}<li>{{ n if n is string else (n.get("note") or n.get("reason") or n) }}</li>{% endfor %}
+            </ul>
+          </div>
+        {% endif %}
+      {% else %}
+        <p class="rounded-2xl bg-zinc-100/70 px-4 py-6 text-center text-sm muted dark:bg-white/[0.04]">{{ customer.display_name }} has no active workout plan yet.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <aside class="space-y-6">
+    <section class="card">
+      {{ sm.card_title("Body metrics", None, "scale") }}
+      {% if bmi_value %}
+        <div class="flex items-end justify-between gap-3">
+          <div>
+            <p class="text-xs muted">BMI</p>
+            <p class="kpi">{{ "%.1f" | format(bmi_value) }}</p>
+          </div>
+          {{ ui.badge(bmi_label, bmi_tone) }}
+        </div>
+        <dl class="mt-4 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+          {{ sm.fact("Height", "%.0f cm" | format(height)) }}
+          {{ sm.fact("Weight", "%.1f kg" | format(weight)) }}
+          {% if metrics %}{{ sm.fact("Last reading", metrics[0].recorded_on | date) }}{% endif %}
+          {% if weight_change is not none %}{{ sm.fact("Change (last " ~ metrics | length ~ ")", ("+" if weight_change > 0 else "") ~ weight_change ~ " kg") }}{% endif %}
+        </dl>
+        {% if metrics | length > 1 %}
+          <p class="mt-4 text-xs font-semibold uppercase tracking-wider muted">Recent weights</p>
+          <ul class="mt-2 space-y-1 text-sm">
+            {% for m in metrics %}
+            <li class="flex justify-between gap-3 tabular-nums"><span class="muted">{{ m.recorded_on | date("%d %b") }}</span><span>{{ "%.1f" | format(m.weight_kg) }} kg{% if m.anomaly_level.value not in ("none", "info") %} <span class="badge badge-{{ m.anomaly_level | tone }} !py-0.5">{{ m.anomaly_level | humanize }}</span>{% endif %}</span></li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      {% else %}
+        <p class="text-sm muted">No height or weight recorded yet.</p>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      {{ sm.card_title("Membership", None, "credit-card") }}
+      <dl class="divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+        {{ sm.fact("Plan", subscription.plan.name if subscription else "Trainer plan") }}
+        {% if subscription and subscription.ends_on %}{{ sm.fact("Active until", subscription.ends_on | date) }}{% endif %}
+        {{ sm.fact("Coaching", "At the branch" if link.mode.value == "offline" else "Online") }}
+        {{ sm.fact("Your client since", link.created_at | dt("%d %b %Y")) }}
+      </dl>
+    </section>
+
+    {% if profile and (profile.emergency_contact_name or (customer.is_minor and profile.guardian_name)) %}
+    <section class="card-muted">
+      <p class="flex items-center gap-2 text-sm font-semibold">{{ icon("phone", "size-4 text-accent") }} Emergency contact</p>
+      {% if profile.emergency_contact_name %}
+        <p class="mt-2 text-sm">{{ profile.emergency_contact_name }}{% if profile.emergency_contact_phone %} · <a href="tel:{{ profile.emergency_contact_phone }}" class="text-accent hover:underline">{{ profile.emergency_contact_phone }}</a>{% endif %}</p>
+      {% endif %}
+      {% if customer.is_minor and profile.guardian_name %}
+        <p class="mt-2 text-sm">Guardian: {{ profile.guardian_name }}{% if profile.guardian_relation %} ({{ profile.guardian_relation }}){% endif %}{% if profile.guardian_phone %} · <a href="tel:{{ profile.guardian_phone }}" class="text-accent hover:underline">{{ profile.guardian_phone }}</a>{% endif %}</p>
+      {% endif %}
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

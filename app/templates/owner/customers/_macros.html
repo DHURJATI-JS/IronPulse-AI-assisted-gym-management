@@ -1,0 +1,40 @@
+{#- WP-F owner macros (members, reports, audit). Import WITH CONTEXT:
+      {% import "owner/customers/_macros.html" as om with context %} -#}
+{% import "_ui.html" as ui with context %}
+
+{% macro subnav(active, open_reports=None) %}
+<nav class="no-scrollbar -mx-4 mb-8 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Members sections">
+  <div class="tabs whitespace-nowrap">
+    {% for key, label, href, ico in [("members", "Members", "/owner/customers", "user-group"), ("new", "Register member", "/owner/customers/new", "plus"), ("reports", "Reports", "/owner/reports", "flag"), ("chat", "Chat", "/chat", "chat"), ("audit", "Audit log", "/owner/audit", "shield")] %}
+      <a href="{{ href }}" class="tab {{ 'tab-active' if active == key }}"{% if active == key %} aria-current="page"{% endif %}>
+        <span class="inline-flex items-center gap-1.5">{{ icon(ico, "size-4") }} {{ label }}{% if key == 'reports' and open_reports %} <span class="chat-unread-badge !bg-bad">{{ open_reports }}</span>{% endif %}</span>
+      </a>
+    {% endfor %}
+  </div>
+</nav>
+{% endmacro %}
+
+{#- Status of a member's relationship with the owner's gyms -#}
+{% macro membership_badge(state) -%}
+{% if state == 'active' %}{{ ui.badge("Active", "green") }}
+{% elif state == 'pending' %}{{ ui.badge("Pending", "amber") }}
+{% elif state == 'expired' %}{{ ui.badge("Expired", "zinc") }}
+{% else %}{{ ui.badge("Registered", "blue") }}{% endif %}
+{%- endmacro %}
+
+{#- Small pagination bar -#}
+{% macro pager(page, pages, prev_url, next_url, total, noun="results") %}
+{% if pages > 1 %}
+<nav class="mt-8 flex items-center justify-between gap-3" aria-label="Pagination">
+  <p class="text-sm muted">Page {{ page }} of {{ pages }} · {{ total }} {{ noun }}</p>
+  <div class="flex gap-2">
+    {% if prev_url %}<a href="{{ prev_url }}" class="btn btn-secondary btn-sm" rel="prev">{{ icon("arrow-left", "size-4") }} Previous</a>
+    {% else %}<span class="btn btn-secondary btn-sm pointer-events-none opacity-40" aria-disabled="true">{{ icon("arrow-left", "size-4") }} Previous</span>{% endif %}
+    {% if next_url %}<a href="{{ next_url }}" class="btn btn-secondary btn-sm" rel="next">Next {{ icon("arrow-right", "size-4") }}</a>
+    {% else %}<span class="btn btn-secondary btn-sm pointer-events-none opacity-40" aria-disabled="true">Next {{ icon("arrow-right", "size-4") }}</span>{% endif %}
+  </div>
+</nav>
+{% elif total %}
+<p class="mt-6 text-center text-xs muted">{{ total }} {{ noun }}</p>
+{% endif %}
+{% endmacro %}

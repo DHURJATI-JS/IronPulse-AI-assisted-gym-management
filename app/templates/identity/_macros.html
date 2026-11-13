@@ -1,0 +1,224 @@
+{#- WP-H identity UI pieces. Import WITH CONTEXT:
+      {% import "identity/_macros.html" as idm with context %}
+    Macros: ring, progress, stepper, engines, checks, thumb, tone_of, hero_icon, upload_form, history, privacy
+-#}
+{% import "_ui.html" as ui with context %}
+{% import "identity/_fields.html" as idf with context %}
+
+{% macro tone_of(state) -%}
+{{ {"done": "green", "pass": "green", "verified": "green", "warn": "amber", "needs_review": "amber", "fail": "red",
+    "rejected": "red", "current": "blue", "pending": "blue", "processing": "blue"}.get(state, "zinc") }}
+{%- endmacro %}
+
+{#- Circular gauge (SVG, CSP-safe: geometry via attributes, never style="") -#}
+{% macro ring(pct, tone="blue", size="size-20", caption=None, text="text-lg") %}
+{% set p = pct if pct is not none else 0 %}
+{% set stroke = {"green": "stroke-ok", "amber": "stroke-warn", "red": "stroke-bad", "blue": "stroke-accent"}.get(tone, "stroke-zinc-400") %}
+<div class="flex shrink-0 flex-col items-center gap-1.5">
+  <div class="relative {{ size }}" role="img" aria-label="{{ p }}% {{ caption or 'consensus' }}">
+    <svg viewBox="0 0 36 36" class="size-full -rotate-90" aria-hidden="true">
+      <circle cx="18" cy="18" r="15.5" fill="none" class="stroke-zinc-200 dark:stroke-white/10" stroke-width="3.2"/>
+      {% if p > 0 %}<circle cx="18" cy="18" r="15.5" fill="none" class="{{ stroke }} idv-ring-arc" stroke-width="3.2" stroke-linecap="round" pathLength="100" stroke-dasharray="{{ p }} 100"/>{% endif %}
+    </svg>
+    <span class="absolute inset-0 grid place-items-center" aria-hidden="true"><span class="{{ text }} font-semibold tabular-nums tracking-tight">{{ p }}<span class="ml-px text-[0.6em] font-medium muted">%</span></span></span>
+  </div>
+  {% if caption %}<span class="text-[11px] font-medium uppercase tracking-wider muted">{{ caption }}</span>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro progress(pct, tone="blue", label="Confidence") %}
+<div>
+  <div class="flex items-center justify-between text-[11px] muted"><span>{{ label }}</span><span class="tabular-nums">{{ pct }}%</span></div>
+  <progress class="idv-progress mt-1" data-tone="{{ tone }}" value="{{ pct }}" max="100" aria-label="{{ label }} {{ pct }}%">{{ pct }}%</progress>
+</div>
+{% endmacro %}
+
+{#- Big status glyph used when there is no consensus score to show -#}
+{% macro hero_icon(ico, tone="blue", live=False) %}
+<span class="idv-hero-icon" data-tone="{{ tone }}"{% if live %} data-live="1"{% endif %} aria-hidden="true">
+  {{ icon(ico, "size-9") }}
+  {% if live %}<span class="idv-scan"></span>{% endif %}
+</span>
+{% endmacro %}
+
+{#- Uploaded -> OCR engines -> Checks -> Verified -#}
+{% macro stepper(steps) %}
+{% set sr = {"done": "completed", "current": "in progress", "warn": "needs attention", "fail": "failed", "todo": "not started"} %}
+<ol class="idv-steps" aria-label="Verification progress">
+  {% for s in steps %}
+  <li class="idv-step" data-state="{{ s.state }}"{% if s.state == "current" %} aria-current="step"{% endif %}>
+    <span class="idv-step-dot" aria-hidden="true">
+      {% if s.state == "done" %}{{ icon("check", "size-4") }}
+      {% elif s.state == "fail" %}{{ icon("x", "size-4") }}
+      {% elif s.state == "warn" %}{{ icon("alert", "size-4") }}
+      {% elif s.state == "current" %}<span class="spinner size-3.5"></span>
+      {% else %}{{ icon(s.icon, "size-4") }}{% endif %}
+    </span>
+    <span class="min-w-0 sm:pr-2">
+      <span class="idv-step-label block text-sm font-semibold">{{ s.label }} <span class="sr-only">({{ sr.get(s.state, s.state) }})</span></span>
+      <span class="mt-0.5 block text-xs leading-snug muted">{{ s.detail }}</span>
+      {% if s.when %}<span class="mt-0.5 block text-[11px] tabular-nums muted">{{ s.when | dt("%d %b, %H:%M") }}</span>{% endif %}
+    </span>
+  </li>
+  {% endfor %}
+</ol>
+{% endmacro %}
+
+{#- One card per OCR engine: what it read (masked), whether it agreed with the consensus -#}
+{% macro engines(rows, cols="sm:grid-cols-2 xl:grid-cols-3") %}
+{% if rows %}
+<ul class="grid gap-3 {{ cols }}">
+  {% for e in rows %}
+  {% set variant = ("agree" if e.agrees else ("read" if e.ok else ("skipped" if e.error else "empty"))) if e.state == "done" else e.state %}
+  <li class="idv-engine" data-state="{{ e.state }}" data-variant="{{ variant }}" data-ok="{{ 1 if e.ok else 0 }}" data-agree="{{ 1 if e.agrees else 0 }}">
+    <div class="flex items-start justify-between gap-3">
+      <span class="idv-engine-icon" data-kind="{{ 'ai' if e.name == 'vision_llm' else 'ocr' }}" aria-hidden="true">{{ icon("sparkles" if e.name == "vision_llm" else "cpu", "size-4") }}</span>
+      {% if e.state == "done" %}
+        {% if variant == "agree" %}{{ ui.badge("Agrees", "green", ico="check") }}
+        {% elif variant == "read" %}{{ ui.badge("Read", "zinc") }}
+        {% elif variant == "skipped" %}{{ ui.badge("Skipped", "zinc") }}
+        {% else %}{{ ui.badge("No text", "amber") }}{% endif %}
+      {% elif e.state == "waiting" %}<span class="badge badge-blue"><span class="spinner size-3"></span>Reading</span>
+      {% elif e.state == "unavailable" %}{{ ui.badge("Offline" if e.name == "vision_llm" else "Not installed", "zinc") }}
+      {% else %}{{ ui.badge("Ready", "blue") }}{% endif %}
+    </div>
+    <p class="mt-3 text-sm font-semibold leading-tight">{{ e.label }}</p>
+    <p class="mt-0.5 text-xs leading-snug muted">{{ e.sub }}</p>
+    {% if e.state == "done" and e.ok %}
+      <dl class="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-xs">
+        <dt class="muted">ID number</dt><dd class="truncate text-right font-mono font-medium">{{ e.number_masked or "Not found" }}</dd>
+        <dt class="muted">Name</dt><dd class="text-right font-medium">{{ "Found" if e.name_found else "Not found" }}</dd>
+        <dt class="muted">Characters</dt><dd class="text-right tabular-nums">{{ e.chars }}</dd>
+        {% if e.ms is not none %}<dt class="muted">Time</dt><dd class="text-right tabular-nums">{{ "%.1f" | format((e.ms or 0) / 1000) }} s</dd>{% endif %}
+      </dl>
+      {% if e.confidence is not none %}
+        <div class="mt-3">{{ progress(e.confidence, "green" if e.confidence >= 80 else ("amber" if e.confidence >= 55 else "red")) }}</div>
+      {% endif %}
+    {% elif e.state == "done" %}
+      <p class="mt-4 text-xs leading-relaxed muted">{{ e.error or "This engine couldn't read any text from the photo." }}</p>
+    {% elif e.state == "waiting" %}
+      <div class="mt-4 space-y-2" aria-hidden="true"><div class="skeleton h-2.5 w-4/5"></div><div class="skeleton h-2.5 w-1/2"></div><div class="skeleton h-2.5 w-2/3"></div></div>
+    {% elif e.state == "unavailable" %}
+      <p class="mt-4 text-xs leading-relaxed muted">{{ "The AI providers are offline right now - the other engines cover for it." if e.name == "vision_llm" else "Not available on this server - the other engines cover for it." }}</p>
+    {% else %}
+      <p class="mt-4 text-xs leading-relaxed muted">Reads your card on the next upload.</p>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="text-sm muted">No OCR engine is configured on this server - ID cards are checked manually by a reviewer.</p>
+{% endif %}
+{% endmacro %}
+
+{% macro checks(rows) %}
+{% set icons = {"pass": "check", "fail": "x", "warn": "alert", "skip": "info"} %}
+{% set sr = {"pass": "passed", "fail": "failed", "warn": "warning", "skip": "not applicable"} %}
+<ul class="divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+  {% for c in rows %}
+  <li class="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0">
+    <span class="idv-check-icon" data-status="{{ c.status }}" aria-hidden="true">{{ icon(icons.get(c.status, "info"), "size-3.5") }}</span>
+    <div class="min-w-0 flex-1">
+      <p class="flex flex-wrap items-center gap-2 text-sm font-medium">
+        {{ c.check }} <span class="sr-only">- {{ sr.get(c.status, c.status) }}</span>
+        {% if c.critical and c.status == "fail" %}<span class="badge badge-red">Critical</span>{% endif %}
+      </p>
+      {% if c.detail %}<p class="mt-0.5 text-xs leading-relaxed muted">{{ c.detail }}</p>{% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+
+{#- Privacy-blurred ID image served by the authorised route (/identity/{id}/{side}); "Show" un-blurs it -#}
+{% macro thumb(doc_id, side, label, hidden=True) %}
+<figure class="idv-thumb" data-component="idv-reveal" data-hidden="{{ 1 if hidden else 0 }}">
+  <img src="/identity/{{ doc_id }}/{{ side }}" alt="{{ label }}" class="idv-thumb-img" loading="lazy" decoding="async">
+  <figcaption class="idv-thumb-bar">
+    <span class="flex items-center gap-1.5 text-xs font-semibold">{{ icon("lock", "size-3.5") }}{{ label }}</span>
+    <span class="flex items-center gap-1">
+      <button type="button" class="idv-thumb-btn" data-reveal aria-pressed="{{ 'false' if hidden else 'true' }}">{{ icon("eye", "size-3.5") }}<span data-reveal-label>{{ "Show" if hidden else "Hide" }}</span></button>
+      <a class="idv-thumb-btn" href="/identity/{{ doc_id }}/{{ side }}" target="_blank" rel="noopener">{{ icon("external", "size-3.5") }}<span class="sr-only">Open {{ label | lower }} in a new tab</span></a>
+    </span>
+  </figcaption>
+</figure>
+{% endmacro %}
+
+{#- Self-service upload form (posts to /account/identity) -#}
+{% macro upload_form(form, errors, block=None, optional=False, replacing=False) %}
+<form method="post" action="/account/identity" enctype="multipart/form-data" class="space-y-5">
+  {{ ui.csrf() }}
+  {% if block %}{{ ui.alert(block, "warning", title="Please wait a moment") }}{% endif %}
+  {{ idf.id_fields(prefix="id", default_country=(form.id_country or "IN"), required=(not optional), doc_type=(form.id_doc_type or None), errors=errors) }}
+  <ul class="grid gap-2 text-xs muted sm:grid-cols-3">
+    <li class="flex items-start gap-2">{{ icon("sun", "size-4 shrink-0 text-warn") }}<span>Good light, no glare or shadows across the text.</span></li>
+    <li class="flex items-start gap-2">{{ icon("photo", "size-4 shrink-0 text-accent") }}<span>All four corners visible, card flat and in focus.</span></li>
+    <li class="flex items-start gap-2">{{ icon("document", "size-4 shrink-0 text-violet") }}<span>Passports: the photo page including both code lines at the bottom.</span></li>
+  </ul>
+  <div class="flex flex-col-reverse gap-3 border-t border-black/[0.06] pt-5 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.08]">
+    <p class="flex items-center gap-2 text-xs muted">{{ icon("lock", "size-3.5 shrink-0") }} Encrypted on upload · checked in about a minute</p>
+    <button type="submit" class="btn btn-primary"{% if block %} disabled{% endif %}>{{ icon("upload", "size-4") }}{{ "Upload new card" if replacing else "Upload & verify" }}</button>
+  </div>
+</form>
+{% endmacro %}
+
+{#- Past submissions: masked numbers + check results (expandable) -#}
+{% macro history(rows, current_id=None) %}
+<ul class="space-y-3">
+  {% for d in rows %}
+  <li>
+    <details class="idv-history group"{% if loop.first and d.status != "verified" and d.checks %} open{% endif %}>
+      <summary class="idv-history-summary">
+        <span class="idv-history-icon" data-tone="{{ tone_of(d.status) }}" aria-hidden="true">{{ icon("id-card", "size-5") }}</span>
+        <span class="min-w-0 flex-1">
+          <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span class="text-sm font-semibold">{{ d.doc_label }}</span>
+            <span class="text-xs muted">{{ d.country }}</span>
+            {% if loop.first %}<span class="badge badge-zinc !py-0.5">Latest</span>{% endif %}
+          </span>
+          <span class="mt-0.5 block truncate text-xs muted">
+            {{ d.created_at | dt("%d %b %Y, %H:%M") }}{% if d.uploaded_by_other and d.uploader_name %} · added by {{ d.uploader_name }}{% endif %}
+          </span>
+        </span>
+        <span class="hidden text-right sm:block">
+          <span class="block font-mono text-xs font-medium tabular-nums">{{ d.number_masked or "No number" }}</span>
+          {% if d.engines_ran %}<span class="block text-[11px] muted">{{ d.agreeing }}/{{ d.engines_read or d.engines_ran }} engines agreed</span>{% endif %}
+        </span>
+        {{ ui.status(d.status) }}
+        <span class="idv-history-chevron" aria-hidden="true">{{ icon("chevron-down", "size-4") }}</span>
+      </summary>
+      <div class="idv-history-body">
+        <dl class="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+          <div><dt class="muted">ID number</dt><dd class="mt-0.5 font-mono font-medium">{{ d.number_masked or "—" }}</dd></div>
+          <div><dt class="muted">Consensus</dt><dd class="mt-0.5 font-medium tabular-nums">{{ (d.consensus_pct ~ "%") if d.consensus_pct is not none else "—" }}</dd></div>
+          <div><dt class="muted">Checks passed</dt><dd class="mt-0.5 font-medium tabular-nums">{{ d.checks_passed }}/{{ d.checks_total }}</dd></div>
+          <div><dt class="muted">{{ "Verified" if d.status == "verified" else "Updated" }}</dt><dd class="mt-0.5 font-medium">{{ (d.verified_at or d.reviewed_at or d.created_at) | dt("%d %b %Y") }}</dd></div>
+        </dl>
+        {% if d.reason %}<div class="mt-4">{{ ui.alert(d.reason, "danger" if d.status == "rejected" else "warning") }}</div>{% endif %}
+        {% if d.checks %}<div class="mt-4">{{ checks(d.checks) }}</div>
+        {% elif d.status in ("pending", "processing") %}<p class="mt-4 text-xs muted">Checks appear here as soon as the engines finish.</p>{% endif %}
+      </div>
+    </details>
+  </li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+
+{% macro privacy() %}
+<section class="card-muted" aria-labelledby="idv-privacy-title">
+  <h2 id="idv-privacy-title" class="text-sm font-semibold">How we protect your card</h2>
+  <ul class="mt-4 space-y-3.5 text-xs leading-relaxed">
+    {% for ico, title, body in [
+      ("lock", "Encrypted at rest", "Card photos are encrypted the moment they arrive and are never shown publicly."),
+      ("eye", "Only the last digits", "We keep the ID number masked - the full number is never stored readable."),
+      ("key", "Duplicate protection", "A one-way, peppered fingerprint of the number stops the same card being used on two accounts."),
+      ("shield", "Who can see the photo", "You, the admins of gyms where you are a member or employed, and platform admins. Every view is logged."),
+    ] %}
+    <li class="flex items-start gap-3">
+      <span class="grid size-8 shrink-0 place-items-center rounded-xl bg-white text-accent shadow-sm ring-1 ring-black/[0.05] dark:bg-white/10 dark:text-[#64b5ff] dark:ring-white/10">{{ icon(ico, "size-4") }}</span>
+      <span><span class="block font-semibold text-ink dark:text-white">{{ title }}</span><span class="muted">{{ body }}</span></span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endmacro %}

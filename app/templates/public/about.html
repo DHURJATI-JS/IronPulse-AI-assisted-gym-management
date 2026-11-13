@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "public/_macros.html" as pub with context %}
+{% block title %}About{% endblock %}
+{% block description %}About IronPulse: a student-grade, AI-assisted gym management project - how it works, what powers it and what it isn't.{% endblock %}
+{% block content %}
+<div class="relative isolate">
+  <div class="pub-page-glow" aria-hidden="true"></div>
+
+  <header class="mx-auto max-w-3xl text-center animate-fade-up">
+    <p class="eyebrow mb-2">About</p>
+    <h1 class="pub-h2 sm:!text-5xl">Gym software that <span class="gradient-text">looks out for people</span>.</h1>
+    <p class="mx-auto mt-4 max-w-2xl text-[15px] leading-relaxed muted">IronPulse is a student-grade project exploring what a modern, AI-assisted gym platform could feel like - for members, trainers and gym owners - with safety and honesty built in.</p>
+  </header>
+
+  <section class="mx-auto mt-12 grid max-w-4xl grid-cols-3 gap-3" aria-label="IronPulse today">
+    {% for value, label in [(stats.branches, "Verified branches"), (stats.online, "Gyms online"), (stats.trainers, "Trainers")] %}
+    <div class="card-flat text-center">
+      <p class="kpi">{{ value }}</p>
+      <p class="mt-1 text-xs font-medium uppercase tracking-wider muted">{{ label }}</p>
+    </div>
+    {% endfor %}
+  </section>
+
+  <section class="mx-auto mt-16 max-w-6xl" aria-label="Principles">
+    {{ pub.section_head("Principles", "What we care about", center=True) }}
+    <div class="grid gap-4 md:grid-cols-3">
+      {% for ico, title, body in [
+          ("shield", "Safety over cleverness", "AI suggests; deterministic rules decide anything safety- or money-critical - exercise contraindications, suspension thresholds, payroll maths and ID checks."),
+          ("check-badge", "Verified, not vague", "Branches go public only after AI document checks, while open, with at least " ~ min_photos ~ " real photos. Staff need a linked account, a photo and a verified ID."),
+          ("wifi-off", "Honest about AI", "Three AI providers fail over in order. When all are down you're told immediately - and the gym keeps running without them."),
+      ] %}
+      <article class="card">
+        <span class="grid size-11 place-items-center rounded-2xl bg-accent/10 text-accent dark:text-[#64b5ff]">{{ icon(ico, "size-5") }}</span>
+        <h3 class="mt-4 font-semibold tracking-tight">{{ title }}</h3>
+        <p class="mt-1.5 text-sm leading-relaxed muted">{{ body }}</p>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="mx-auto mt-16 grid max-w-6xl gap-4 lg:grid-cols-2" aria-label="What's inside">
+    <article class="pub-bento">
+      <h2 class="text-xl font-semibold tracking-tight">For members</h2>
+      <ul class="mt-4 grid gap-2.5 text-sm">
+        {% for item in ["Find AI-verified gyms by distance or city", "Offline, online or combo plans - with a trainer, the AI coach or both", "Workout plans that respect your health conditions", "Live chat with trainers, reminders, calendar and bedtime nudges", "Safety alerts that point you to professionals"] %}
+        <li class="flex gap-2">{{ icon("check", "mt-0.5 size-4 shrink-0 text-ok") }}<span>{{ item }}</span></li>
+        {% endfor %}
+      </ul>
+    </article>
+    <article class="pub-bento">
+      <h2 class="text-xl font-semibold tracking-tight">For gym owners &amp; staff</h2>
+      <ul class="mt-4 grid gap-2.5 text-sm">
+        {% for item in ["Branch verification from registration and safety documents", "Desk OTP for offline sign-ups and fraud checks", "Staff onboarding with ID and certification checks", "Trainer shifts with distance and rest-time rules", "Payroll with country rules, payouts and proof of payment"] %}
+        <li class="flex gap-2">{{ icon("check", "mt-0.5 size-4 shrink-0 text-ok") }}<span>{{ item }}</span></li>
+        {% endfor %}
+      </ul>
+    </article>
+  </section>
+
+  <section class="mx-auto mt-16 max-w-6xl" aria-label="Under the hood">
+    {{ pub.section_head("Under the hood", "Built with boring, dependable tech", "Server-rendered pages that work without heavy JavaScript, a strict content-security policy and an async Python backend.") }}
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {% for ico, title, body in [
+          ("cpu", "FastAPI + PostgreSQL", "Async SQLAlchemy, pgvector for similarity search and strict relational deletes."),
+          ("sparkles", "Gemma → Gemma → Claude", "Gateway first, a local Docker model as failsafe, Claude as the last resort."),
+          ("document", "Multi-engine OCR", "Several OCR engines cross-check every document before AI reviews it."),
+          ("chat", "Live everywhere", "WebSocket notifications, chat and a Dynamic-Island-style status pill."),
+      ] %}
+      <div class="card-flat">
+        <span class="grid size-10 place-items-center rounded-2xl bg-zinc-900/[0.05] text-zinc-700 dark:bg-white/10 dark:text-zinc-200">{{ icon(ico, "size-5") }}</span>
+        <p class="mt-3 font-semibold">{{ title }}</p>
+        <p class="mt-1 text-sm leading-relaxed muted">{{ body }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="mx-auto mt-16 max-w-4xl">
+    <div class="pub-callout flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex items-start gap-3">
+        {{ icon("alert", "mt-0.5 size-5 shrink-0") }}
+        <p class="text-sm leading-relaxed"><strong>Student-grade project.</strong> The gym owner, the developer and the AI are not responsible for injuries, health outcomes, AI advice, verification decisions, payroll or payments. Nothing here is medical, legal or financial advice.</p>
+      </div>
+      <a href="/terms#disclaimer" class="btn btn-dark btn-sm shrink-0">Read the disclaimer</a>
+    </div>
+  </section>
+
+  <div class="mx-auto mt-12 flex flex-wrap justify-center gap-3">
+    <a href="/gyms" class="btn btn-primary">{{ icon("map-pin", "size-4") }} Find a gym</a>
+    <a href="/plans" class="btn btn-secondary">Compare plans</a>
+    <a href="/jobs" class="btn btn-ghost">{{ icon("briefcase", "size-4") }} Jobs</a>
+  </div>
+</div>
+{% endblock %}

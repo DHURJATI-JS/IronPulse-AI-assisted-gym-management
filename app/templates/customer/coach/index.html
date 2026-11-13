@@ -1,0 +1,286 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "customer/coach/_macros.html" as cm with context %}
+{% block title %}AI Coach{% endblock %}
+{% block content %}
+{% set providers = {"gateway": "Gemma (gateway)", "docker": "Gemma (Docker)", "anthropic": "Claude", "fake": "Test AI"} %}
+
+{% call ui.page_header("Your training plan", "Workouts built around your goal, level and health profile. Every plan passes our safety guardrails before you see it.", eyebrow="AI Coach") %}
+  {{ ui.ai_chip() }}
+  <a href="/me/health/profile/ai" class="btn btn-ghost btn-sm">{{ icon("sparkles", "size-4") }} What the AI knows</a>
+  <a href="/me/health/profile/fitness" class="btn btn-ghost btn-sm">{{ icon("dumbbell", "size-4") }} Training preferences</a>
+  {% if access.has_any %}
+    <form method="post" action="/me/coach/generate">
+      {{ ui.csrf() }}
+      <button type="submit" class="btn btn-primary" {% if suspended %}disabled aria-disabled="true" title="Coaching is paused"{% elif job_card %}disabled aria-disabled="true" title="Your plan is being built"{% endif %}>
+        {{ icon("sparkles", "size-4") }} {{ "Generate new plan" if plan else "Generate my plan" }}
+      </button>
+    </form>
+  {% endif %}
+{% endcall %}
+
+{% if not access.has_any %}
+  {# ------------------------------------------------------------ locked: no membership #}
+  <section class="card relative overflow-hidden p-0 animate-fade-up">
+    <div class="hero-gradient grid gap-8 p-6 sm:p-10 lg:grid-cols-[1.2fr_1fr] lg:items-center">
+      <div>
+        <span class="grid size-12 place-items-center rounded-2xl bg-ink text-white dark:bg-white dark:text-black">{{ icon("lock", "size-5") }}</span>
+        <h2 class="mt-5 text-2xl font-semibold tracking-tight sm:text-3xl">Coaching comes with your membership</h2>
+        <p class="mt-3 max-w-xl text-[15px] muted">Join a gym to unlock a weekly plan that adapts reps, loads and methods every time you generate it - and never suggests exercises your health conditions rule out.</p>
+        <div class="mt-6 flex flex-wrap gap-2">
+          <a href="/gyms" class="btn btn-primary">{{ icon("map-pin", "size-4") }} Find a gym</a>
+          <a href="/plans" class="btn btn-secondary">Compare plans</a>
+        </div>
+      </div>
+      <ul class="grid gap-3">
+        {% for ico, title, body in [
+            ("sparkles", "Personal plans", "Built from your goal, level, metrics and previous plan."),
+            ("shield", "Safety guardrails", "Contraindicated exercises are swapped for safe alternatives."),
+            ("play", "Video library", "Guided sessions included with every membership."),
+        ] %}
+        <li class="card-flat flex items-start gap-3">
+          <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">{{ icon(ico, "size-5") }}</span>
+          <div><p class="font-semibold">{{ title }}</p><p class="text-sm muted">{{ body }}</p></div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </section>
+{% else %}
+  {% if suspended %}
+    <div class="alert alert-danger mb-6 animate-fade-up" role="alert">
+      {{ icon("alert", "size-5 shrink-0") }}
+      <div>
+        <p class="font-semibold">Coaching is paused for your safety</p>
+        <p>{{ profile.suspension_reason or "A recent health reading needs attention." }} New plans can be generated again once a gym admin approves your reactivation.</p>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+    {# ------------------------------------------------------------ main column #}
+    <div class="min-w-0 space-y-6">
+      {% if job_card %}
+        {# the plan is built in the background (coach_plan job); 51-coach.js follows it and shows the plan when saved #}
+        <section class="card animate-fade-up" data-component="coach-job" data-job="{{ job_card.job }}" data-status="{{ job_card.status }}"
+                 data-status-url="/me/coach/status?job={{ job_card.job }}" role="status" aria-live="polite" aria-labelledby="coach-job-title">
+          <div class="flex items-start gap-4">
+            <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-accent via-indigo to-violet text-white">{{ icon("sparkles", "size-6") }}</span>
+            <div class="min-w-0 flex-1">
+              <h2 id="coach-job-title" class="text-lg font-semibold" data-coach-job-title>{{ job_card.title }}</h2>
+              <p class="mt-1 text-sm muted" data-coach-job-text>{{ job_card.message }}</p>
+              <div class="mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-900/[0.06] dark:bg-white/10"><div class="skeleton h-full w-full !rounded-full"></div></div>
+              <p class="mt-3 text-xs muted">Keep using IronPulse meanwhile - we'll notify you when it's ready. If you close the app, it pauses and finishes when you're back.</p>
+            </div>
+          </div>
+        </section>
+      {% elif job_problem %}
+        <div class="alert alert-warning animate-fade-up" role="alert">
+          {{ icon("alert", "size-5 shrink-0") }}
+          <div>
+            <p class="font-semibold">{{ job_problem.title }}</p>
+            <p>{{ job_problem.message }}</p>
+          </div>
+        </div>
+      {% endif %}
+      {% if plan %}
+        {% set ai_status = plan_meta.get("ai_status") %}
+        <section class="card animate-fade-up">
+          <div class="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                {% if plan.source == "ai" %}
+                  <span class="badge badge-violet">{{ icon("sparkles", "size-3.5") }} AI-personalised</span>
+                {% elif plan.source == "trainer" %}
+                  <span class="badge badge-green">{{ icon("user", "size-3.5") }} From your trainer</span>
+                {% else %}
+                  <span class="badge badge-blue">{{ icon("layers", "size-3.5") }} Standard plan</span>
+                {% endif %}
+                <span class="badge badge-zinc">{{ goal_label }}</span>
+                <span class="badge badge-zinc">{{ level_label }}</span>
+              </div>
+              <h2 class="mt-3 text-2xl font-semibold tracking-tight">{{ plan.title }}</h2>
+              <p class="mt-1 text-sm muted">
+                Created {{ plan.created_at | dt }}
+                {% if plan.ai_provider %} · generated by {{ providers.get(plan.ai_provider, plan.ai_provider) }}{% endif %}
+                · {{ days | length }} session{{ "s" if days | length != 1 }} per week
+              </p>
+            </div>
+            <div class="grid shrink-0 grid-cols-3 gap-2 text-center sm:w-[19rem]">
+              <div class="card-muted !p-3"><p class="text-xl font-semibold tabular-nums">{{ days | length }}</p><p class="text-[11px] muted">{{ "day" if days | length == 1 else "days" }}</p></div>
+              <div class="card-muted !p-3"><p class="text-xl font-semibold tabular-nums">{{ n_items }}</p><p class="text-[11px] muted">{{ "exercise" if n_items == 1 else "exercises" }}</p></div>
+              <div class="card-muted !p-3"><p class="text-xl font-semibold tabular-nums">{{ plan.removed_items | length }}</p><p class="text-[11px] muted">{{ "safety swap" if plan.removed_items | length == 1 else "safety swaps" }}</p></div>
+            </div>
+          </div>
+
+          {% if plan.source == "template" and ai_status == "unavailable" %}
+            <div class="alert alert-warning mt-5">
+              {{ icon("wifi-off", "size-5 shrink-0") }}
+              <p><strong>AI was unavailable when this plan was generated.</strong> This is a standard plan from our exercise library - fully safety-checked. Generate again later for an AI-personalised version.</p>
+            </div>
+          {% elif plan.source == "template" and ai_status == "rejected" %}
+            <div class="alert alert-info mt-5">
+              {{ icon("shield", "size-5 shrink-0") }}
+              <p>The AI suggestion did not pass our safety checks, so you received a standard, safety-checked plan instead.</p>
+            </div>
+          {% endif %}
+
+          {% if weekly %}
+            <ul class="mt-5 grid gap-2 sm:grid-cols-2">
+              {% for note in weekly %}
+                <li class="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-300">{{ icon("check-circle", "size-4 mt-0.5 shrink-0 text-ok") }}<span>{{ note }}</span></li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+          <div class="mt-5 flex flex-wrap gap-2 border-t border-black/[0.05] pt-4 dark:border-white/[0.06]">
+            <button type="button" class="btn btn-secondary btn-sm" data-assistant-open data-assistant-prefill="How should I warm up for today's session?">{{ icon("chat", "size-4") }} Ask about this plan</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-assistant-open data-assistant-prefill="Remind me to train tomorrow at 7am">{{ icon("bell", "size-4") }} Set a workout reminder</button>
+          </div>
+        </section>
+
+        <div data-component="coach-days" class="space-y-4">
+          <div class="no-scrollbar -mx-1 overflow-x-auto px-1" data-day-tabs hidden>
+            <div class="tabs" role="tablist" aria-label="Training days">
+              {% for day in days %}
+                <button type="button" class="tab whitespace-nowrap {{ 'tab-active' if loop.first }}" role="tab" id="day-tab-{{ loop.index }}"
+                        aria-controls="day-{{ loop.index }}" aria-selected="{{ 'true' if loop.first else 'false' }}" data-day-tab="{{ loop.index0 }}">
+                  Day {{ loop.index }}<span class="hidden sm:inline"> · {{ day.name }}</span>
+                </button>
+              {% endfor %}
+            </div>
+          </div>
+          {% for day in days %}
+            {{ cm.day_card(day, loop.index, videos, access.videos) }}
+          {% endfor %}
+        </div>
+      {% elif not job_card %}
+        <section class="card flex flex-col items-center px-6 py-14 text-center animate-fade-up">
+          <span class="grid size-16 place-items-center rounded-[22px] bg-gradient-to-br from-accent via-indigo to-violet text-white shadow-lg shadow-indigo/30">{{ icon("dumbbell", "size-8") }}</span>
+          <h2 class="mt-5 text-xl font-semibold">Let's build your first plan</h2>
+          <p class="mt-2 max-w-md text-sm muted">
+            {% if access.ai %}Your membership includes AI coaching: we'll combine your goal, level, metrics and health profile into a weekly plan.
+            {% else %}You'll get a safety-checked standard plan from our exercise library, tuned to your goal and level.{% endif %}
+          </p>
+          <form method="post" action="/me/coach/generate" class="mt-6">
+            {{ ui.csrf() }}
+            <button type="submit" class="btn btn-primary btn-lg" {% if suspended %}disabled aria-disabled="true"{% endif %}>{{ icon("sparkles", "size-4") }} Generate my plan</button>
+          </form>
+          <p class="mt-4 text-xs muted">Takes a few seconds. You can regenerate any time.</p>
+        </section>
+      {% endif %}
+
+      {% if not access.ai %}
+        <section class="card relative overflow-hidden animate-fade-up">
+          <div class="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-gradient-to-br from-accent/30 to-violet/30 blur-3xl"></div>
+          <div class="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-start gap-4">
+              <span class="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-accent to-violet text-white">{{ icon("sparkles", "size-5") }}</span>
+              <div>
+                <p class="font-semibold">Unlock AI coaching</p>
+                <p class="mt-1 text-sm muted">Your current membership includes standard plans. Plans with AI adapt your methods, reps and loads every time you generate - always within your safety guardrails.</p>
+              </div>
+            </div>
+            <a href="/me/subscriptions" class="btn btn-dark shrink-0">See upgrade options</a>
+          </div>
+        </section>
+      {% endif %}
+    </div>
+
+    {# ------------------------------------------------------------ side column #}
+    <aside class="min-w-0 space-y-6">
+      <section class="card animate-fade-up">
+        <div class="flex items-center gap-3">
+          <span class="grid size-10 place-items-center rounded-2xl bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("shield", "size-5") }}</span>
+          <div>
+            <h2 class="section-title">Safety guardrails</h2>
+            <p class="text-xs muted">Checked on every plan, AI or not.</p>
+          </div>
+        </div>
+        {% if tags %}
+          <ul class="mt-4 space-y-3">
+            {% for tag, label, avoid in tags %}
+              <li class="rounded-2xl bg-zinc-900/[0.03] p-3 dark:bg-white/[0.04]">
+                <span class="badge badge-amber">{{ label }}</span>
+                <p class="mt-1.5 text-xs muted">Avoids {{ avoid }}.</p>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="mt-4 text-sm muted">No health conditions on file. Add injuries or conditions to your health profile so the coach can protect you.</p>
+        {% endif %}
+        <a href="/me/health/profile" class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">Update health profile {{ icon("chevron-right", "size-4") }}</a>
+
+        {% if plan and plan.safety_notes %}
+          <div class="divider !my-5"></div>
+          <ul class="space-y-2">
+            {% for note in plan.safety_notes %}
+              <li class="flex items-start gap-2 text-sm">{{ icon("info", "size-4 mt-0.5 shrink-0 text-accent") }}<span>{{ note }}</span></li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+
+        {% if plan and plan.removed_items %}
+          <div class="divider !my-5"></div>
+          <h3 class="text-sm font-semibold">Swapped for your safety</h3>
+          <ul class="mt-3 space-y-3">
+            {% for r in plan.removed_items %}
+              <li class="text-sm">
+                <p class="flex flex-wrap items-center gap-1.5">
+                  <span class="text-zinc-400 line-through dark:text-zinc-500">{{ r.exercise }}</span>
+                  {% if r.replacement %}{{ icon("arrow-right", "size-3.5 text-zinc-400") }}<span class="font-medium">{{ r.replacement }}</span>{% else %}<span class="badge badge-zinc">removed</span>{% endif %}
+                </p>
+                <p class="mt-0.5 text-xs muted">{{ r.reason }}{% if r.day %} · {{ r.day }}{% endif %}</p>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+      </section>
+
+      {% if ac %}
+        {% set ac_text = ac.get("summary") or ac.get("advice") or ac.get("recommendation") or ac.get("text") or ac.get("message") %}
+        {% set ac_temp = ac.get("temperature_c") or ac.get("setpoint_c") or ac.get("temp_c") or ac.get("temperature") %}
+        <section class="card-flat animate-fade-up">
+          <div class="flex items-center gap-3">
+            <span class="grid size-10 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("thermometer", "size-5") }}</span>
+            <div>
+              <h2 class="section-title">Room climate</h2>
+              <p class="text-xs muted">Air-conditioning advice for training and recovery</p>
+            </div>
+          </div>
+          {% if ac_temp %}<p class="kpi mt-4">{{ ac_temp }}<span class="text-lg font-medium muted">°C</span></p>{% endif %}
+          {% if ac_text %}<p class="mt-2 text-sm text-zinc-600 dark:text-zinc-300">{{ ac_text }}</p>{% endif %}
+          {% if ac.get("mode") %}<span class="chip mt-3">{{ icon("wind", "size-3.5") }} {{ ac.get("mode") | humanize }}</span>{% endif %}
+        </section>
+      {% endif %}
+
+      <section class="card-flat animate-fade-up">
+        <h2 class="section-title">Your profile</h2>
+        <dl class="mt-3 grid grid-cols-2 gap-3 text-sm">
+          <div class="rounded-2xl bg-zinc-900/[0.03] p-3 dark:bg-white/[0.04]"><dt class="text-xs muted">Goal</dt><dd class="mt-0.5 font-semibold">{{ goal_label }}</dd></div>
+          <div class="rounded-2xl bg-zinc-900/[0.03] p-3 dark:bg-white/[0.04]"><dt class="text-xs muted">Level</dt><dd class="mt-0.5 font-semibold">{{ level_label }}</dd></div>
+          <div class="rounded-2xl bg-zinc-900/[0.03] p-3 dark:bg-white/[0.04]"><dt class="text-xs muted">AI coaching</dt><dd class="mt-0.5 font-semibold">{{ "Included" if access.ai else "Not in plan" }}</dd></div>
+          <div class="rounded-2xl bg-zinc-900/[0.03] p-3 dark:bg-white/[0.04]"><dt class="text-xs muted">Trainer</dt><dd class="mt-0.5 font-semibold">{{ "Included" if access.trainer else "—" }}</dd></div>
+        </dl>
+      </section>
+
+      {% if history %}
+        <section class="card-flat animate-fade-up">
+          <h2 class="section-title">Previous plans</h2>
+          <ul class="mt-3 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+            {% for h in history %}
+              <li class="flex items-center justify-between gap-3 py-2.5 text-sm">
+                <div class="min-w-0">
+                  <p class="truncate font-medium">{{ h.title }}</p>
+                  <p class="text-xs muted">{{ h.created_at | dt("%d %b %Y") }}</p>
+                </div>
+                <span class="badge {{ 'badge-violet' if h.source == 'ai' else ('badge-green' if h.source == 'trainer' else 'badge-blue') }}">{{ {"ai": "AI", "trainer": "Trainer", "template": "Standard"}.get(h.source, h.source) }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
+      {% with compact=True %}{% include "partials/gear_card.html" %}{% endwith %}
+    </aside>
+  </div>
+{% endif %}
+{% endblock %}

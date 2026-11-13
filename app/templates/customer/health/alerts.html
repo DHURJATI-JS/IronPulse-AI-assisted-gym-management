@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "customer/health/_macros.html" as hm with context %}
+{% block title %}Health alerts{% endblock %}
+{% block content %}
+{% call ui.page_header("Health alerts", "Every alert raised about your readings and check-ins, newest first.", eyebrow="Health", back="/me/health") %}
+  <a href="/me/health" class="btn btn-secondary">{{ icon("activity", "size-4") }} Daily metrics</a>
+{% endcall %}
+
+<div class="mx-auto max-w-3xl">
+  {{ hm.alert_list(page.items, next=here, title="All alerts" ~ (" · " ~ "{:,}".format(page.total) if page.total else ""), empty_text="No alerts yet - your readings and check-ins look steady.") }}
+  {{ ui.pager(page, noun="alerts", label="Alert pages") }}
+</div>
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% import "superadmin/_load_test_macros.html" as lt with context %}
+{% import "superadmin/_load_test_charts.html" as charts with context %}
+{% block title %}Load test{% endblock %}
+{% block content %}
+{% include "superadmin/_load_test_header.html" %}
+
+{% if run is none %}
+  {% include "superadmin/_load_test_empty.html" %}
+{% elif view is none %}
+  {% include "superadmin/_load_test_error.html" %}
+{% else %}
+{% set s = view.s %}
+{% set passed = s.verdict.passed %}
+
+{# ------------------------------------------------------------------ data volume: first, in bold #}
+{{ lt.data_volume(view.data_volume) }}
+
+{# ------------------------------------------------------------------ run line (times in the viewer's zone, named) #}
+{% set same_day = (s.started_at | dt("%Y-%m-%d")) == (s.ended_at | dt("%Y-%m-%d")) %}
+<p class="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm muted animate-fade-up" data-lt-run-line>
+  <span class="sa-mono">{{ run.run_id }}</span>
+  <span>{{ s.started_at | dt("%d %b %Y, %H:%M") }}{{ "–" if same_day else " – " }}{{ s.ended_at | dt("%H:%M %Z" if same_day else "%d %b %Y, %H:%M %Z") }} · {{ fmt.duration(s.duration_s) }}</span>
+  <span class="min-w-0 [overflow-wrap:anywhere]">{{ s.target.environment | capitalize }} · {{ s.target.workers }} worker{{ 's' if s.target.workers != 1 }} · Redis {{ 'on' if s.target.redis else 'off' }}</span>
+  <span class="min-w-0 break-all">{{ s.target.host }}</span>
+</p>
+
+{# ------------------------------------------------------------------ verdict + SLOs #}
+<section aria-labelledby="lt-verdict" class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] animate-fade-up" data-lt-verdict="{{ 'pass' if passed else 'fail' }}">
+  <div class="alert alert-{{ 'success' if passed else 'danger' }} !items-start !rounded-[24px] !p-5">
+    {{ icon("check-circle" if passed else "x-circle", "size-8 shrink-0") }}
+    <div class="min-w-0 [overflow-wrap:anywhere]">
+      <p class="text-xs font-semibold tracking-[0.14em] uppercase opacity-80" aria-hidden="true">Verdict</p>
+      <h2 id="lt-verdict" class="text-3xl font-semibold tracking-tight"><span class="sr-only">Verdict: </span>{{ "PASS" if passed else "FAIL" }}</h2>
+      <p class="mt-1 text-[15px] leading-relaxed">{{ s.verdict.headline }}</p>
+      {% if s.capacity.note %}<p class="mt-3 text-sm leading-relaxed opacity-85">{{ s.capacity.note }}</p>{% endif %}
+    </div>
+  </div>
+  <div class="card !p-0 min-w-0">
+    {% set met = s.verdict.slos | selectattr("passed") | list | length %}
+    <div class="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 pb-2 sm:px-6">
+      <h3 class="sa-card-title">Service-level objectives</h3>
+      {% if s.verdict.slos %}<span class="badge badge-{{ 'green' if met == s.verdict.slos | length else 'red' }}">{{ met }} of {{ s.verdict.slos | length }} met</span>{% endif %}
+    </div>
+    <ul class="sa-list">
+      {% for slo in s.verdict.slos %}
+      <li class="sa-check">
+        {{ sa.check_icon("pass" if slo.passed else "fail") }}
+        <div class="min-w-0 flex-1 [overflow-wrap:anywhere]">
+          <p class="font-medium">{{ slo.name }}</p>
+          <p class="mt-0.5 text-sm muted">Target {{ slo.target }} · actual <span class="font-semibold text-ink tabular-nums dark:text-white">{{ slo.actual }}</span></p>
+        </div>
+      </li>
+      {% else %}
+      <li class="px-5 py-4 text-sm muted sm:px-6">The analysis recorded no SLOs for this run.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+{# ------------------------------------------------------------------ KPIs #}
+<section aria-label="Key figures" class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6" data-lt-kpis>
+  {% for k in view.kpis %}
+  <div class="sa-kpi [overflow-wrap:anywhere]">{{ ui.stat(k.label, k.value, k.hint, k.icon, k.tone) }}</div>
+  {% endfor %}
+</section>
+
+{# ------------------------------------------------------------------ load steps #}
+{% set st = view.steps %}
+<section class="card mt-6 min-w-0" aria-labelledby="lt-steps-title">
+  <div class="sa-card-head">
+    <div class="min-w-0">
+      <h2 id="lt-steps-title" class="sa-card-title">Load steps</h2>
+      <p class="sa-card-sub">{{ view.plan }}{% if s.capacity.knee_users is not none %} · knee at {{ fmt.num(s.capacity.knee_users) }} users{% endif %}</p>
+    </div>
+  </div>
+  {% if st.rows %}
+  <div class="mt-5 grid grid-cols-1 gap-8 md:grid-cols-2">
+    {{ charts.step_chart(st.p95, "lt-p95", st.p95_title) }}
+    {{ charts.step_chart(st.rps, "lt-rps", "Throughput per step") }}
+  </div>
+  <div class="mt-6 overflow-x-auto">
+    <table class="table [&_td]:whitespace-nowrap" data-lt-steps>
+      <caption class="sr-only">Load steps: users, time window, throughput, error rate, latency percentiles{% if st.slo_column %} (all requests, and the p95 of the requests the SLO judges){% endif %} and result</caption>
+      <thead>
+        <tr>
+          <th scope="col">Users</th><th scope="col">Window</th><th scope="col" class="text-right">Req/s</th>
+          <th scope="col" class="text-right">Errors</th><th scope="col" class="text-right">p50</th>
+          <th scope="col" class="text-right">p95</th><th scope="col" class="text-right">p99</th>
+          {% if st.slo_column %}<th scope="col" class="text-right"><abbr title="p95 of the requests the latency SLO judges" class="no-underline">SLO p95</abbr></th>{% endif %}
+          <th scope="col">Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in st.rows %}
+        <tr{% if r.knee %} class="bg-accent/[0.05] dark:bg-accent/[0.08]"{% endif %}>
+          <td class="whitespace-nowrap font-semibold tabular-nums">{{ fmt.num(r.users) }}{% if r.knee %} <span class="badge badge-blue ml-1">Knee</span>{% endif %}</td>
+          <td class="whitespace-nowrap tabular-nums muted">{{ r.window }}</td>
+          <td class="text-right tabular-nums">{{ fmt.rps(r.rps) }}</td>
+          <td class="whitespace-nowrap text-right">{{ lt.failure_rate(r.error_rate, r.flag) }}</td>
+          <td class="whitespace-nowrap text-right tabular-nums">{{ fmt.ms(r.p50) }}</td>
+          <td class="whitespace-nowrap text-right {{ 'font-medium ' if not st.slo_column }}tabular-nums">{{ fmt.ms(r.p95) }}</td>
+          <td class="whitespace-nowrap text-right tabular-nums">{{ fmt.ms(r.p99) }}</td>
+          {% if st.slo_column %}<td class="whitespace-nowrap text-right font-medium tabular-nums">{{ fmt.ms(r.slo_p95) }}</td>{% endif %}
+          <td>{{ lt.result_chip(r.passed) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="mt-4">{{ lt.missing("No load steps recorded", "The analysis wrote no steps for this run.", "chart") }}</div>
+  {% endif %}
+</section>
+
+{# ------------------------------------------------------------------ timeline #}
+{% set tl = view.timeline %}
+<section class="card mt-6 min-w-0" aria-labelledby="lt-tl-title">
+  <div class="sa-card-head">
+    <div class="min-w-0">
+      <h2 id="lt-tl-title" class="sa-card-title">Over time</h2>
+      <p class="sa-card-sub">{% if tl.panels %}{{ fmt.num(tl.total) }} sample{{ 's' if tl.total != 1 }} over {{ fmt.duration(s.duration_s) }} · hover a chart for the readout at that moment{% else %}No samples over {{ fmt.duration(s.duration_s) }}{% endif %}</p>
+    </div>
+  </div>
+  {% if tl.panels %}
+  <div class="mt-5">{{ charts.line_panel(tl.users, "lt-tl-users") }}</div>
+  <div class="mt-8 grid grid-cols-1 gap-x-8 gap-y-8 md:grid-cols-2">
+    {% for p in tl.panels %}{{ charts.line_panel(p, "lt-tl-" ~ p.key) }}{% endfor %}
+  </div>
+  <details class="mt-8 rounded-2xl bg-zinc-50 ring-1 ring-black/[0.04] dark:bg-white/[0.03] dark:ring-white/[0.06]">
+    <summary class="cursor-pointer px-4 py-3 text-sm font-medium">Timeline table{% if tl.stride > 1 %} · every {{ tl.stride_text }} of {{ fmt.num(tl.total) }} samples{% else %} · {{ fmt.num(tl.total) }} samples{% endif %}</summary>
+    <div class="max-h-[28rem] overflow-auto border-t border-black/[0.05] dark:border-white/[0.06]">
+      <table class="table [&_td]:!py-2 [&_td]:whitespace-nowrap [&_td]:tabular-nums [&_td:not(:first-child)]:text-right [&_th:not(:first-child)]:text-right" data-lt-timeline>
+        <caption class="sr-only">Timeline samples: users, throughput, failures, latency, CPU, memory and database connections</caption>
+        <thead>
+          <tr><th scope="col">Time</th><th scope="col">Users</th><th scope="col">Req/s</th><th scope="col">Failures/s</th><th scope="col">p50</th><th scope="col">p95</th><th scope="col">CPU</th><th scope="col">RSS</th><th scope="col">DB conns</th></tr>
+        </thead>
+        <tbody>
+          {% for p in tl.rows %}<tr><td>{{ fmt.clock(p.t_s) }}</td><td>{{ fmt.num(p.users) }}</td><td>{{ fmt.rps(p.rps) }}</td><td>{{ "%.2f" | format(p.failures_per_s) if p.failures_per_s is not none else "—" }}</td><td>{{ fmt.ms(p.p50_ms) }}</td><td>{{ fmt.ms(p.p95_ms) }}</td><td>{{ fmt.cpu(p.cpu_pct) }}</td><td>{{ fmt.mb(p.rss_mb) }}</td><td>{{ fmt.num(p.db_connections) }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+  {% else %}
+  <div class="mt-4">{{ lt.missing("No timeline recorded", "The analysis wrote no timeline samples for this run.", "activity") }}</div>
+  {% endif %}
+</section>
+
+{% include "superadmin/_load_test_endpoints.html" %}
+{% include "superadmin/_load_test_details.html" %}
+{% endif %}
+{% endblock %}

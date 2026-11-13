@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+
+{% macro history(runs, reviewers) %}
+<section class="card" aria-labelledby="history-title">
+  <h2 id="history-title" class="sa-card-title">Verification history</h2>
+  {% if runs %}
+  <ol class="mt-4 grid gap-3">
+    {% for r in runs %}
+    <li class="flex gap-3">
+      <span class="mt-1.5 size-2.5 shrink-0 rounded-full {{ {'verified': 'bg-ok', 'rejected': 'bg-bad', 'needs_review': 'bg-warn', 'ai_unavailable': 'bg-violet'}.get(r.outcome.value, 'bg-zinc-400') }}" aria-hidden="true"></span>
+      <div class="min-w-0 flex-1">
+        <p class="flex flex-wrap items-center gap-1.5 text-sm">
+          {{ ui.status(r.outcome) }}
+          {% if r.manual %}<span class="badge badge-blue">{{ icon("user", "size-3.5") }}Manual{% if r.reviewer_id and reviewers.get(r.reviewer_id) %} · {{ reviewers[r.reviewer_id].display_name }}{% endif %}</span>
+          {% else %}<span class="badge badge-zinc">{{ icon("bolt", "size-3.5") }}Automatic{% if r.ai_provider %} · {{ r.ai_provider }}{% endif %}</span>{% endif %}
+          {% if r.score is not none %}<span class="text-xs muted tabular-nums">score {{ (r.score * 100) | round | int }}%</span>{% endif %}
+          <span class="ml-auto text-xs muted">{{ r.created_at | dt }}</span>
+        </p>
+        {% if r.summary %}<p class="mt-1 text-sm leading-relaxed break-words whitespace-pre-line text-zinc-700 dark:text-zinc-300">{{ r.summary }}</p>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+    <p class="mt-3 text-sm muted">No verification runs recorded yet.</p>
+  {% endif %}
+</section>
+{% endmacro %}
+
+{% macro preview(url, content_type, label) %}
+{% if content_type and content_type.startswith("image/") %}
+  <a href="{{ url }}" target="_blank" rel="noopener" class="sa-preview block" data-component="sa-preview">
+    <img src="{{ url }}" alt="{{ label }}" loading="lazy" decoding="async">
+    <span class="sa-preview-fallback" hidden>{{ icon("photo", "size-6") }}<span>Preview unavailable</span></span>
+  </a>
+{% else %}
+  <a href="{{ url }}" target="_blank" rel="noopener" class="sa-preview">
+    <span class="sa-preview-fallback">{{ icon("document", "size-7") }}<span class="font-medium text-ink dark:text-white">Open PDF</span><span class="text-xs">Opens in a new tab · never cached</span></span>
+  </a>
+{% endif %}
+{% endmacro %}
+
+{% if kind == "branch" %}
+  {% set title = branch.name %}
+  {% set subtitle = branch.gym.name ~ " · owned by " ~ branch.gym.owner.display_name ~ " · " ~ branch.city ~ ", " ~ branch.country_code %}
+  {% set state = branch.verification_status %}
+  {% set subject_label = "the gym owner" %}
+{% elif kind == "employee" %}
+  {% set title = emp.display_name %}
+  {% set subtitle = (emp.role_title or (emp.role | humanize)) ~ " at " ~ emp.gym.name ~ " · trainer certification" %}
+  {% set state = emp.verification_status %}
+  {% set subject_label = "the gym owner and the staff member" %}
+{% else %}
+  {% set holder = doc.user if doc.user else doc.employee %}
+  {% set title = "ID card #" ~ doc.id %}
+  {% set subtitle = (holder.display_name if holder else "Unknown holder") ~ " · " ~ (doc.doc_type | humanize) ~ " · issued in " ~ doc.country_code %}
+  {% set state = doc.status %}
+  {% set subject_label = "the account holder" %}
+{% endif %}
+
+{% block title %}Review · {{ title }}{% endblock %}
+{% block content %}
+{% call sa.header("Review · " ~ title, subtitle, section, sections, counts, back="/superadmin/reviews?tab=" ~ {"branch": "branches", "employee": "staff", "identity": "identity"}[kind]) %}
+  {{ ui.status(state) }}
+  {{ ui.ai_chip(disclaimer=False) }}
+{% endcall %}
+{{ ui.form_errors(errors) if errors and not decidable }}
+
+<div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+  <div class="grid min-w-0 gap-6">
+  {# ============================================================== branch #}
+  {% if kind == "branch" %}
+    <section class="card" aria-labelledby="sum-title">
+      <div class="sa-card-head">
+        <h2 id="sum-title" class="sa-card-title">Automated assessment</h2>
+        {% if failing %}<span class="badge badge-red">{{ failing }} failed check{{ 's' if failing != 1 }}</span>{% else %}<span class="badge badge-green">No failed checks</span>{% endif %}
+      </div>
+      <p class="mt-3 text-[15px] leading-relaxed whitespace-pre-line">{{ branch.verification_summary or "No summary was recorded - review the documents below." }}</p>
+      {{ ui.ai_disclaimer("The decision is yours.") }}
+      <div class="divider"></div>
+      {{ sa.evidence(branch.verification_checks) }}
+    </section>
+
+    <section class="card" aria-labelledby="loc-title">
+      <h2 id="loc-title" class="sa-card-title">Business &amp; location</h2>
+      <dl class="sa-kv mt-4">
+        <div><dt>Registration number</dt><dd class="font-mono text-[13px]">{{ branch.registration_number or "—" }}</dd></div>
+        <div><dt>Contact</dt><dd>{{ branch.phone or "—" }}{% if branch.email %} · {{ branch.email }}{% endif %}</dd></div>
+        <div class="sm:col-span-2"><dt>Address as typed</dt><dd>{{ branch.address_line1 }}{% if branch.address_line2 %}, {{ branch.address_line2 }}{% endif %}, {{ branch.city }}{% if branch.state %}, {{ branch.state }}{% endif %}{% if branch.postal_code %} {{ branch.postal_code }}{% endif %}, {{ branch.country_code }}</dd></div>
+        <div class="sm:col-span-2"><dt>Geocoder says</dt><dd>{{ branch.formatted_address or "Not geocoded" }}{% if branch.geo_confidence is not none %} <span class="muted">· confidence {{ (branch.geo_confidence * 100) | round | int }}%</span>{% endif %}</dd></div>
+        <div><dt>Owner's map pin</dt><dd class="tabular-nums">{{ ('%.5f, %.5f' | format(branch.latitude, branch.longitude)) if branch.latitude is not none and branch.longitude is not none else "—" }}</dd></div>
+        <div><dt>Pin vs. address</dt><dd>
+          {% if distance_km is not none %}
+            <span class="badge badge-{{ 'green' if distance_km <= 0.5 else ('amber' if distance_km <= 2 else 'red') }}">{{ '%.2f' | format(distance_km) }} km apart</span>
+          {% else %}<span class="muted">Not comparable</span>{% endif %}
+        </dd></div>
+        <div><dt>Status</dt><dd>{{ 'Open' if branch.is_open else 'Closed' }}{% if branch.verified_at %} · verified {{ branch.verified_at | dt }}{% endif %}</dd></div>
+        <div><dt>Opening hours</dt><dd>
+          {% if branch.hours %}{% set days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] %}
+            <span class="text-sm">{% for h in branch.hours %}{{ days[h.weekday] }} {{ h.opens_at.strftime("%H:%M") }}–{{ h.closes_at.strftime("%H:%M") }}{{ ' · ' if not loop.last }}{% endfor %}</span>
+          {% else %}<span class="muted">Not set</span>{% endif %}
+        </dd></div>
+      </dl>
+    </section>
+
+    <section class="card" aria-labelledby="docs-title">
+      <h2 id="docs-title" class="sa-card-title">Documents</h2>
+      <p class="sa-card-sub">Encrypted at rest · previews are served only to super-admins and never cached</p>
+      {% if branch.documents %}
+      <ul class="mt-5 grid gap-5 sm:grid-cols-2">
+        {% for d in branch.documents | sort(attribute="id") %}
+        <li class="min-w-0">
+          {{ preview("/superadmin/files/branch-doc/" ~ d.id, d.content_type, (d.doc_type | humanize) ~ " - " ~ d.original_filename) }}
+          <div class="mt-3 flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="truncate font-medium">{{ d.doc_type | humanize }}</p>
+              <p class="truncate text-xs muted" title="{{ d.original_filename }}">{{ d.original_filename }} · {{ (d.size_bytes / 1024) | round | int }} KB</p>
+            </div>
+            {% if d.accepted is sameas true %}<span class="badge badge-green shrink-0">Accepted</span>{% elif d.accepted is sameas false %}<span class="badge badge-red shrink-0">Not accepted</span>{% endif %}
+          </div>
+          <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+            <div><dt class="muted">Number</dt><dd class="truncate font-mono">{{ d.document_number or "—" }}</dd></div>
+            <div><dt class="muted">Expires</dt><dd class="{{ 'font-semibold text-[#d1281e] dark:text-[#ff6b61]' if d.expires_on and d.expires_on < now }}">{{ d.expires_on | date if d.expires_on else "—" }}</dd></div>
+          </dl>
+          {% if d.ocr_engines %}<p class="mt-2 flex flex-wrap gap-1">{% for eng in d.ocr_engines %}<span class="chip !py-0.5">{{ eng }}</span>{% endfor %}</p>{% endif %}
+          {{ sa.json_facts(d.assessment, 6) }}
+          {% if d.ocr_text %}
+          <details class="mt-2 text-xs"><summary class="cursor-pointer font-medium text-accent">OCR text</summary><pre class="sa-pre mt-2 max-h-56 !text-[11px]">{{ d.ocr_text[:3000] }}</pre></details>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+        <div class="mt-4">{{ sa.inline_empty("No documents uploaded", "Ask the owner to upload registration, tax and safety certificates before approving.", "document") }}</div>
+      {% endif %}
+    </section>
+
+    {% if branch.photos %}
+    <section class="card" aria-labelledby="photos-title">
+      <h2 id="photos-title" class="sa-card-title">Photos <span class="text-sm font-normal muted">· {{ branch.photos | length }}</span></h2>
+      <ul class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {% for ph in branch.photos[:9] %}
+        <li class="sa-preview !aspect-[4/3]" data-component="sa-preview">
+          <img src="{{ media_url(ph.image_key) }}" alt="{{ ph.caption or (ph.kind | humanize ~ ' photo') }}" loading="lazy" class="!object-cover">
+          <span class="sa-preview-fallback" hidden>{{ icon("photo", "size-6") }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+    {{ history(runs, reviewers) }}
+
+  {# ============================================================== employee #}
+  {% elif kind == "employee" %}
+    <section class="card" aria-labelledby="person-title">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+        {{ ui.avatar(emp.photo_key, emp.display_name, "size-16", "text-lg") }}
+        <div class="min-w-0 flex-1">
+          <h2 id="person-title" class="text-xl font-semibold tracking-tight">{{ emp.display_name }}</h2>
+          <p class="text-sm muted">{{ emp.role_title or (emp.role | humanize) }} · {{ emp.employment_type | humanize }} · {{ emp.work_mode | humanize }}</p>
+        </div>
+        {{ ui.status(emp.status) }}
+      </div>
+      <dl class="sa-kv mt-5">
+        <div><dt>Gym</dt><dd>{{ emp.gym.name }} <span class="muted">· owner {{ emp.gym.owner.display_name }}</span></dd></div>
+        <div><dt>Own account</dt><dd>{% if emp.user %}{{ emp.user.display_name }} <span class="muted">· {{ emp.user.email }}</span>{% else %}<span class="muted">Not linked yet ({{ emp.invite_email }})</span>{% endif %}</dd></div>
+        <div><dt>ID card</dt><dd>{{ ui.status(emp.user.id_status if emp.user else emp.id_status) }}</dd></div>
+        <div><dt>Experience</dt><dd>{{ (emp.years_experience ~ " years") if emp.years_experience is not none else "—" }}{% if emp.specialties %} · {{ emp.specialties | join(", ") }}{% endif %}</dd></div>
+        {% if emp.certifications %}<div class="sm:col-span-2"><dt>Certifications (as entered by the owner)</dt><dd class="whitespace-pre-line">{{ emp.certifications }}</dd></div>{% endif %}
+      </dl>
+    </section>
+
+    <section class="card" aria-labelledby="sum-title">
+      <h2 id="sum-title" class="sa-card-title">Automated assessment</h2>
+      <p class="mt-3 text-[15px] leading-relaxed whitespace-pre-line">{{ emp.verification_summary or "No summary was recorded." }}</p>
+      {{ ui.ai_disclaimer("The decision is yours.") }}
+      <div class="divider"></div>
+      {{ sa.evidence(latest_checks) }}
+    </section>
+
+    <section class="card" aria-labelledby="docs-title">
+      <h2 id="docs-title" class="sa-card-title">Documents</h2>
+      <p class="sa-card-sub">Certification first · encrypted at rest · never cached</p>
+      {% if documents %}
+      <ul class="mt-5 grid gap-5 sm:grid-cols-2">
+        {% for d in documents %}
+        <li class="min-w-0">
+          {{ preview("/superadmin/files/employee-doc/" ~ d.id, d.content_type, (d.doc_type | humanize) ~ " - " ~ d.original_filename) }}
+          <div class="mt-3 flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="truncate font-medium">{{ d.doc_type | humanize }}</p>
+              <p class="truncate text-xs muted" title="{{ d.original_filename }}">{{ d.original_filename }} · {{ (d.size_bytes / 1024) | round | int }} KB · {{ d.created_at | timeago }}</p>
+            </div>
+            {% if d.assessment and d.assessment.name_match is sameas true %}<span class="badge badge-green shrink-0">Name matched</span>
+            {% elif d.assessment and d.assessment.name_match is sameas false %}<span class="badge badge-amber shrink-0">Name not confirmed</span>{% endif %}
+          </div>
+          {{ sa.json_facts(d.assessment, 6) }}
+          {% if d.ocr_text %}
+          <details class="mt-2 text-xs"><summary class="cursor-pointer font-medium text-accent">OCR text</summary><pre class="sa-pre mt-2 max-h-56 !text-[11px]">{{ d.ocr_text[:3000] }}</pre></details>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+        <div class="mt-4">{{ sa.inline_empty("No documents uploaded", "The owner needs to upload the trainer's certification first.", "document") }}</div>
+      {% endif %}
+    </section>
+    {{ history(runs, reviewers) }}
+
+  {# ============================================================== identity #}
+  {% else %}
+    <section class="card" aria-labelledby="img-title">
+      <h2 id="img-title" class="sa-card-title">Card images</h2>
+      <p class="sa-card-sub">Served by the identity module to authorised staff only · never cached</p>
+      <div class="mt-5 grid gap-4 sm:grid-cols-2">
+        <figure>
+          {{ preview("/identity/" ~ doc.id ~ "/front", "image/jpeg", "Front of the ID card") }}
+          <figcaption class="mt-2 text-xs muted">Front</figcaption>
+        </figure>
+        {% if doc.back_key %}
+        <figure>
+          {{ preview("/identity/" ~ doc.id ~ "/back", "image/jpeg", "Back of the ID card") }}
+          <figcaption class="mt-2 text-xs muted">Back</figcaption>
+        </figure>
+        {% endif %}
+      </div>
+    </section>
+
+    {% set acct = doc.user %}
+    <section class="card" aria-labelledby="fields-title">
+      <h2 id="fields-title" class="sa-card-title">Extracted vs. account</h2>
+      <div class="mt-4 table-wrap !rounded-2xl !ring-0">
+        <table class="table">
+          <thead><tr><th scope="col">Field</th><th scope="col">On the card</th><th scope="col">Account</th></tr></thead>
+          <tbody>
+            {% set acct_name = acct.full_name if acct else (doc.employee.full_name if doc.employee else None) %}
+            {% set acct_dob = acct.date_of_birth if acct else None %}
+            <tr><td class="font-medium">Name</td><td>{{ doc.name_on_id or "—" }}</td><td>{{ acct_name or "—" }}</td></tr>
+            <tr><td class="font-medium">Date of birth</td>
+              <td class="{{ 'font-semibold text-[#d1281e] dark:text-[#ff6b61]' if doc.dob_on_id and acct_dob and doc.dob_on_id != acct_dob }}">{{ doc.dob_on_id | date if doc.dob_on_id else "—" }}</td>
+              <td>{{ acct_dob | date if acct_dob else "—" }}</td></tr>
+            <tr><td class="font-medium">ID number</td><td class="font-mono">{{ doc.id_number_masked or "—" }}</td><td class="muted">stored only masked + hashed</td></tr>
+            <tr><td class="font-medium">Expires</td><td class="{{ 'font-semibold text-[#d1281e] dark:text-[#ff6b61]' if doc.expires_on and doc.expires_on < now.date() }}">{{ doc.expires_on | date if doc.expires_on else "—" }}</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <dl class="sa-kv mt-5">
+        <div><dt>Engine consensus</dt><dd>{{ ((doc.consensus_score * 100) | round | int ~ "%") if doc.consensus_score is not none else "—" }}</dd></div>
+        <div><dt>Engines</dt><dd>{% if doc.engines %}{% for eng in doc.engines %}<span class="chip mr-1 !py-0.5">{{ eng }}</span>{% endfor %}{% else %}—{% endif %}</dd></div>
+        <div><dt>Attempts</dt><dd>{{ doc.attempts }}</dd></div>
+        <div><dt>Uploaded</dt><dd>{{ doc.created_at | dt }}{% if doc.uploaded_by_id and people.get(doc.uploaded_by_id) %} by {{ people[doc.uploaded_by_id].display_name }}{% endif %}</dd></div>
+      </dl>
+    </section>
+
+    <section class="card" aria-labelledby="sum-title">
+      <h2 id="sum-title" class="sa-card-title">Automated assessment</h2>
+      <p class="mt-3 text-[15px] leading-relaxed whitespace-pre-line">{{ doc.ai_summary or doc.rejection_reason or "No summary was recorded." }}</p>
+      {{ ui.ai_disclaimer("The decision is yours.") }}
+      <div class="divider"></div>
+      {{ sa.evidence(doc.checks) }}
+      {% if doc.engine_results %}
+      <details class="mt-4 text-sm"><summary class="cursor-pointer font-medium text-accent">Per-engine results ({{ doc.engine_results | length }})</summary>
+        <ul class="mt-3 grid gap-3">
+          {% for r in doc.engine_results %}
+          <li class="rounded-2xl bg-zinc-100/70 p-3 dark:bg-white/[0.04]">
+            {% if r is mapping %}<p class="text-xs font-semibold">{{ r.engine or r.name or ("Engine " ~ loop.index) }}</p>{{ sa.json_facts(r, 8) }}{% else %}<p class="text-xs">{{ r }}</p>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% endif %}
+    </section>
+
+    {% if duplicates %}
+    <section class="card ring-2 ring-bad/30" aria-labelledby="dup-title">
+      <h2 id="dup-title" class="sa-card-title flex items-center gap-2 text-[#d1281e] dark:text-[#ff6b61]">{{ icon("alert", "size-5") }} Same ID number used elsewhere</h2>
+      <p class="sa-card-sub">The peppered hash of this ID number matches {{ duplicates | length }} other document{{ 's' if duplicates | length != 1 }}.</p>
+      <ul class="mt-4 grid gap-2">
+        {% for d in duplicates %}
+        <li class="flex items-center gap-3 rounded-2xl bg-zinc-50 px-3 py-2 text-sm dark:bg-white/[0.03]">
+          <span class="font-medium">#{{ d.id }}</span>
+          <span class="min-w-0 flex-1 truncate">{% if d.user_id and people.get(d.user_id) %}{{ people[d.user_id].display_name }} · {{ people[d.user_id].email }}{% elif d.employee_id %}Staff record #{{ d.employee_id }}{% else %}Unknown{% endif %}</span>
+          {{ ui.status(d.status) }}
+          <a href="/superadmin/reviews/identity/{{ d.id }}" class="btn btn-ghost btn-sm" aria-label="Open ID card #{{ d.id }}">{{ icon("chevron-right", "size-4") }}</a>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  {% endif %}
+  </div>
+
+  {# ============================================================== decision #}
+  <div class="min-w-0">
+    {{ sa.decision(action, form, errors, decidable, subject_label, "This item is " ~ (state | humanize | lower) ~ " - only items waiting in the review queue can be decided here.") }}
+  </div>
+</div>
+{% endblock %}

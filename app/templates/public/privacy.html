@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "public/_macros.html" as pub with context %}
+{% block title %}Privacy{% endblock %}
+{% block description %}What IronPulse collects, how ID cards are encrypted, how location is used, how long data is kept and your rights.{% endblock %}
+{% block content %}
+<div class="relative isolate">
+  <div class="pub-page-glow" aria-hidden="true"></div>
+
+  <header class="mx-auto mb-10 max-w-3xl text-center animate-fade-up">
+    <p class="eyebrow mb-2">Legal</p>
+    <h1 class="pub-h2 sm:!text-5xl">Privacy notice</h1>
+    <p class="mt-3 text-sm muted">Last updated {{ updated }}</p>
+  </header>
+
+  <section class="mx-auto grid max-w-5xl gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Privacy at a glance">
+    {% for ico, title, body in [
+        ("lock", "ID cards encrypted", "Scans are encrypted at rest; numbers are stored masked."),
+        ("camera", "No face photos kept", "Face photos used for checks are never stored."),
+        ("map-pin", "Location on request", "Only when you tap “Use my location”."),
+        ("clock", retention_days ~ "-day deletion", "Deleted accounts are erased after " ~ retention_days ~ " days."),
+    ] %}
+    <div class="card-flat">
+      <span class="grid size-10 place-items-center rounded-2xl bg-accent/10 text-accent dark:text-[#64b5ff]">{{ icon(ico, "size-5") }}</span>
+      <p class="mt-3 font-semibold">{{ title }}</p>
+      <p class="mt-1 text-sm muted">{{ body }}</p>
+    </div>
+    {% endfor %}
+  </section>
+
+  <div class="mx-auto mt-12 grid max-w-6xl gap-10 lg:grid-cols-[220px_minmax(0,1fr)]">
+    <aside>{{ pub.toc([("collect", "What we collect"), ("ids", "ID cards & photos"), ("location", "Location"), ("health", "Health data"),
+        ("ai", "AI processing"), ("sharing", "Who sees what"), ("security", "Security"), ("retention", "Retention & deletion"),
+        ("rights", "Your rights"), ("contact", "Contact")]) }}</aside>
+
+    <article class="prose-ip pub-legal min-w-0">
+      <p>IronPulse is a <strong>student-grade project</strong>. This notice explains, in plain language, what the app stores and why. It is not legal advice; see the <a href="/terms">Terms &amp; disclaimer</a>.</p>
+
+      <section id="collect">
+        <h2>What we collect</h2>
+        <ul>
+          <li><strong>Account details:</strong> name, e-mail, phone, date of birth, password (stored only as an Argon2id hash), time zone and city.</li>
+          <li><strong>Guardian details</strong> for members under 18 (name, phone, e-mail, relation).</li>
+          <li><strong>Gym data</strong> entered by owners: branches, addresses, opening hours, photos, registration and safety documents, plans and prices.</li>
+          <li><strong>Staff data:</strong> role, photo, documents, shifts, salary and payout details (payout details are encrypted).</li>
+          <li><strong>Activity:</strong> memberships, payments ledger, chat messages, tasks, reminders and notifications.</li>
+          <li><strong>Job enquiries</strong> sent through the jobs board (name, e-mail, phone, message, optional résumé - stored encrypted).</li>
+          <li><strong>Security logs:</strong> IP address and request metadata for rate limiting, attack detection and bans.</li>
+        </ul>
+      </section>
+
+      <section id="ids">
+        <h2>ID cards &amp; photos</h2>
+        <p>Every account except the platform administrator uploads a government ID card. ID images are <strong>encrypted at rest</strong> and only ever shown through authorised pages; ID numbers are stored masked plus a one-way hash used to detect the same ID on several accounts. Several OCR engines read the card to check it. <strong>Face photos used for presence or identity checks are never stored.</strong> Profile photos of gym owners and staff are public because members need to recognise them.</p>
+      </section>
+
+      <section id="location">
+        <h2>Location</h2>
+        <p>We only ask for your device location when you tap “Use my location” (or similar). It's used to sort gyms by distance and to apply the {{ offline_km }} km rule for offline memberships, and - at the branch desk - to confirm you're within {{ presence_km }} km of the branch. If you're signed in you can save it to your account; otherwise it lives only in the page address. You can always use your city instead.</p>
+      </section>
+
+      <section id="health">
+        <h2>Health data</h2>
+        <p>If you choose to enter health conditions, allergies, injuries or readings (such as heart rate), they're used to tailor plans and to raise safety alerts. Gym admins of gyms you're a member of may see alerts that need their review. This is sensitive data: only share what you're comfortable with.</p>
+      </section>
+
+      <section id="ai">
+        <h2>AI processing</h2>
+        <p>AI features send the minimum context needed (for example your goal, level and conditions) to an AI provider: Gemma via the project's gateway or a local Docker container, and Claude only as a fallback. Outputs are advice and are re-checked by rules. Images sent for document checks are downscaled and stripped of metadata first.</p>
+      </section>
+
+      <section id="sharing">
+        <h2>Who sees what</h2>
+        <ul>
+          <li>The public sees published branches, gym details, plans, and the names, photos and roles of public staff.</li>
+          <li>Gym owners see data of their own members, staff and job applicants - never other gyms' data.</li>
+          <li>Trainers see the clients assigned to them.</li>
+          <li>The platform administrator can review security events, verification queues and conversations to keep people safe.</li>
+          <li>We don't sell your data. E-mails go through the configured mail server; payments through the payment gateway.</li>
+        </ul>
+      </section>
+
+      <section id="security">
+        <h2>Security</h2>
+        <p>Strict content-security policy, CSRF protection, rate limits, attack detection, Argon2id password hashing and encryption at rest for private files. Uploaded images are re-encoded to strip hidden metadata (including GPS). No system is perfectly secure - see the disclaimer.</p>
+      </section>
+
+      <section id="retention">
+        <h2>Retention &amp; deletion</h2>
+        <p>When you delete your account it's <strong>kept for {{ retention_days }} days and then erased</strong>, along with your files. Payment records keep an anonymised label so gyms' books stay correct. <strong>One person, one account - forever:</strong> the e-mail address, phone number and ID number(s) of a deleted account (or one disabled for a conduct violation) can never open a new account. For that, IronPulse keeps only a keyed hash of each - a one-way fingerprint made with a secret key, never the e-mail, number or ID itself - indefinitely; it contains no other personal data (Terms, section 17).</p>
+      </section>
+
+      <section id="rights">
+        <h2>Your rights</h2>
+        <ul>
+          <li>See and correct your details on your account page.</li>
+          <li>Delete your account at any time (with the {{ retention_days }}-day window above).</li>
+          <li>Ask what we store about you or object to processing by contacting the administrator.</li>
+          <li>Guardians can contact us about a minor's account.</li>
+        </ul>
+      </section>
+
+      <section id="contact">
+        <h2>Contact</h2>
+        <p>Questions about privacy? E-mail the platform administrator at <a href="mailto:{{ contact }}">{{ contact }}</a>.</p>
+      </section>
+    </article>
+  </div>
+</div>
+{% endblock %}

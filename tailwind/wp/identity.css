@@ -1,0 +1,147 @@
+/* identity work-package styles (use @layer components { ... }; prefer utility classes in templates)
+ * WP-H: ID-card verification - status hero, stepper, OCR engine cards, check list, privacy-blurred card
+ * images, drag & drop upload zones and the submission history. Every custom colour has a dark: variant. */
+@layer components {
+  /* ---------- status hero */
+  .idv-hero { @apply relative isolate overflow-hidden; }
+  .idv-hero::before {
+    content: "";
+    @apply pointer-events-none absolute -right-24 -top-28 -z-10 size-80 rounded-full opacity-70 blur-3xl dark:opacity-40;
+    background: radial-gradient(closest-side, rgb(10 132 255 / 0.22), transparent);
+  }
+  .idv-hero[data-tone="green"]::before { background: radial-gradient(closest-side, rgb(48 209 88 / 0.24), transparent); }
+  .idv-hero[data-tone="amber"]::before { background: radial-gradient(closest-side, rgb(255 159 10 / 0.24), transparent); }
+  .idv-hero[data-tone="red"]::before { background: radial-gradient(closest-side, rgb(255 69 58 / 0.22), transparent); }
+
+  .idv-hero-icon {
+    @apply relative grid size-24 shrink-0 place-items-center overflow-hidden rounded-[30px] text-white shadow-xl;
+    background: linear-gradient(140deg, #0a84ff, #5e5ce6 60%, #bf5af2);
+    box-shadow: 0 18px 40px -18px rgb(94 92 230 / 0.65);
+  }
+  .idv-hero-icon[data-tone="green"] { background: linear-gradient(140deg, #30d158, #0fb39a); box-shadow: 0 18px 40px -18px rgb(48 209 88 / 0.6); }
+  .idv-hero-icon[data-tone="amber"] { background: linear-gradient(140deg, #ff9f0a, #ff6a3d); box-shadow: 0 18px 40px -18px rgb(255 159 10 / 0.6); }
+  .idv-hero-icon[data-tone="red"] { background: linear-gradient(140deg, #ff453a, #d1281e); box-shadow: 0 18px 40px -18px rgb(255 69 58 / 0.6); }
+  .idv-scan {
+    @apply pointer-events-none absolute inset-x-3 h-8 rounded-full;
+    background: linear-gradient(180deg, transparent, rgb(255 255 255 / 0.55), transparent);
+    animation: idv-scan 1.8s var(--ease-snappy) infinite alternate;
+  }
+  @keyframes idv-scan {
+    from { top: -10%; }
+    to { top: 78%; }
+  }
+
+  .idv-fact { @apply min-w-0 rounded-2xl bg-zinc-100/80 px-3.5 py-2.5 dark:bg-white/[0.05]; }
+  .idv-fact dt { @apply text-[11px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400; }
+  .idv-fact dd { @apply mt-0.5 text-sm font-semibold text-ink dark:text-white; }
+
+  /* ---------- gauges */
+  .idv-ring-arc { transition: stroke-dasharray 0.9s var(--ease-spring); }
+  .idv-progress {
+    @apply block h-1.5 w-full appearance-none overflow-hidden rounded-full border-0 bg-zinc-200 text-accent dark:bg-white/10;
+  }
+  .idv-progress::-webkit-progress-bar { @apply rounded-full bg-transparent; }
+  .idv-progress::-webkit-progress-value { @apply rounded-full bg-accent; transition: width 0.6s var(--ease-spring); }
+  .idv-progress::-moz-progress-bar { @apply rounded-full bg-accent; }
+  .idv-progress[data-tone="green"]::-webkit-progress-value { @apply bg-ok; }
+  .idv-progress[data-tone="green"]::-moz-progress-bar { @apply bg-ok; }
+  .idv-progress[data-tone="amber"]::-webkit-progress-value { @apply bg-warn; }
+  .idv-progress[data-tone="amber"]::-moz-progress-bar { @apply bg-warn; }
+  .idv-progress[data-tone="red"]::-webkit-progress-value { @apply bg-bad; }
+  .idv-progress[data-tone="red"]::-moz-progress-bar { @apply bg-bad; }
+
+  /* ---------- stepper: vertical on phones, horizontal from sm */
+  .idv-steps { @apply grid gap-5 sm:grid-cols-4 sm:gap-3; }
+  .idv-step { @apply relative flex items-start gap-3 sm:flex-col sm:gap-3; }
+  .idv-step:not(:last-child)::after {
+    content: "";
+    @apply absolute left-[17px] top-11 -bottom-4 w-0.5 rounded-full bg-zinc-200 dark:bg-white/10
+      sm:left-12 sm:right-1 sm:top-[17px] sm:bottom-auto sm:h-0.5 sm:w-auto;
+  }
+  .idv-step[data-state="done"]:not(:last-child)::after { @apply bg-ok/70; }
+  .idv-step-dot {
+    @apply relative z-10 grid size-9 shrink-0 place-items-center rounded-full bg-zinc-100 text-zinc-500 ring-4 ring-white
+      transition duration-500 ease-spring dark:bg-elevated-dark dark:text-zinc-400 dark:ring-surface-dark;
+  }
+  .idv-step[data-state="done"] .idv-step-dot { @apply bg-ok text-white; }
+  .idv-step[data-state="current"] .idv-step-dot { @apply bg-accent text-white; box-shadow: 0 0 0 7px rgb(10 132 255 / 0.16); }
+  .idv-step[data-state="warn"] .idv-step-dot { @apply bg-warn text-white; }
+  .idv-step[data-state="fail"] .idv-step-dot { @apply bg-bad text-white; }
+  .idv-step[data-state="todo"] .idv-step-label { @apply text-zinc-500 dark:text-zinc-400; }
+
+  /* ---------- OCR engine cards */
+  .idv-engine {
+    @apply rounded-[22px] bg-zinc-50 p-4 ring-1 ring-black/[0.05] transition duration-300 ease-spring
+      dark:bg-white/[0.03] dark:ring-white/[0.07];
+  }
+  .idv-engine[data-agree="1"] { @apply bg-ok/[0.07] ring-ok/40 dark:bg-ok/[0.09] dark:ring-ok/35; }
+  .idv-engine[data-variant="empty"] { @apply ring-warn/35 dark:ring-warn/35; }
+  .idv-engine[data-variant="skipped"], .idv-engine[data-state="unavailable"] { @apply opacity-75; }
+  .idv-engine[data-state="waiting"] { @apply ring-accent/30 dark:ring-accent/35; }
+  .idv-engine-icon {
+    @apply grid size-9 shrink-0 place-items-center rounded-xl bg-white text-accent shadow-sm ring-1 ring-black/[0.05]
+      dark:bg-white/10 dark:text-[#64b5ff] dark:ring-white/10;
+  }
+  .idv-engine-icon[data-kind="ai"] { @apply text-violet dark:text-[#d8a4ff]; }
+
+  /* ---------- checks */
+  .idv-check-icon { @apply mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-zinc-500/15 text-zinc-500 dark:text-zinc-300; }
+  .idv-check-icon[data-status="pass"] { @apply bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]; }
+  .idv-check-icon[data-status="fail"] { @apply bg-bad/15 text-[#d1281e] dark:text-[#ff6b61]; }
+  .idv-check-icon[data-status="warn"] { @apply bg-warn/15 text-[#b45309] dark:text-[#fbbf24]; }
+
+  /* ---------- privacy-blurred card images */
+  .idv-thumb { @apply relative overflow-hidden rounded-[22px] bg-zinc-100 ring-1 ring-black/[0.05] dark:bg-white/[0.04] dark:ring-white/[0.08]; }
+  .idv-thumb-img { @apply block aspect-[1.586] w-full object-cover transition duration-500 ease-spring; }
+  .idv-thumb[data-hidden="1"] .idv-thumb-img { filter: blur(16px) saturate(0.85); transform: scale(1.08); }
+  .idv-thumb-bar {
+    @apply absolute inset-x-2 bottom-2 flex items-center justify-between gap-2 rounded-2xl bg-black/55 px-3 py-1.5 text-white
+      backdrop-blur-md;
+  }
+  .idv-thumb-btn {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-white/90 transition
+      hover:bg-white/15 hover:text-white focus-visible:outline-white;
+  }
+
+  /* ---------- drag & drop upload zones */
+  .idv-drop {
+    @apply relative flex min-h-36 flex-col items-stretch justify-end gap-3 overflow-hidden rounded-[20px] border border-dashed
+      border-zinc-300 bg-white/70 p-3 transition duration-300 ease-spring dark:border-white/15 dark:bg-white/[0.03];
+  }
+  .idv-drop:focus-within { @apply border-accent ring-2 ring-accent/30; }
+  .idv-drop[data-dragging="1"] { @apply scale-[1.01] border-accent bg-accent/[0.06] dark:bg-accent/10; }
+  .idv-drop[data-filled="1"] { @apply border-solid border-ok/50 dark:border-ok/40; }
+  .idv-drop-error { @apply border-bad/60 dark:border-bad/60; }
+  .idv-drop-empty { @apply flex flex-1 flex-col items-center justify-center gap-2 px-2 pt-2 text-center; }
+  .idv-drop-icon {
+    @apply grid size-10 place-items-center rounded-2xl bg-zinc-900/[0.05] text-zinc-600 dark:bg-white/10 dark:text-zinc-300;
+  }
+  .idv-drop-preview { @apply aspect-[1.586] w-full rounded-xl object-cover ring-1 ring-black/[0.06] dark:ring-white/10; }
+  .idv-drop-input { @apply block w-full min-w-0 text-xs text-zinc-500 dark:text-zinc-400; }
+
+  /* ---------- submission history */
+  .idv-history { @apply rounded-[22px] bg-zinc-50 ring-1 ring-black/[0.04] transition dark:bg-white/[0.03] dark:ring-white/[0.06]; }
+  .idv-history[open] { @apply bg-white shadow-sm ring-black/[0.07] dark:bg-white/[0.05] dark:ring-white/[0.1]; }
+  .idv-history-summary {
+    @apply flex cursor-pointer list-none items-center gap-3 rounded-[22px] px-4 py-3.5 focus-visible:outline-2
+      focus-visible:outline-offset-2;
+  }
+  .idv-history-summary::-webkit-details-marker { display: none; }
+  .idv-history-icon { @apply grid size-10 shrink-0 place-items-center rounded-2xl bg-zinc-500/15 text-zinc-600 dark:text-zinc-300; }
+  .idv-history-icon[data-tone="green"] { @apply bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]; }
+  .idv-history-icon[data-tone="amber"] { @apply bg-warn/15 text-[#b45309] dark:text-[#fbbf24]; }
+  .idv-history-icon[data-tone="red"] { @apply bg-bad/15 text-[#d1281e] dark:text-[#ff6b61]; }
+  .idv-history-icon[data-tone="blue"] { @apply bg-accent/15 text-accent-strong dark:text-[#64b5ff]; }
+  .idv-history-chevron { @apply hidden text-zinc-400 transition duration-300 sm:block; }
+  .idv-history[open] .idv-history-chevron { @apply rotate-180; }
+  .idv-history-body { @apply border-t border-black/[0.05] px-4 pb-4 pt-4 dark:border-white/[0.06]; }
+
+  /* ---------- review decision cards */
+  .idv-choice {
+    @apply flex cursor-pointer items-start gap-3 rounded-[20px] bg-zinc-50 p-4 ring-1 ring-black/[0.06] transition
+      duration-200 ease-spring hover:ring-black/15 dark:bg-white/[0.03] dark:ring-white/[0.08] dark:hover:ring-white/20;
+  }
+  .idv-choice:has(input:checked) { @apply bg-accent/[0.06] ring-2 ring-accent/60 dark:bg-accent/10; }
+  .idv-choice:has(input[value="reject"]:checked) { @apply bg-bad/[0.06] ring-bad/60 dark:bg-bad/10; }
+  .idv-choice:focus-within { @apply ring-2 ring-accent/50; }
+}

@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "customer/live/_macros.html" as lv with context %}
+{% block title %}Live coach{% endblock %}
+{% block content %}
+<div data-component="live-start" data-tts="{{ tts | jsonattr }}" class="space-y-8">
+  {% call ui.page_header("Live coach", "A voice-guided workout with a coach who listens, adapts to how you feel and stops the moment something isn't right.", eyebrow="Live workout") %}
+    {{ ui.ai_chip(disclaimer=False) }}
+  {% endcall %}
+
+  {% if resumable %}
+  <div class="card-flat flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between animate-fade-up" role="status">
+    <div class="flex items-center gap-3">
+      <span class="grid size-11 shrink-0 place-items-center rounded-2xl bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ lv.svg("play", "size-5") }}</span>
+      <div class="min-w-0">
+        <p class="font-semibold">You have a workout in progress</p>
+        <p class="truncate text-sm muted">{{ resumable.title }} · {{ resumable.done }} of {{ resumable.total }} exercises done</p>
+      </div>
+    </div>
+    <a href="/me/live/{{ resumable.id }}" class="btn btn-primary">{{ lv.svg("play", "size-4") }} Resume session</a>
+  </div>
+  {% endif %}
+
+  {% if error %}{{ ui.alert(error, "danger") }}{% endif %}
+
+  <form method="post" action="/me/live/start" class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]" data-live-form data-no-busy novalidate>
+    {{ ui.csrf() }}
+    {% if plan %}<input type="hidden" name="plan_id" value="{{ plan.id }}">{% endif %}
+    <div class="min-w-0 space-y-8">
+      {# ------------------------------------------------------------ hero #}
+      <section class="live-hero card animate-fade-up p-0" aria-labelledby="live-hero-title">
+        <div class="grid items-center gap-6 p-6 sm:grid-cols-[200px_minmax(0,1fr)] sm:p-8">
+          <div class="live-preview-face">
+            <canvas data-component="coach-face" data-emotion="happy" class="live-face-canvas" aria-hidden="true"></canvas>
+          </div>
+          <div class="min-w-0 text-center sm:text-left">
+            <p class="eyebrow">Meet Pulse, your coach</p>
+            <h2 id="live-hero-title" class="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Hi {{ first_name }}, ready to move?</h2>
+            <p class="mt-2 text-[15px] muted">Pulse counts your sets, times your rests and talks you through every move. Say <em>easier</em>, <em>next</em> or <em>pause</em> - or tell it if something hurts.</p>
+            <div class="mt-5 flex flex-col items-center gap-3 sm:flex-row sm:items-center">
+              <button type="submit" class="btn btn-primary btn-lg w-full sm:w-auto" data-start-btn>
+                {{ lv.svg("play", "size-5") }} Start live session
+              </button>
+              <p class="text-sm muted" data-selection aria-live="polite"></p>
+            </div>
+            <p class="mt-3 hidden text-sm font-medium text-bad" data-start-error role="alert"></p>
+          </div>
+        </div>
+      </section>
+
+      {# ------------------------------------------------------------ plan days #}
+      <section aria-labelledby="live-plan-title" class="animate-fade-up">
+        <div class="mb-3 flex items-end justify-between gap-3">
+          <div>
+            <h2 id="live-plan-title" class="section-title">Today's workout</h2>
+            <p class="text-sm muted">{% if plan %}From “{{ plan.title }}”. Pick any day.{% else %}Your personal plan appears here.{% endif %}</p>
+          </div>
+          <a href="/me/coach" class="btn btn-ghost btn-sm shrink-0">{{ icon("bolt", "size-4") }} {{ "View plan" if plan else "Get a plan" }}</a>
+        </div>
+        {% if options.days %}
+        <div class="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-labelledby="live-plan-title">
+          {% for d in options.days %}
+          <label class="live-option" data-title="{{ d.name }}">
+            <input type="radio" name="pick" value="day-{{ d.index }}" class="sr-only" {{ 'checked' if loop.index0 == options.today_index }} {{ 'disabled' if not d.count }}>
+            <span class="live-check">{{ icon("check", "size-3.5") }}</span>
+            <span class="flex items-center gap-2 pr-8">
+              <span class="badge {{ 'badge-blue' if loop.index0 == options.today_index else 'badge-zinc' }}">{{ 'Today' if loop.index0 == options.today_index else 'Day ' ~ (d.index + 1) }}</span>
+              {% if d.swaps %}<span class="badge badge-amber">{{ icon("shield", "size-3.5") }} {{ d.swaps }} safety swap{{ 's' if d.swaps != 1 }}</span>{% endif %}
+            </span>
+            <span class="min-w-0">
+              <span class="block truncate text-base font-semibold">{{ d.name }}</span>
+              {% if d.focus %}<span class="block truncate text-sm muted">{{ d.focus }}</span>{% endif %}
+            </span>
+            <span class="line-clamp-2 text-xs muted">{{ d.names | join(" · ") }}{% if d.count > d.names | length %} · +{{ d.count - d.names | length }} more{% endif %}</span>
+            <span class="mt-auto flex flex-wrap gap-1.5">
+              <span class="live-pill">{{ lv.svg("timer", "size-3.5") }} ~{{ d.minutes }} min</span>
+              <span class="live-pill">{{ d.count }} exercise{{ 's' if d.count != 1 }}</span>
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="card-muted flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div class="flex items-start gap-3">
+            <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("sparkles", "size-5") }}</span>
+            <div>
+              <p class="font-semibold">No training plan yet</p>
+              <p class="text-sm muted">Generate a plan in Coach to train your own programme live - or start a quick session below right now.</p>
+            </div>
+          </div>
+          <a href="/me/coach" class="btn btn-secondary btn-sm shrink-0">Open Coach</a>
+        </div>
+        {% endif %}
+      </section>
+
+      {# ------------------------------------------------------------ quick sessions #}
+      <section aria-labelledby="live-quick-title" class="animate-fade-up">
+        <div class="mb-3">
+          <h2 id="live-quick-title" class="section-title">Quick sessions</h2>
+          <p class="text-sm muted">Built from our exercise library and filtered for your health profile{% if condition_labels %} ({{ condition_labels | join(", ") }}){% endif %}.</p>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-labelledby="live-quick-title">
+          {% for q in options.quick %}
+          <label class="live-option" data-title="{{ q.title }}">
+            <input type="radio" name="pick" value="quick-{{ q.key }}" class="sr-only" {{ 'checked' if (not options.days and loop.first) }} {{ 'disabled' if not q.count }}>
+            <span class="live-check">{{ icon("check", "size-3.5") }}</span>
+            <span class="flex items-center gap-3 pr-8">
+              <span class="live-icon bg-gradient-to-br from-accent/15 to-violet/15 text-accent dark:text-[#8cc8ff]">{{ icon(q.icon, "size-5") }}</span>
+              <span class="min-w-0">
+                <span class="block truncate text-base font-semibold">{{ q.title }}</span>
+                <span class="block text-sm muted">{{ q.subtitle }}</span>
+              </span>
+            </span>
+            <span class="line-clamp-2 text-xs muted">{{ q.names | join(" · ") }}{% if q.count > q.names | length %} · +{{ q.count - q.names | length }} more{% endif %}</span>
+            <span class="mt-auto flex flex-wrap gap-1.5">
+              <span class="live-pill">{{ lv.svg("timer", "size-3.5") }} ~{{ q.minutes }} min</span>
+              <span class="live-pill">{{ q.count }} exercise{{ 's' if q.count != 1 }}</span>
+              {% if q.skipped %}<span class="live-pill">{{ icon("shield", "size-3") }} adapted for you</span>{% endif %}
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+
+    {# ------------------------------------------------------------ sidebar #}
+    <aside class="min-w-0 space-y-6">
+      <section class="card animate-fade-up" aria-labelledby="live-voice-title">
+        <p class="eyebrow">Voice &amp; microphone</p>
+        <h2 id="live-voice-title" class="section-title mt-1">How Pulse talks with you</h2>
+        <div class="mt-5 space-y-4">
+          <label class="flex items-center justify-between gap-4">
+            <span class="min-w-0">
+              <span class="block font-medium">AI voice</span>
+              <span class="block text-xs muted">Spoken cues and replies. Captions always stay on.</span>
+            </span>
+            <input type="checkbox" name="voice" value="1" class="live-switch" checked data-pref="voice" aria-describedby="live-voice-engine">
+          </label>
+          <label class="flex items-center justify-between gap-4">
+            <span class="min-w-0">
+              <span class="block font-medium">Microphone</span>
+              <span class="block text-xs muted">Talk hands-free. Turn it off to type or use push-to-talk.</span>
+            </span>
+            <input type="checkbox" name="mic" value="1" class="live-switch" checked data-pref="mic">
+          </label>
+        </div>
+        <div class="mt-5 flex items-center gap-2 rounded-2xl bg-zinc-900/[0.04] px-3.5 py-2.5 text-xs dark:bg-white/[0.05]" id="live-voice-engine">
+          <span class="ai-dot" data-state="{{ 'online' if tts.state == 'up' else ('degraded' if tts.state == 'unknown' else 'offline') }}" data-tts-dot></span>
+          <span data-tts-label>{% if tts.state == "up" %}Natural Kokoro voice ready{% elif tts.state == "unknown" %}Natural Kokoro voice{% else %}Soft browser voice (Kokoro offline){% endif %}</span>
+        </div>
+        <p class="mt-3 hidden text-xs font-medium text-[#b45309] dark:text-[#fbbf24]" data-mic-unsupported>
+          Voice input isn't supported in this browser - type instead (Chrome, Edge and Safari support it).
+        </p>
+        <details class="mt-4 text-xs muted">
+          <summary class="cursor-pointer font-medium text-zinc-600 dark:text-zinc-300">Privacy</summary>
+          <p class="mt-2">Speech recognition is done by your browser's speech service (Chrome sends audio to Google, Safari uses Apple). IronPulse never records or stores audio - only the text of what you say during a session, so your coach can follow the conversation. Turn the microphone off to type instead.</p>
+        </details>
+      </section>
+
+      {% if ai_plan %}
+      <section class="card animate-fade-up">
+        <div class="flex items-start gap-3">
+          <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("chat", "size-5") }}</span>
+          <div>
+            <p class="font-semibold">Chat live with your coach</p>
+            <p class="mt-1 text-sm muted">Ask about form, swap moves, or just talk it through - Pulse answers in a couple of seconds and never lets AI override a safety stop.</p>
+          </div>
+        </div>
+        {{ ui.ai_disclaimer() }}
+      </section>
+      {% else %}
+      <section class="card relative overflow-hidden animate-fade-up">
+        <div class="pointer-events-none absolute -right-12 -top-12 size-40 rounded-full bg-gradient-to-br from-accent/25 to-violet/25 blur-3xl"></div>
+        <div class="relative">
+          <span class="badge badge-violet">{{ icon("sparkles", "size-3.5") }} AI plans</span>
+          <p class="mt-3 font-semibold">Voice-guided sessions are included</p>
+          <p class="mt-1 text-sm muted">Spoken cues, timers and voice commands work on every membership. Free conversation with the AI coach comes with plans that include AI.</p>
+          <a href="/me/subscriptions" class="btn btn-secondary btn-sm mt-4">{{ icon("sparkles", "size-4") }} See AI plans</a>
+        </div>
+      </section>
+      {% endif %}
+
+      {% with compact=True %}{% include "partials/gear_card.html" %}{% endwith %}
+
+      <section class="card-muted animate-fade-up" aria-labelledby="live-safety-title">
+        <div class="flex items-start gap-3">
+          <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-bad/12 text-bad">{{ icon("shield", "size-5") }}</span>
+          <div>
+            <h2 id="live-safety-title" class="font-semibold">Safety comes first</h2>
+            <p class="mt-1 text-sm muted">Say “my chest hurts”, “I feel dizzy” or tap <strong>I feel discomfort</strong> at any time. Pulse stops at once, gives emergency guidance (call {{ emergency.number }}) and alerts your gym team.</p>
+          </div>
+        </div>
+      </section>
+
+      {% if recent %}
+      <section class="card animate-fade-up" aria-labelledby="live-recent-title">
+        <h2 id="live-recent-title" class="section-title">Recent sessions</h2>
+        <ul class="mt-4 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+          {% for r in recent %}
+          <li class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+            <div class="min-w-0">
+              <p class="truncate text-sm font-medium">{{ r.title }}</p>
+              <p class="text-xs muted">{{ r.started_at | timeago }} · {{ r.done }}/{{ r.total }} exercises</p>
+            </div>
+            <div class="flex shrink-0 items-center gap-2">
+              {{ lv.status_badge(r.status) }}
+              {% if r.open or r.status == "stopped_for_safety" %}<a href="/me/live/{{ r.id }}" class="btn btn-ghost btn-sm" aria-label="Open {{ r.title }}">{{ icon("chevron-right", "size-4") }}</a>{% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+    </aside>
+  </form>
+</div>
+{% endblock %}

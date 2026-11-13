@@ -1,0 +1,28 @@
+# NVIDIA GPU acceleration for the Gemma failsafe (Ollama) and the Kokoro voice.
+# Requires an NVIDIA driver + the NVIDIA Container Toolkit (Linux) or Docker Desktop with WSL 2 GPU support (Windows).
+#
+#   docker compose --env-file .env -f docker/compose.yml -f docker/compose.gpu.yml up -d ollama ollama-pull
+#   docker compose --env-file .env -f docker/compose.yml -f docker/compose.gpu.yml --profile voice up -d kokoro
+#
+# Without a GPU keep using docker/compose.yml alone - everything works on the CPU, just slower.
+
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  kokoro:
+    # CUDA build of the same Kokoro-FastAPI release
+    image: ghcr.io/remsky/kokoro-fastapi-gpu:v0.9.2
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_form.html" as sf with context %}
+{% block title %}Change position · {{ emp.display_name }}{% endblock %}
+{% block content %}
+{{ ui.page_header("Change " ~ emp.full_name ~ "'s position", "Currently " ~ current_label ~ ". Choose the new role - everything else is filled in from their current record.", eyebrow=gym.name, back="/owner/staff/" ~ emp.id) }}
+
+<div class="mb-8 animate-fade-up">{{ ui.alert("Positions are never edited in place. Saving ends the current employment as “Position change” - they can always rejoin - and invites " ~ emp.full_name ~ " to the new position through the normal invitation and the verification that role needs (certifications may differ). The current record stays in the staff history.", "info", "Why a new employment?") }}</div>
+
+{{ ui.form_errors(errors) }}
+{% if errors %}
+  <p class="-mt-3 mb-6 text-xs muted">{{ icon("info", "size-3.5 inline -mt-0.5") }} For your security, chosen files are not kept after an error - please select them again.</p>
+{% endif %}
+
+<form method="post" action="/owner/staff/{{ emp.id }}/change-position" enctype="multipart/form-data" class="animate-fade-up" data-component="staff-form"
+      data-confirm="End {{ emp.full_name }}'s current position and invite them to the new one?">
+  {{ ui.csrf() }}
+  {{ sf.staff_fields(editing=True, linked=True, employee=emp, email_help="The new invitation goes to the same person - their current address.") }}
+  <div class="mt-8">{{ sf.document_fields() }}</div>
+
+  <div class="glass sticky bottom-4 z-20 mt-10 flex flex-col gap-3 rounded-[24px] p-3 pl-5 shadow-lg shadow-black/10 ring-1 ring-black/[0.06] sm:flex-row sm:items-center sm:justify-between dark:ring-white/10">
+    <p class="text-xs muted">{{ icon("info", "size-3.5 inline -mt-0.5") }} The photo is kept unless you choose a new one. The hire date is the first day in the new position.</p>
+    <div class="flex gap-2">
+      <a href="/owner/staff/{{ emp.id }}" class="btn btn-ghost flex-1 sm:flex-none">Cancel</a>
+      <button type="submit" class="btn btn-primary flex-1 sm:flex-none">{{ icon("send", "size-4") }} Change position</button>
+    </div>
+  </div>
+</form>
+{% endblock %}

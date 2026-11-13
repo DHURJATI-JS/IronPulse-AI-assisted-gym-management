@@ -1,0 +1,51 @@
+{#- WP-F chat macros. Import WITH CONTEXT: {% import "chat/_macros.html" as cm with context %} -#}
+{% import "_ui.html" as ui with context %}
+{% import "chat/_safety.html" as sp with context %}
+
+{#- Small round avatar from a ready URL (payload ``sender_photo``) or initials -#}
+{% macro face(url, name, size="size-7", text="text-[10px]") -%}
+<span class="avatar {{ size }} {{ text }}">{% if url %}<img src="{{ url }}" alt="" loading="lazy">{% else %}{{ name | initials }}{% endif %}</span>
+{%- endmacro %}
+
+{#- One conversation in the sidebar list -#}
+{% macro thread_item(t, active=False, qs="") %}
+<li>
+  <a href="/chat/{{ t.id }}{{ ('?' ~ qs) if qs }}" class="chat-item {{ 'chat-item-unread' if t.unread }}" data-thread-item="{{ t.id }}" data-team="{{ '1' if t.team else '0' }}"{% if active %} aria-current="page"{% endif %}>
+    <span class="relative shrink-0">
+      {{ ui.avatar(t.photo, t.name, "size-11", "text-sm") }}
+      {% if t.team %}<span class="absolute -bottom-0.5 -right-0.5 grid size-5 place-items-center rounded-full bg-white text-accent ring-2 ring-white dark:bg-surface-dark dark:ring-surface-dark" title="Gym team">{{ icon("users", "size-3") }}</span>{% endif %}
+    </span>
+    <span class="min-w-0 flex-1">
+      <span class="flex items-baseline justify-between gap-2">
+        <span class="chat-item-name truncate text-[15px] font-medium">{{ t.name }}</span>
+        <span class="flex shrink-0 items-center gap-1.5">{% if t.safety %}{{ sp.badge() }}{% endif %}<time class="text-[11px] tabular-nums muted" datetime="{{ t.last_at.isoformat() if t.last_at else '' }}" data-time>{{ t.when }}</time></span>
+      </span>
+      <span class="block truncate text-xs muted">{{ t.subtitle }}</span>
+      <span class="mt-0.5 flex items-center gap-2">
+        <span class="chat-item-preview min-w-0 flex-1 truncate text-[13px] muted" data-preview>{{ t.preview }}</span>
+        {% if t.deleted %}<span class="badge badge-zinc shrink-0">{{ icon("lock", "size-3") }}Read-only</span>
+        {% elif t.closed %}<span class="badge badge-zinc shrink-0">Closed</span>{% endif %}
+        <span class="chat-unread-badge shrink-0" data-unread aria-label="{{ t.unread }} unread"{% if not t.unread %} hidden{% endif %}>{{ t.unread }}</span>
+      </span>
+    </span>
+  </a>
+</li>
+{% endmacro %}
+
+{#- One message row (server-rendered; 60-chat.js builds identical markup for live messages) -#}
+{% macro message_row(r) %}
+{% if r.system %}
+<div class="chat-row chat-row-gap justify-center" data-msg-id="{{ r.id }}" data-ts="{{ r.created_at }}">
+  <p class="chat-bubble chat-bubble-system{{ ' chat-bubble-safety' if r.body.startswith('Safety first:') }}">{{ r.body }}</p>
+</div>
+{% else %}
+<div class="chat-row {{ 'chat-row-mine' if r.mine }} {{ 'chat-row-gap' if r.first_of_group }}" data-msg-id="{{ r.id }}" data-sender="{{ r.sender_id or '' }}" data-role="{{ r.sender_role }}" data-ts="{{ r.created_at }}">
+  {% if not r.mine %}<span class="chat-avatar-slot">{% if r.first_of_group %}{{ face(r.sender_photo, r.sender_name) }}{% endif %}</span>{% endif %}
+  <div class="chat-bubble {{ 'chat-bubble-mine' if r.mine else 'chat-bubble-theirs' }}">
+    {% if not r.mine and r.first_of_group %}<p class="chat-sender">{{ r.sender_name }} · {{ r.sender_label }}</p>{% endif %}
+    <p class="chat-body">{{ r.body }}</p>
+    <p class="chat-meta"><time datetime="{{ r.created_at }}">{{ r.time }}</time></p>
+  </div>
+</div>
+{% endif %}
+{% endmacro %}

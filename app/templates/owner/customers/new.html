@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/customers/_macros.html" as om with context %}
+{% import "identity/_fields.html" as idf with context %}
+{% block title %}Register a member{% endblock %}
+{% block content %}
+{% call ui.page_header("Register a member", "Fill in the form yourself, or describe the member in a few sentences and let the AI intake fill it for you. You always review everything before it's saved.", eyebrow="Members", back="/owner/customers") %}{% endcall %}
+
+{% if not gyms %}
+  {{ ui.empty("Create your gym first", "Members are registered to one of your gyms. Create your gym, then come back to add members.", "building", "Create a gym", "/owner/gyms/new") }}
+{% else %}
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
+
+  {# ============================================================ AI intake (first on mobile) #}
+  <aside id="ai-intake" class="order-first space-y-4 lg:order-last lg:sticky lg:top-24" aria-labelledby="intake-title">
+    <section class="card relative overflow-hidden animate-fade-up" data-component="intake-ai" data-url="/owner/customers/intake" data-form="register-form" data-min="{{ text_min }}" data-max="{{ text_max }}">
+      <div class="pointer-events-none absolute inset-x-0 -top-24 h-48 hero-gradient opacity-80" aria-hidden="true"></div>
+      <div class="relative">
+        <div class="flex items-center justify-between gap-3">
+          <span class="grid size-11 place-items-center rounded-2xl bg-gradient-to-br from-accent via-indigo to-violet text-white shadow-lg shadow-indigo/30">{{ icon("sparkles", "size-5") }}</span>
+          {{ ui.ai_chip(disclaimer=False) }}
+        </div>
+        <h2 id="intake-title" class="mt-4 text-xl font-semibold tracking-tight">AI intake</h2>
+        <p class="mt-1 text-sm muted">Type or paste what you know - name, contact, age, health conditions, guardian. Only what you write is used; nothing is invented.</p>
+        <label for="intake-text" class="sr-only">Describe the new member</label>
+        <textarea id="intake-text" rows="6" maxlength="{{ text_max }}" class="input mt-4 resize-y" data-intake-text data-component="char-count" data-min="{{ text_min }}" data-max="{{ text_max }}"
+                  placeholder="This customer's name is Tara Mehra, 16 years old, allergic to peanuts and has asthma. Phone 98765 43210. Her mother Leela Mehra (leela@example.com) is the guardian."></textarea>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" class="btn btn-primary flex-1" data-intake-run>{{ icon("sparkles", "size-4") }} <span data-intake-label>Fill with AI</span></button>
+          <button type="submit" form="register-form" class="btn btn-secondary" data-intake-save title="Submit the form as it is">{{ icon("check", "size-4") }} Save directly</button>
+        </div>
+        <p class="mt-2 text-[11px] muted">The ID card photo still has to be uploaded in the form.</p>
+
+        <div class="mt-5 space-y-3" data-intake-result hidden aria-live="polite">
+          <div class="flex items-center gap-2 text-xs">
+            <span class="chip" data-intake-provider></span>
+          </div>
+          <p class="text-sm font-medium" data-intake-summary></p>
+          <div data-intake-missing hidden>
+            <p class="text-xs font-semibold uppercase tracking-wider text-[#b45309] dark:text-[#fbbf24]">Still needed</p>
+            <ul class="mt-1.5 flex flex-wrap gap-1.5" data-intake-missing-list></ul>
+          </div>
+          <div data-intake-invalid hidden>
+            <p class="text-xs font-semibold uppercase tracking-wider text-[#d1281e] dark:text-[#ff6b61]">Please check</p>
+            <ul class="mt-1.5 space-y-1 text-sm" data-intake-invalid-list></ul>
+          </div>
+          <div data-intake-dropped hidden>
+            <p class="text-xs font-semibold uppercase tracking-wider muted">Ignored - not in your note</p>
+            <ul class="mt-1.5 space-y-1 text-xs muted" data-intake-dropped-list></ul>
+          </div>
+          <ul class="space-y-1 text-xs muted" data-intake-notes></ul>
+          <p class="flex items-start gap-1.5 text-xs muted" role="note">{{ icon("info", "size-3.5 shrink-0 mt-0.5") }}<span data-intake-disclaimer></span></p>
+        </div>
+        <p class="mt-4 hidden text-sm font-medium text-bad" data-intake-error role="alert"></p>
+      </div>
+    </section>
+    {{ ui.ai_disclaimer("Review every field before saving - health details keep the member's workouts safe.") }}
+    <div class="card-muted text-sm">
+      <p class="flex items-center gap-2 font-semibold">{{ icon("shield", "size-4 text-accent") }} What happens next</p>
+      <ul class="mt-2 space-y-1.5 muted">
+        <li>The member gets an e-mail invite to set their password (valid 7 days).</li>
+        <li>Their ID card is checked by several OCR engines.</li>
+        <li>Guardians of under-18s get a copy of every notification.</li>
+      </ul>
+    </div>
+  </aside>
+
+  {# ============================================================ manual form #}
+  <form id="register-form" method="post" action="/owner/customers/new" enctype="multipart/form-data" class="min-w-0 space-y-6" novalidate data-component="member-form">
+    {{ ui.csrf() }}
+    <input type="hidden" name="intake_source" value="{{ values.intake_source or 'owner_manual' }}" data-intake-source>
+    {{ ui.form_errors(errors.values() | list if errors else None) }}
+
+    <section class="card space-y-5 animate-fade-up" aria-labelledby="who-title">
+      <div class="flex items-center gap-3">
+        <span class="grid size-10 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("user", "size-5") }}</span>
+        <div><h2 id="who-title" class="section-title">Who's joining?</h2><p class="text-sm muted">Name and date of birth as on their ID card.</p></div>
+      </div>
+      <div class="fieldset max-sm:grid-cols-1">
+        {{ ui.field("full_name", "Full name", value=values.full_name, required=True, error=errors.get("full_name"), autocomplete="off", cls="sm:col-span-2", attrs='maxlength="120"') }}
+        {{ ui.field("date_of_birth", "Date of birth", type="date", value=values.date_of_birth, required=True, error=errors.get("date_of_birth"), attrs='max="' ~ today ~ '" data-dob', help="Members under 18 need a guardian.") }}
+        {{ ui.select("gender", "Gender", genders, value=values.gender, error=errors.get("gender"), empty="Not specified") }}
+        {{ ui.field("city", "City", value=values.city, error=errors.get("city"), autocomplete="off", attrs='maxlength="120"') }}
+        {{ ui.select("goal", "Fitness goal", goals, value=values.goal, required=True, error=errors.get("goal")) }}
+        {% if gyms | length > 1 %}
+          <div class="sm:col-span-2">
+            <label class="label" for="f-gym_id">Registering at <span class="text-bad">*</span></label>
+            <select id="f-gym_id" name="gym_id" class="input {{ 'input-error' if errors.gym_id }}" required>
+              {% for g in gyms %}<option value="{{ g.id }}" {{ 'selected' if values.gym_id == g.id | string }}>{{ g.name }}</option>{% endfor %}
+            </select>
+            {% if errors.gym_id %}<p class="field-error">{{ errors.gym_id }}</p>{% else %}<p class="help">Used for the welcome message - the member can join any of your gyms.</p>{% endif %}
+          </div>
+        {% else %}
+          <input type="hidden" name="gym_id" value="{{ gyms[0].id }}">
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="card space-y-5 animate-fade-up" aria-labelledby="contact-title">
+      <div class="flex items-center gap-3">
+        <span class="grid size-10 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("envelope", "size-5") }}</span>
+        <div><h2 id="contact-title" class="section-title">Contact</h2><p class="text-sm muted">An e-mail address (recommended) or a phone number is required.</p></div>
+      </div>
+      <div class="fieldset max-sm:grid-cols-1">
+        {{ ui.field("email", "E-mail", type="email", value=values.email, error=errors.get("email"), autocomplete="off", help="The invite to set a password is sent here.", cls="sm:col-span-2", attrs='maxlength="254"') }}
+        <div class="sm:col-span-2">
+          <label class="label" for="f-phone">Phone</label>
+          <div class="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2">
+            <label class="sr-only" for="f-country_code">Country code</label>
+            <input id="f-country_code" name="country_code" value="{{ values.country_code }}" maxlength="2" class="input text-center uppercase" aria-label="Country (ISO code)" title="Country (ISO code) used to read the phone number">
+            <input id="f-phone" name="phone" type="tel" value="{{ values.phone }}" class="input {{ 'input-error' if errors.phone }}" autocomplete="off" inputmode="tel" maxlength="32"{% if errors.phone %} aria-invalid="true" aria-describedby="e-phone"{% endif %}>
+          </div>
+          {% if errors.phone %}<p class="field-error" id="e-phone">{{ errors.phone }}</p>{% else %}<p class="help">Country code (e.g. IN) + number. Each phone number can belong to one account only.</p>{% endif %}
+        </div>
+      </div>
+    </section>
+
+    <section class="card space-y-5 animate-fade-up" aria-labelledby="health-title">
+      <div class="flex items-center gap-3">
+        <span class="grid size-10 place-items-center rounded-2xl bg-bad/10 text-bad">{{ icon("heart", "size-5") }}</span>
+        <div><h2 id="health-title" class="section-title">Health &amp; safety</h2><p class="text-sm muted">Separate entries with commas. Workouts and AI advice are filtered against these.</p></div>
+      </div>
+      <div class="fieldset max-sm:grid-cols-1">
+        {{ ui.textarea("conditions", "Conditions", value=values.conditions, rows=2, error=errors.get("conditions"), placeholder="Asthma, high blood pressure") }}
+        {{ ui.textarea("allergies", "Allergies", value=values.allergies, rows=2, error=errors.get("allergies"), placeholder="Peanuts, dust") }}
+        {{ ui.textarea("medications", "Medications", value=values.medications, rows=2, error=errors.get("medications"), placeholder="Inhaler (salbutamol)") }}
+        {{ ui.textarea("injuries", "Injuries", value=values.injuries, rows=2, error=errors.get("injuries"), placeholder="Left knee ACL (2023)") }}
+        {{ ui.textarea("health_notes", "Notes for trainers", value=values.health_notes, rows=2, error=errors.get("health_notes"), cls="sm:col-span-2", placeholder="Anything else trainers should know", attrs='maxlength="1000"') }}
+      </div>
+    </section>
+
+    <section class="card space-y-5 animate-fade-up" aria-labelledby="guardian-title" data-guardian-section>
+      <div class="flex flex-wrap items-center gap-3">
+        <span class="grid size-10 place-items-center rounded-2xl bg-violet/12 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("shield", "size-5") }}</span>
+        <div class="min-w-0 flex-1"><h2 id="guardian-title" class="section-title">Guardian &amp; emergency contact</h2><p class="text-sm muted">The guardian is mandatory for members under 18 and receives a copy of their notifications.</p></div>
+        <span class="badge badge-violet" data-minor-badge hidden>{{ icon("alert", "size-3.5") }}Required - under 18</span>
+      </div>
+      <div class="fieldset max-sm:grid-cols-1">
+        {{ ui.field("guardian_name", "Guardian name", value=values.guardian_name, error=errors.get("guardian_name"), autocomplete="off", attrs='maxlength="120"') }}
+        <div>
+          <label class="label" for="f-guardian_relation">Relation</label>
+          <input id="f-guardian_relation" name="guardian_relation" value="{{ values.guardian_relation }}" list="relations" maxlength="40" autocomplete="off" class="input {{ 'input-error' if errors.guardian_relation }}"{% if errors.guardian_relation %} aria-invalid="true"{% endif %}>
+          <datalist id="relations">{% for r in relations %}<option value="{{ r }}">{% endfor %}</datalist>
+          {% if errors.guardian_relation %}<p class="field-error">{{ errors.guardian_relation }}</p>{% endif %}
+        </div>
+        {{ ui.field("guardian_phone", "Guardian phone", type="tel", value=values.guardian_phone, error=errors.get("guardian_phone"), autocomplete="off", attrs='inputmode="tel" maxlength="32"') }}
+        {{ ui.field("guardian_email", "Guardian e-mail", type="email", value=values.guardian_email, error=errors.get("guardian_email"), autocomplete="off", attrs='maxlength="254"') }}
+      </div>
+      <div class="divider !my-1"></div>
+      <div class="fieldset max-sm:grid-cols-1">
+        {{ ui.field("emergency_contact_name", "Emergency contact", value=values.emergency_contact_name, error=errors.get("emergency_contact_name"), autocomplete="off", help="Optional - who to call if something happens at the gym.", attrs='maxlength="120"') }}
+        {{ ui.field("emergency_contact_phone", "Emergency phone", type="tel", value=values.emergency_contact_phone, error=errors.get("emergency_contact_phone"), autocomplete="off", attrs='inputmode="tel" maxlength="32"') }}
+      </div>
+    </section>
+
+    <section class="space-y-2 animate-fade-up" aria-label="Identity card" data-id-section>
+      {{ idf.id_fields(prefix="id", default_country=values.id_country or values.country_code or "IN", required=True, doc_type=values.id_doc_type or None) }}
+      {% for k in ("id_front", "id_back", "id_doc_type", "id_country") %}{% if errors.get(k) %}<p class="field-error px-1">{{ errors.get(k) }}</p>{% endif %}{% endfor %}
+      {% if errors %}<p class="help px-1">For your security, files aren't kept after an error - please choose the ID photo again.</p>{% endif %}
+    </section>
+
+    <section class="card space-y-5 animate-fade-up" aria-label="Confirm">
+      <label class="flex items-start gap-3 text-sm">
+        <input type="checkbox" name="consent" value="1" class="checkbox mt-0.5" {{ 'checked' if values.consent }} required>
+        <span><span class="font-medium">The member agreed to be registered and to share these details with the gym.</span>
+          <span class="block text-xs muted">Health information is only shown to your team and their trainer, and is used to keep their workouts safe.</span></span>
+      </label>
+      {% if errors.consent %}<p class="field-error">{{ errors.consent }}</p>{% endif %}
+      <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <a href="/owner/customers" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-primary">{{ icon("check", "size-4") }} Register member</button>
+      </div>
+    </section>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

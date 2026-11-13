@@ -1,0 +1,43 @@
+# ---------------------------------------------------------------- Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---------------------------------------------------------------- virtual environments
+.venv/
+.venv-*/
+venv/
+env/
+
+# ---------------------------------------------------------------- secrets (NEVER commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ---------------------------------------------------------------- runtime data (uploads, encrypted ID scans, mail spool, logs)
+var/
+*.log
+
+# ---------------------------------------------------------------- generated media / tools
+app/static/videos/*.mp4
+app/static/videos/*.jpg
+app/static/videos/manifest.json
+.tools/
+.build/
+docker/data/
+
+# ---------------------------------------------------------------- OS / editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~

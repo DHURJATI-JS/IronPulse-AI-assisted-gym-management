@@ -1,0 +1,27 @@
+{% extends "auth/_center.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "auth/_macros.html" as am with context %}
+{% block title %}{{ "E-mail confirmed" if state == "ok" else "Confirm your e-mail" }}{% endblock %}
+{% block card %}
+{% if state == "ok" %}
+<div class="card p-7 text-center sm:p-10">
+  <div class="flex justify-center">{{ am.card_icon("check-circle", "green") }}</div>
+  <h1 class="mt-6 text-[28px] font-semibold leading-tight tracking-tight">E-mail confirmed</h1>
+  <p class="mx-auto mt-2 max-w-sm text-[15px] leading-relaxed muted"><span class="font-semibold text-ink dark:text-white">{{ email }}</span> is verified. Every notification we send also arrives there.</p>
+  <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+    <a href="{{ home }}" class="btn btn-primary">{{ "Continue" if signed_in else "Sign in" }} {{ icon("arrow-right", "size-4") }}</a>
+    {% if signed_in %}<a href="/account" class="btn btn-secondary">Account settings</a>{% endif %}
+  </div>
+</div>
+{% else %}
+  {% call am.token_problem(state, what="confirmation link") %}
+    {% if signed_in %}You can ask for a fresh link below.{% else %}Sign in and request a fresh link from your account page.{% endif %}
+  {% endcall %}
+  {% if signed_in %}
+  <form method="post" action="/auth/verify-email/resend" class="mt-4 text-center">
+    {{ ui.csrf() }}
+    <button type="submit" class="btn btn-dark">{{ icon("send", "size-4") }} Send a new confirmation link</button>
+  </form>
+  {% endif %}
+{% endif %}
+{% endblock %}

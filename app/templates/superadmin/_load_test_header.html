@@ -1,0 +1,40 @@
+{#- Load-test page header: title, run picker (the last runs: date, peak users, verdict), the two downloads and the link
+    to the public page. -#}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% import "superadmin/_load_test_macros.html" as lt with context %}
+{% call sa.header("Load test", "Results of the 10-minute production-like Locust stress test: SLO verdict, capacity, latency under load and server health - read from the load-test kit's results folder, never from the database.", section, sections, counts) %}
+  {% if listing.runs %}
+  <details class="relative">
+    <summary class="btn btn-secondary btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+      {{ icon("clock", "size-4") }}<span class="max-w-[12rem] truncate">{{ run.run_id if run else "Runs" }}</span>{{ icon("chevron-down", "size-4") }}
+      <span class="sr-only"> - choose another run</span>
+    </summary>
+    <div class="absolute left-0 z-30 mt-2 w-[min(24rem,calc(100vw-2rem))] rounded-[22px] bg-white p-1.5 shadow-xl ring-1 ring-black/[0.06] sm:right-0 sm:left-auto dark:bg-elevated-dark dark:ring-white/10">
+      <p class="px-3 pt-2 pb-1.5 text-xs muted">
+        {% if listing.total > listing.runs | length %}Latest {{ listing.runs | length }} of {{ listing.total }} runs{% else %}{{ listing.total }} run{{ 's' if listing.total != 1 }}{% endif %}, newest first{% if listing.truncated %} · only the first {{ "{:,}".format(max_scan) }} entries of the folder were scanned{% endif %}
+      </p>
+      <ul class="grid max-h-[60vh] gap-0.5 overflow-y-auto" data-lt-runs>
+        {% for r in listing.runs %}
+        {% set current = run is not none and r.run_id == run.run_id %}
+        <li>
+          <a href="{{ page_url(r.run_id) }}" class="flex items-center gap-3 rounded-2xl px-3 py-2 transition hover:bg-zinc-100 dark:hover:bg-white/[0.06] {{ 'bg-zinc-100 dark:bg-white/[0.06]' if current }}"{% if current %} aria-current="page"{% endif %}>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-sm font-medium">{{ r.started_at | dt("%d %b %Y, %H:%M %Z") if r.started_at else "Start time unknown" }}</span>
+              <span class="block truncate font-mono text-[11px] muted">{{ r.run_id }}</span>
+            </span>
+            {% if r.users_peak %}<span class="shrink-0 text-xs tabular-nums muted">{{ fmt.num(r.users_peak) }} users</span>{% endif %}
+            {{ lt.verdict_chip(r.passed) }}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+  </details>
+  {% endif %}
+  {% for d in downloads %}
+  <a href="{{ d.href }}" class="btn btn-secondary btn-sm" download>{{ icon("download", "size-4") }}{{ d.label }} <span class="font-normal muted">{{ d.size }}</span></a>
+  {% endfor %}
+  {#- the curated public page everyone sees (/load-test, while PUBLIC_LOADTEST_PAGE is on) #}
+  {% if public_url %}<a href="{{ public_url }}" class="btn btn-secondary btn-sm" data-lt-public-link>{{ icon("globe", "size-4") }}Public page</a>{% endif %}
+{% endcall %}

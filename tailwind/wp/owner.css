@@ -1,0 +1,161 @@
+/* owner work-package styles (WP-B): owner console, gyms, branches, stepper, maps, hours, features. */
+
+@keyframes owner-indeterminate {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(280%); }
+}
+
+@layer components {
+  /* ---------- clickable KPI tiles */
+  .owner-kpi {
+    @apply block rounded-[24px] transition duration-300 ease-spring hover:-translate-y-0.5;
+  }
+  .owner-kpi > .card-flat { @apply h-full transition-shadow duration-300; }
+  .owner-kpi:hover > .card-flat { @apply shadow-xl shadow-black/[0.06] dark:shadow-black/40; }
+  .owner-kpi .kpi { @apply truncate text-2xl sm:text-3xl; }
+
+  /* ---------- vertical timeline (activity, verification history) */
+  .owner-timeline { @apply relative space-y-5 pl-6; }
+  .owner-timeline::before {
+    content: "";
+    @apply absolute top-2 bottom-2 left-[5px] w-px bg-black/[0.08] dark:bg-white/10;
+  }
+  .owner-timeline-item { @apply relative min-w-0; }
+  .owner-timeline-dot {
+    @apply absolute top-1.5 -left-6 size-[11px] rounded-full ring-4 ring-white dark:ring-surface-dark;
+  }
+
+  /* ---------- 5-step progress (Details -> Documents -> AI verification -> Photos -> Live) */
+  .owner-stepper {
+    @apply grid grid-cols-5 gap-1 rounded-[24px] bg-white p-1.5 ring-1 ring-black/[0.05] sm:gap-2 sm:p-2
+      dark:bg-surface-dark dark:ring-white/[0.08];
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.03), 0 10px 28px -20px rgb(0 0 0 / 0.2);
+  }
+  .owner-step { @apply relative flex min-w-0 flex-col items-center gap-1.5 py-2 text-center; }
+  .owner-step-link {
+    @apply -my-2 flex w-full min-w-0 flex-col items-center gap-1.5 rounded-2xl py-2 transition
+      hover:bg-zinc-50 dark:hover:bg-white/[0.04];
+  }
+  .owner-step:not(:first-child)::before {
+    content: "";
+    @apply absolute top-[21px] h-0.5 rounded-full bg-zinc-200 dark:bg-white/10;
+    left: calc(-50% + 18px);
+    right: calc(50% + 18px);
+  }
+  .owner-step[data-state="done"]:not(:first-child)::before { @apply bg-ok/70; }
+  .owner-step-dot {
+    @apply relative z-[1] grid size-7 place-items-center rounded-full bg-zinc-100 text-xs font-semibold text-zinc-500
+      transition dark:bg-white/10 dark:text-zinc-300;
+  }
+  .owner-step-label { @apply max-w-full truncate px-0.5 text-[11px] leading-tight font-semibold sm:text-sm; }
+  .owner-step-hint { @apply hidden max-w-full truncate px-1 text-xs text-zinc-500 sm:block dark:text-zinc-400; }
+  .owner-step[data-state="done"] .owner-step-dot { @apply bg-ok text-white; }
+  .owner-step[data-state="current"] .owner-step-dot { @apply bg-accent text-white ring-4 ring-accent/20; }
+  .owner-step[data-state="active"] .owner-step-dot { @apply bg-accent text-white ring-4 ring-accent/20; }
+  .owner-step[data-state="error"] .owner-step-dot { @apply bg-bad text-white ring-4 ring-bad/20; }
+  .owner-step[data-state="warning"] .owner-step-dot { @apply bg-warn text-white ring-4 ring-warn/20; }
+  .owner-step[data-state="locked"] .owner-step-dot { @apply bg-zinc-100 text-zinc-400 dark:bg-white/[0.06] dark:text-zinc-500; }
+  .owner-step[data-state="locked"] .owner-step-label { @apply text-zinc-400 dark:text-zinc-500; }
+  .owner-step[data-state="current"] .owner-step-label,
+  .owner-step[data-state="active"] .owner-step-label { @apply text-accent-strong dark:text-[#64b5ff]; }
+  .owner-step[data-state="error"] .owner-step-label { @apply text-[#d1281e] dark:text-[#ff6b61]; }
+  .owner-step[data-state="warning"] .owner-step-label { @apply text-[#b45309] dark:text-[#fbbf24]; }
+
+  /* numbered sub-section marker inside forms */
+  .owner-step-num { @apply grid size-8 shrink-0 place-items-center rounded-xl bg-accent/10 text-sm font-semibold text-accent; }
+
+  /* ---------- maps (Leaflet lives in its own stacking context so it never covers the sticky navbar) */
+  .owner-map {
+    @apply relative isolate z-0 h-72 w-full overflow-hidden rounded-[20px] bg-zinc-100 sm:h-80 dark:bg-white/[0.04];
+  }
+  .owner-map-sm { @apply h-56 sm:h-64; }
+  .owner-map-fallback {
+    @apply absolute inset-0 flex flex-col items-center justify-center gap-1 px-6 text-center text-zinc-400 dark:text-zinc-500;
+  }
+  .owner-map.leaflet-container { @apply bg-zinc-100 font-sans dark:bg-zinc-900; } /* beats leaflet.css #ddd */
+  .owner-map .leaflet-control-attribution { @apply rounded-tl-lg !bg-white/80 text-[10px] backdrop-blur dark:!bg-black/60 dark:text-zinc-300; }
+  .owner-map .leaflet-control-attribution a { @apply text-accent; }
+  .owner-map .leaflet-bar { @apply overflow-hidden !rounded-xl !border-0 shadow-lg shadow-black/10; }
+  .owner-map .leaflet-bar a { @apply !border-black/[0.06] dark:!border-white/10 dark:!bg-zinc-800 dark:!text-white; }
+  .dark .owner-map .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.92) saturate(0.7); }
+
+  .owner-pin {
+    @apply grid size-[30px] place-items-center rounded-full bg-accent text-white shadow-lg shadow-accent/40 ring-[3px] ring-white
+      transition-transform duration-200 ease-spring dark:ring-zinc-900;
+  }
+  .owner-pin::after { content: ""; @apply size-2.5 rounded-full bg-white; }
+  .owner-pin-alt { @apply bg-violet shadow-violet/40; }
+  .leaflet-dragging .owner-pin { @apply scale-110; }
+
+  .owner-geo-results {
+    @apply mt-3 max-h-64 space-y-0.5 overflow-y-auto rounded-2xl bg-white p-1 shadow-xl ring-1 ring-black/[0.06]
+      dark:bg-elevated-dark dark:ring-white/10;
+  }
+  .owner-geo-results button {
+    @apply flex w-full items-start gap-2 rounded-xl px-3 py-2 text-left text-sm transition hover:bg-zinc-100
+      focus-visible:bg-zinc-100 dark:hover:bg-white/10 dark:focus-visible:bg-white/10;
+  }
+
+  /* ---------- opening hours editor */
+  /* phones: day + "Closed" on the first line, the two times full-width below; sm+: one row */
+  .owner-hours-row {
+    @apply grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-3 py-3 transition-colors
+      sm:grid-cols-[110px_minmax(0,1fr)_auto] sm:gap-4 sm:px-4 sm:py-2.5;
+  }
+  .owner-hours-row [data-times] { @apply order-last col-span-2 sm:order-none sm:col-span-1; }
+  .owner-hours-row[data-closed="1"] [data-times] { @apply pointer-events-none opacity-35; }
+  .owner-hours-error { @apply bg-bad/[0.07]; }
+  .owner-hours-row [data-duration][data-over="1"] { @apply font-semibold text-bad; }
+  .input.owner-time { @apply w-auto min-w-0 flex-1 bg-white px-3 py-2 text-sm tabular-nums dark:bg-white/[0.06]; }
+
+  /* WebKit/Safari ignore padding & colours on native selects: draw our own chevron on owner pages */
+  .owner-page select.input {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 2.75rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1rem 1rem;
+  }
+
+  /* ---------- facility chips */
+  .owner-feature { @apply block min-w-0 cursor-pointer; }
+  .owner-feature-box {
+    @apply flex h-full min-w-0 items-center gap-2 rounded-2xl bg-zinc-50 px-3 py-2.5 text-sm font-medium text-zinc-600 ring-1
+      ring-black/[0.04] transition select-none hover:bg-zinc-100 dark:bg-white/[0.03] dark:text-zinc-300
+      dark:ring-white/[0.06] dark:hover:bg-white/[0.06];
+  }
+  .owner-feature input:checked + .owner-feature-box {
+    @apply bg-accent/10 text-accent-strong ring-accent/40 dark:bg-accent/15 dark:text-[#64b5ff] dark:ring-accent/40;
+  }
+  .owner-feature input:focus-visible + .owner-feature-box { @apply outline-2 outline-offset-2 outline-accent; }
+  .owner-feature-tick { @apply ml-auto opacity-0 transition; }
+  .owner-feature input:checked + .owner-feature-box .owner-feature-tick { @apply opacity-100; }
+
+  /* ---------- collapsible card (<details class="card owner-collapsible">) */
+  .owner-collapsible > summary::-webkit-details-marker { display: none; }
+  .owner-collapsible > summary { @apply rounded-2xl outline-offset-4; }
+  .owner-when-closed { @apply inline-flex items-center gap-2; }
+  .owner-when-open { @apply hidden items-center gap-2; }
+  .owner-collapsible[open] .owner-when-open { @apply inline-flex; }
+  .owner-collapsible[open] .owner-when-closed { @apply hidden; }
+
+  /* ---------- verification progress */
+  .owner-progress { width: 36%; animation: owner-indeterminate 1.5s var(--ease-snappy) infinite; }
+
+  /* ---------- photo uploader */
+  .owner-dropzone {
+    @apply flex cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-zinc-300
+      bg-white px-4 py-8 text-center text-zinc-500 transition hover:border-accent hover:text-accent
+      dark:border-white/15 dark:bg-white/[0.02] dark:text-zinc-400 dark:hover:border-accent dark:hover:text-[#64b5ff];
+  }
+  .owner-dropzone[data-drag="1"] { @apply border-accent bg-accent/5 text-accent; }
+  .owner-thumb { @apply relative aspect-square overflow-hidden rounded-xl bg-zinc-100 ring-1 ring-black/[0.05] dark:bg-white/[0.05] dark:ring-white/10; }
+  .owner-thumb img { @apply size-full object-cover; }
+
+  /* ---------- live indicator */
+  .owner-live-dot { @apply relative inline-flex size-3 shrink-0 rounded-full bg-zinc-300 dark:bg-zinc-600; }
+  .owner-live-on { @apply bg-ok; }
+  .owner-live-on::after { content: ""; @apply absolute inset-0 animate-ping rounded-full bg-ok/60; }
+}

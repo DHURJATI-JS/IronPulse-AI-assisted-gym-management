@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% import "superadmin/_governance.html" as gov with context %}
+{% block title %}{{ gym.name }} · Governance{% endblock %}
+{% block content %}
+{% call sa.header(gym.name, "Gym #" ~ gym.id ~ " · owned by " ~ (owner.full_name if owner else "a removed account") ~ ((" (" ~ owner.email ~ ")") if owner and owner.email else ""), section, sections, counts, back="/superadmin/governance") %}
+  {{ gov.state_badge(state) }}
+  {% if owner %}<a href="/superadmin/governance/users/{{ owner.id }}" class="btn btn-secondary btn-sm">{{ icon("user", "size-4") }} Owner{% if owner_ban %} (banned){% endif %}</a>{% endif %}
+{% endcall %}
+
+{% if errors.final %}
+<div class="alert alert-danger mb-6" role="alert" data-final-blocked>{{ icon("x-circle", "size-5 shrink-0") }}<p>{{ errors.final }}</p></div>
+{% endif %}
+
+{# ------------------------------------------------------------------ state #}
+{% if state == "archived" %}
+<div class="alert alert-info mb-6" role="status">
+  {{ icon("document", "size-5 shrink-0") }}
+  <div><p class="font-semibold">Deleted on {{ gym.archived_at | dt }}</p>
+    <p>The gym is archived: hidden everywhere, its employments ended. Its financial records - transactions, salary
+      statements, invoices and refunds - are kept, read-only, for legal and tax purposes.</p></div>
+</div>
+{% elif state == "deletion_scheduled" %}
+<div class="alert alert-danger mb-6" role="status">
+  {{ icon("clock", "size-5 shrink-0") }}
+  <div><p class="font-semibold">Deletion scheduled · suspended since {{ gym.suspended_at | dt }}</p>
+    <p>{{ gym.suspension_reason }}. Cooling-off until {{ gym.delete_after | dt }} - it can be restored until then. The final
+      deletion stays blocked until every money obligation below is settled.</p></div>
+</div>
+{% elif state == "suspended" %}
+<div class="alert alert-warning mb-6" role="status">
+  {{ icon("lock", "size-5 shrink-0") }}
+  <div><p class="font-semibold">Suspended since {{ gym.suspended_at | dt }}</p>
+    <p>{{ gym.suspension_reason }}. Hidden from public pages and search; no new memberships, shop orders or job enquiries.
+      Staff pay keeps being recorded - settle it below.{% if owner_ban %} Lifting the owner's ban opens the gym again.{% endif %}</p></div>
+</div>
+{% endif %}
+
+{{ gov.impact(impact, note="Today's figures - a dry run, nothing changes until you confirm an action.") }}
+
+{# ------------------------------------------------------------------ actions #}
+<div class="mt-6 grid gap-6 lg:grid-cols-2">
+  {% if state in ("active", "suspended") %}
+  <section id="delete" class="card scroll-mt-24 border border-bad/30" aria-labelledby="delete-title">
+    <h2 id="delete-title" class="section-title">Delete this gym - step 1 of 2</h2>
+    <p class="mt-1 text-sm muted">The gym is suspended at once (hidden, nothing new can be sold) and members, staff and the
+      owner are told. For {{ cooling_off_days }} day{{ 's' if cooling_off_days != 1 }} it can be restored; the final deletion
+      then waits until staff pay, members' memberships and open orders are settled. Nothing financial is ever deleted.</p>
+    <form method="post" action="/superadmin/governance/gyms/{{ gym.id }}/delete" class="mt-5 grid gap-4"
+          data-confirm="Suspend {{ gym.name }} now and schedule it for deletion?">
+      {{ ui.csrf() }}
+      {{ gov.decision_fields(reasons, values, errors, gym.name, "the gym's name", prefix="del-") }}
+      <button class="btn btn-danger">{{ icon("trash", "size-4") }} Suspend and schedule deletion</button>
+    </form>
+  </section>
+  {% endif %}
+
+  {% if state == "deletion_scheduled" %}
+  <section id="restore" class="card scroll-mt-24" aria-labelledby="restore-title">
+    <h2 id="restore-title" class="section-title">Cancel the deletion</h2>
+    <p class="mt-1 text-sm muted">{% if owner_ban %}The gym stays suspended while its owner is banned.{% else %}The gym opens again.{% endif %}
+      Unpaid final settlements the deletion created are voided; refunds and payments already made stay made.</p>
+    <form method="post" action="/superadmin/governance/gyms/{{ gym.id }}/restore" class="mt-5 grid gap-3"
+          data-confirm="Cancel the deletion of {{ gym.name }}?">
+      {{ ui.csrf() }}
+      <label class="label" for="restore-note">Why? <span class="text-bad">*</span></label>
+      <textarea id="restore-note" name="note" rows="2" required minlength="{{ G.LIFT_NOTE_MIN }}" maxlength="{{ G.NOTE_MAX }}"
+                class="input {{ 'input-error' if errors.restore_note }}">{{ values.restore_note or '' }}</textarea>
+      {% if errors.restore_note %}<p class="field-error">{{ errors.restore_note }}</p>{% endif %}
+      <button class="btn btn-secondary">{{ icon("refresh", "size-4") }} Restore the gym</button>
+    </form>
+  </section>
+
+  <section id="finalize" class="card scroll-mt-24 border border-bad/30" aria-labelledby="final-title">
+    <h2 id="final-title" class="section-title">Delete this gym - step 2 of 2</h2>
+    {% if blockers and not blockers.clear %}
+      <div class="alert alert-warning mt-3" role="status" data-blockers>
+        {{ icon("lock", "size-5 shrink-0") }}
+        <div><p class="font-semibold">Blocked until every obligation is settled</p>
+          <ul class="mt-1 list-disc pl-5">{% for item in blockers["items"] %}<li>{{ item }}</li>{% endfor %}</ul></div>
+      </div>
+    {% else %}
+      <p class="mt-1 text-sm muted">Everything is settled. The gym is archived: remaining employments end, job postings close.
+        Financial records stay, read-only.</p>
+    {% endif %}
+    <form method="post" action="/superadmin/governance/gyms/{{ gym.id }}/finalize" class="mt-5 grid gap-3"
+          data-confirm="Delete {{ gym.name }} for good? Its financial records are kept.">
+      {{ ui.csrf() }}
+      <label class="label" for="final-note">Closing note <span class="text-bad">*</span></label>
+      <textarea id="final-note" name="note" rows="2" required minlength="{{ G.NOTE_MIN }}" maxlength="{{ G.NOTE_MAX }}"
+                class="input {{ 'input-error' if errors.final_note }}">{{ values.final_note or '' }}</textarea>
+      {% if errors.final_note %}<p class="field-error">{{ errors.final_note }}</p>{% endif %}
+      <label class="label" for="final-confirm">Type the gym's name to confirm: <span class="font-mono">{{ gym.name }}</span> <span class="text-bad">*</span></label>
+      <input id="final-confirm" name="confirm" value="{{ values.final_confirm or '' }}" required autocomplete="off" maxlength="200"
+             class="input {{ 'input-error' if errors.final_confirm }}">
+      {% if errors.final_confirm %}<p class="field-error">{{ errors.final_confirm }}</p>{% endif %}
+      <button class="btn btn-danger" {{ 'disabled' if blockers and not blockers.clear }}>{{ icon("trash", "size-4") }} Delete permanently</button>
+    </form>
+  </section>
+  {% endif %}
+</div>
+
+{# ------------------------------------------------------------------ the settlement desk #}
+{% if desk %}
+<section id="desk" class="mt-8 scroll-mt-24" aria-labelledby="desk-title">
+  <h2 id="desk-title" class="text-2xl font-semibold tracking-tight">Settlement desk</h2>
+  <p class="mt-1 max-w-3xl text-sm muted">Money moves only when you confirm it here.
+    {% if desk.staff and not app.payments_test_mode %}Cashfree payouts pay a statement at once when configured; otherwise pay by
+    bank transfer and record the proof - the statement shows <strong>To pay</strong> until then.{% endif %}</p>
+
+  {# staff #}
+  <div id="desk-staff" class="card mt-5 scroll-mt-24">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h3 class="section-title">Staff pay</h3>
+      {% if state == "deletion_scheduled" %}
+      <form method="post" action="/superadmin/governance/gyms/{{ gym.id }}/settlements" class="flex flex-wrap items-end gap-3">
+        {{ ui.csrf() }}
+        <div><label class="label" for="last-day">Last working day</label>
+          <input id="last-day" type="date" name="last_day" value="{{ today.isoformat() }}" max="{{ max_last_day.isoformat() }}" class="input !py-2" required></div>
+        {{ gov.money_confirm("Create the final settlements (nothing is paid yet)") }}
+        <button class="btn btn-secondary btn-sm">{{ icon("receipt", "size-4") }} Create final settlements</button>
+      </form>
+      {% endif %}
+    </div>
+    {% if desk.staff %}
+    <ul class="mt-4 grid gap-3">
+      {% for row in desk.staff %}
+      {% set e = row.employee %}
+      <li id="emp-{{ e.id }}" class="card-muted scroll-mt-24 !p-4" data-staff-row data-cleared="{{ '1' if row.cleared else '0' }}">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="font-semibold">{{ e.display_name }} <span class="text-xs font-normal muted">{{ e.role_title or (e.role.value | humanize) }} · {{ e.status.value | humanize }}</span></p>
+            <p class="mt-0.5 text-xs muted">Owed: {{ money_text(row.owed) }}
+              {% if row.accrued and not row.settlement %} (incl. {{ money_text({row.accrued.currency: row.accrued.net}) }} earned since the last statement){% endif %}</p>
+          </div>
+          {% if row.waiver %}{{ ui.badge("Pay waived", "zinc", "check") }}
+          {% elif row.open_statements %}{{ ui.badge("To pay", "red") }}
+          {% elif row.needs_settlement and state == "deletion_scheduled" %}{{ ui.badge("Final settlement needed", "amber") }}
+          {% elif row.needs_settlement %}{{ ui.badge("Earning pay - nothing due yet", "zinc") }}
+          {% else %}{{ ui.badge("Settled", "green", "check") }}{% endif %}
+        </div>
+        {% if row.statements %}
+        <ul class="mt-3 grid gap-2 text-sm">
+          {% for st in row.statements %}
+          {% set tx = row.transactions.get(st.transaction_id or 0) %}
+          {% set done = statement_settled(st, tx) %}
+          <li class="flex flex-col gap-2 rounded-2xl bg-white/60 p-3 dark:bg-white/[0.03] sm:flex-row sm:items-center sm:justify-between">
+            <span>{{ 'Final settlement' if st.is_final_settlement else 'Salary' }} {{ st.period_start | date }} - {{ st.period_end | date }} ·
+              <span class="font-semibold tabular-nums">{{ st.net_pay | money(st.currency) }}</span> · {{ st.status.value | humanize }}{% if done %} ✓{% endif %}</span>
+            {% if not done and not row.waiver %}
+            <div class="flex flex-wrap items-center gap-2">
+              {% set mode = row.payout_mode(st) %}
+              {% if mode[0] %}
+              <form method="post" action="/superadmin/governance/statements/{{ st.id }}/payout" class="flex items-center gap-2"
+                    data-confirm="Pay {{ st.net_pay | money(st.currency) }} to {{ e.full_name }} now?">
+                {{ ui.csrf() }}
+                {{ gov.money_confirm("Pay " ~ (st.net_pay | money(st.currency))) }}
+                <button class="btn btn-primary btn-sm">{{ icon("banknotes", "size-4") }} {{ 'Pay (test mode)' if mode[0] == 'test' else 'Pay via Cashfree' }}</button>
+              </form>
+              {% endif %}
+              <details class="relative">
+                <summary class="btn btn-secondary btn-sm list-none">{{ icon("upload", "size-4") }} Record proof</summary>
+                <form method="post" action="/superadmin/governance/statements/{{ st.id }}/proof" enctype="multipart/form-data" class="card mt-2 grid gap-2 !p-4 sm:w-80">
+                  {{ ui.csrf() }}
+                  <label class="label" for="ref-{{ st.id }}">Reference / UTR</label>
+                  <input id="ref-{{ st.id }}" name="reference" class="input !py-2" required maxlength="40" autocomplete="off">
+                  <label class="label" for="amt-{{ st.id }}">Amount paid</label>
+                  <input id="amt-{{ st.id }}" name="amount" class="input !py-2" required inputmode="decimal" value="{{ st.net_pay }}">
+                  <label class="label" for="on-{{ st.id }}">Paid on</label>
+                  <input id="on-{{ st.id }}" name="paid_on" type="date" class="input !py-2" value="{{ today.isoformat() }}">
+                  <label class="label" for="proof-{{ st.id }}">Proof (screenshot or PDF)</label>
+                  <input id="proof-{{ st.id }}" name="proof" type="file" accept="image/*,application/pdf" required class="block w-full text-sm muted">
+                  <button class="btn btn-dark btn-sm">{{ icon("upload", "size-4") }} Record the payment</button>
+                </form>
+              </details>
+              {% if not mode[0] %}{{ ui.badge("To pay", "red") }} <span class="text-xs muted">{{ mode[1] }}</span>{% endif %}
+            </div>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% if state == "deletion_scheduled" and not row.cleared %}
+        <details class="mt-3">
+          <summary class="cursor-pointer text-sm font-semibold text-accent">Waive this pay with a note…</summary>
+          <form method="post" action="/superadmin/governance/employees/{{ e.id }}/waive" class="mt-2 grid gap-2 sm:max-w-lg"
+                data-confirm="Record {{ e.full_name }}'s outstanding pay as settled outside IronPulse? Their employment ends.">
+            {{ ui.csrf() }}
+            <label class="label" for="waive-{{ e.id }}">Why is it settled or forgone? <span class="text-bad">*</span></label>
+            <textarea id="waive-{{ e.id }}" name="note" rows="2" required minlength="{{ G.WAIVE_NOTE_MIN }}" maxlength="{{ G.NOTE_MAX }}" class="input"
+                      placeholder="e.g. Paid by bank transfer on 3 Nov, reference HDFC123456"></textarea>
+            <button class="btn btn-secondary btn-sm">{{ icon("check", "size-4") }} Record the waiver</button>
+          </form>
+        </details>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% if desk.staff_more %}<p class="mt-3 text-xs muted">Showing the first {{ G.DESK_STAFF_MAX }} employees - settle them to see the rest.</p>{% endif %}
+    {% else %}
+      <p class="mt-3 text-sm muted">No staff pay to settle.</p>
+    {% endif %}
+  </div>
+
+  {# members #}
+  <div id="desk-members" class="card mt-5 scroll-mt-24">
+    <h3 class="section-title">Members</h3>
+    <p class="mt-1 text-sm muted">{{ "{:,}".format(impact.memberships) }} active membership{{ 's' if impact.memberships != 1 }} ·
+      {{ money_text(impact.refunds_due) }} unused (pro rata, today){% if impact.last_end %} · the last ends {{ impact.last_end | date }}{% endif %}.
+      Honour them by waiting until they end - or refund the unused part now.</p>
+    {% if desk.refund_job %}
+      <p class="mt-3 text-sm font-medium" data-refunds-running>{{ icon("clock", "size-4 inline") }} Refunds are being issued in the background.</p>
+    {% elif impact.online_refunds %}
+    <form method="post" action="/superadmin/governance/gyms/{{ gym.id }}/refunds" class="mt-4 flex flex-wrap items-center gap-3"
+          data-confirm="Refund the unused part of {{ impact.online_refunds }} membership(s) paid online?">
+      {{ ui.csrf() }}
+      {{ gov.money_confirm("Refund " ~ impact.online_refunds ~ " membership(s) paid online, pro rata, to the original payment method") }}
+      <button class="btn btn-primary btn-sm">{{ icon("banknotes", "size-4") }} Refund members</button>
+    </form>
+    {% endif %}
+    {% if desk.manual_refunds %}
+    <h4 class="mt-5 text-sm font-semibold">Paid in cash - refund by hand, then record it</h4>
+    <ul class="mt-2 grid gap-2 text-sm">
+      {% for sub, member, amount in desk.manual_refunds %}
+      <li class="flex flex-col gap-2 rounded-2xl bg-zinc-50 p-3 dark:bg-white/[0.03] sm:flex-row sm:items-center sm:justify-between">
+        <span>{{ member }} · until {{ sub.ends_on | date }} · <span class="font-semibold">{{ amount | money(sub.currency) }}</span> unused</span>
+        <form method="post" action="/superadmin/governance/subscriptions/{{ sub.id }}/manual-refund" class="flex flex-wrap items-center gap-2">
+          {{ ui.csrf() }}
+          <label class="sr-only" for="mref-{{ sub.id }}">Reference</label>
+          <input id="mref-{{ sub.id }}" name="reference" class="input !py-1.5 sm:w-36" placeholder="Reference" required maxlength="80">
+          <label class="sr-only" for="mnote-{{ sub.id }}">How it was refunded</label>
+          <input id="mnote-{{ sub.id }}" name="note" class="input !py-1.5 sm:w-56" placeholder="How it was refunded" required minlength="{{ G.WAIVE_NOTE_MIN }}" maxlength="{{ G.NOTE_MAX }}">
+          <button class="btn btn-secondary btn-sm">Record refund</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+
+  {# orders #}
+  <div id="desk-orders" class="card mt-5 scroll-mt-24">
+    <h3 class="section-title">Open shop orders</h3>
+    {% if desk.orders %}
+    <ul class="mt-3 grid gap-1 text-sm">
+      {% for o in desk.orders %}<li>{{ o.order_number }} · {{ o.status.value | humanize }} · {{ (o.total - o.refunded_total) | money(o.currency) }}</li>{% endfor %}
+    </ul>
+    {% if desk.orders_job %}
+      <p class="mt-3 text-sm font-medium">{{ icon("clock", "size-4 inline") }} Orders are being cancelled and refunded in the background.</p>
+    {% else %}
+    <form method="post" action="/superadmin/governance/gyms/{{ gym.id }}/orders" class="mt-4 flex flex-wrap items-center gap-3"
+          data-confirm="Cancel and refund every open order of {{ gym.name }}?">
+      {{ ui.csrf() }}
+      {{ gov.money_confirm("Cancel and refund every open order (" ~ money_text(impact.order_refunds) ~ ")") }}
+      <button class="btn btn-primary btn-sm">{{ icon("refresh", "size-4") }} Cancel and refund</button>
+    </form>
+    {% endif %}
+    {% else %}
+      <p class="mt-2 text-sm muted">No open orders.</p>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

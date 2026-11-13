@@ -1,0 +1,174 @@
+{#- Branch details fields (inside a <form>): basics, address + map pin, opening hours, features.
+    Context: values, errors, hours_rows, standard_features, country_options, timezone_suggestions, form_rules,
+             registration_labels, map_center, max_open_hours, is_verified_branch, locked_for_review -#}
+{% set material_attrs = 'data-material' %}
+
+{% if locked_for_review %}
+<div class="alert alert-info">
+  <span class="spinner mt-0.5 shrink-0" aria-hidden="true"></span>
+  <p>Verification is running. You can still edit the name, contacts, hours and features - the address, registration number and map pin unlock when the result is in.</p>
+</div>
+{% endif %}
+
+{# ------------------------------------------------------------------ basics #}
+<section class="space-y-5" aria-labelledby="sec-basics">
+  <div class="flex items-center gap-3">
+    <span class="owner-step-num">1</span>
+    <div>
+      <h3 id="sec-basics" class="font-semibold">Basics</h3>
+      <p class="text-xs muted">Members see the branch name and contacts.</p>
+    </div>
+  </div>
+  <div class="fieldset">
+    {{ ui.field("name", "Branch name", value=values.name, required=True, error=errors.name, placeholder="e.g. Indiranagar", attrs='maxlength="120"', cls="sm:col-span-2") }}
+    {{ ui.field("phone", "Branch phone", type="tel", value=values.phone, error=errors.phone, placeholder="+91 80 1234 5678", autocomplete="tel") }}
+    {{ ui.field("email", "Branch e-mail", type="email", value=values.email, error=errors.email, placeholder="indiranagar@mygym.com", autocomplete="email") }}
+    <div class="sm:col-span-2" data-registration-field data-reg-labels="{{ registration_labels | jsonattr }}">
+      <label class="label" for="f-registration_number"><span data-reg-label>{{ form_rules.registration_label }}</span> <span class="muted font-normal">(registration number)</span></label>
+      <input id="f-registration_number" name="registration_number" type="text" value="{{ values.registration_number }}" maxlength="80"
+             class="input font-mono uppercase tracking-wide {{ 'input-error' if errors.registration_number }}" autocomplete="off" spellcheck="false"
+             placeholder="{{ form_rules.registration_example }}" data-reg-input {{ material_attrs }}
+             {% if errors.registration_number %}aria-invalid="true" aria-describedby="e-registration_number"{% else %}aria-describedby="h-registration_number"{% endif %}>
+      {% if errors.registration_number %}<p class="field-error" id="e-registration_number">{{ errors.registration_number }}</p>
+      {% else %}<p class="help" id="h-registration_number">Issued by <span data-reg-authority>{{ form_rules.registration_authority }}</span>. Format and checksum are checked automatically, e.g. <span class="font-mono" data-reg-example>{{ form_rules.registration_example }}</span>.</p>{% endif %}
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+{# ------------------------------------------------------------------ address + map #}
+<section class="space-y-5" aria-labelledby="sec-address">
+  <div class="flex items-center gap-3">
+    <span class="owner-step-num">2</span>
+    <div>
+      <h3 id="sec-address" class="font-semibold">Address &amp; map pin</h3>
+      <p class="text-xs muted">The pin must sit within 0.5 km of the typed address - the AI compares both.</p>
+    </div>
+  </div>
+
+  {% if is_verified_branch %}
+  <div class="alert alert-warning" role="note">
+    {{ icon("alert", "size-5 shrink-0") }}
+    <div class="space-y-2">
+      <p><strong>This branch is verified.</strong> Changing the address, city, country, registration number or moving the pin resets it to draft and hides it from the website until it is verified again.</p>
+      <label class="flex items-start gap-2">
+        <input type="checkbox" name="confirm_reverify" value="1" class="checkbox mt-0.5" data-confirm-reverify>
+        <span>I understand - reset verification if I change these details.</span>
+      </label>
+      {% if errors.confirm_reverify %}<p class="field-error">{{ errors.confirm_reverify }}</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="fieldset">
+    {{ ui.field("address_line1", "Street address", value=values.address_line1, required=True, error=errors.address_line1, placeholder="100 Feet Road, HAL 2nd Stage", autocomplete="address-line1", attrs='maxlength="200" data-material data-addr="line1"', cls="sm:col-span-2") }}
+    {{ ui.field("address_line2", "Building, floor (optional)", value=values.address_line2, error=errors.address_line2, placeholder="2nd floor, above the pharmacy", autocomplete="address-line2", attrs='maxlength="200" data-material data-addr="line2"', cls="sm:col-span-2") }}
+    {{ ui.field("city", "City", value=values.city, required=True, error=errors.city, placeholder="Bengaluru", autocomplete="address-level2", attrs='maxlength="120" data-material data-addr="city"') }}
+    {{ ui.field("state", "State / region", value=values.state, error=errors.state, placeholder="Karnataka", autocomplete="address-level1", attrs='maxlength="120" data-material data-addr="state"') }}
+    {{ ui.field("postal_code", "Postal code", value=values.postal_code, error=errors.postal_code, placeholder="560038", autocomplete="postal-code", attrs='maxlength="20" data-material data-addr="postcode"') }}
+    {{ ui.select("country_code", "Country", country_options, value=values.country_code, required=True, error=errors.country_code, attrs='data-material data-addr="country" data-reg-country') }}
+    <div class="sm:col-span-2">
+      <label class="label" for="f-timezone">Time zone</label>
+      <input id="f-timezone" name="timezone" list="tz-suggestions" value="{{ values.timezone }}" class="input {{ 'input-error' if errors.timezone }}" maxlength="64" autocomplete="off" spellcheck="false" data-timezone>
+      <datalist id="tz-suggestions">{% for tz in timezone_suggestions %}<option value="{{ tz }}"></option>{% endfor %}</datalist>
+      {% if errors.timezone %}<p class="field-error">{{ errors.timezone }}</p>{% else %}<p class="help">Used for opening hours and schedules. "Find address" fills it in for you.</p>{% endif %}
+    </div>
+  </div>
+
+  <div class="rounded-[24px] bg-zinc-50 p-3 ring-1 ring-black/[0.04] dark:bg-white/[0.03] dark:ring-white/[0.06]"
+       data-component="branch-picker" data-lat="{{ values.latitude }}" data-lon="{{ values.longitude }}"
+       data-center="{{ map_center | jsonattr }}" data-geoapify="{{ '1' if geoapify else '0' }}">
+    <div class="owner-map" data-map role="application" aria-label="Map - click or drag the pin to the branch entrance">
+      <div class="owner-map-fallback">
+        {{ icon("map", "size-6") }}
+        <p class="text-sm font-medium">Interactive map</p>
+        <p class="text-xs">Loads in a moment. You can also type the coordinates below.</p>
+      </div>
+    </div>
+    <div class="mt-3 flex flex-wrap items-center gap-2 px-1">
+      <button type="button" class="btn btn-dark btn-sm" data-find-address>{{ icon("search", "size-4") }} Find address</button>
+      <button type="button" class="btn btn-secondary btn-sm" data-locate>{{ icon("map-pin", "size-4") }} Use my location</button>
+      <p class="text-xs muted" data-picker-status aria-live="polite">Click the map or drag the pin to the entrance.</p>
+    </div>
+    <ul class="owner-geo-results" data-results hidden aria-label="Address suggestions"></ul>
+    <div class="mt-3 grid grid-cols-2 gap-3 px-1 pb-1">
+      <div>
+        <label class="label !text-xs" for="f-latitude">Latitude</label>
+        <input id="f-latitude" name="latitude" value="{{ values.latitude }}" inputmode="decimal" class="input !py-2 font-mono text-xs {{ 'input-error' if errors.location }}" placeholder="12.971600" data-lat data-material autocomplete="off">
+      </div>
+      <div>
+        <label class="label !text-xs" for="f-longitude">Longitude</label>
+        <input id="f-longitude" name="longitude" value="{{ values.longitude }}" inputmode="decimal" class="input !py-2 font-mono text-xs {{ 'input-error' if errors.location }}" placeholder="77.641200" data-lon data-material autocomplete="off">
+      </div>
+      {% if errors.location %}<p class="field-error col-span-2">{{ errors.location }}</p>{% endif %}
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+{# ------------------------------------------------------------------ hours #}
+<section class="space-y-4" aria-labelledby="sec-hours" data-component="hours-editor" data-max-hours="{{ max_open_hours }}">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <span class="owner-step-num">3</span>
+      <div>
+        <h3 id="sec-hours" class="font-semibold">Opening hours</h3>
+        <p class="text-xs muted">At most {{ max_open_hours | int }} hours a day - a safety rule for staff and members.</p>
+      </div>
+    </div>
+    <button type="button" class="btn btn-ghost btn-sm" data-copy-first>{{ icon("copy", "size-4") }} Copy Monday to all days</button>
+  </div>
+  {% if hours_errors %}
+  <div class="alert alert-danger" role="alert">{{ icon("clock", "size-5 shrink-0") }}<ul class="space-y-0.5">{% for e in hours_errors %}<li>{{ e }}</li>{% endfor %}</ul></div>
+  {% endif %}
+  <div class="divide-y divide-black/[0.05] overflow-hidden rounded-[24px] bg-zinc-50 ring-1 ring-black/[0.04] dark:divide-white/[0.06] dark:bg-white/[0.03] dark:ring-white/[0.06]">
+    {% for row in hours_rows %}
+    <div class="owner-hours-row {{ 'owner-hours-error' if row.error }}" data-day="{{ row.wd }}">
+      <p class="text-sm font-medium"><span class="sm:hidden">{{ row.short }}</span><span class="hidden sm:inline">{{ row.day }}</span></p>
+      <div class="flex min-w-0 items-center gap-1.5 sm:gap-2" data-times>
+        <label class="sr-only" for="f-open_{{ row.wd }}">{{ row.day }} opening time</label>
+        <input id="f-open_{{ row.wd }}" type="time" name="open_{{ row.wd }}" value="{{ row.open }}" step="900" class="input owner-time" data-open {% if row.error %}aria-invalid="true"{% endif %}>
+        <span class="muted" aria-hidden="true">–</span>
+        <label class="sr-only" for="f-close_{{ row.wd }}">{{ row.day }} closing time</label>
+        <input id="f-close_{{ row.wd }}" type="time" name="close_{{ row.wd }}" value="{{ row.close }}" step="900" class="input owner-time" data-close {% if row.error %}aria-invalid="true"{% endif %}>
+        <span class="hidden w-14 shrink-0 text-right text-xs tabular-nums muted sm:inline" data-duration></span>
+      </div>
+      <label class="flex items-center justify-end gap-2 text-sm">
+        <input type="checkbox" name="closed_{{ row.wd }}" value="1" class="checkbox" data-closed {{ 'checked' if row.closed }}>
+        <span>Closed<span class="sr-only"> on {{ row.day }}</span></span>
+      </label>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<div class="divider"></div>
+
+{# ------------------------------------------------------------------ features #}
+<section class="space-y-4" aria-labelledby="sec-features">
+  <div class="flex items-center gap-3">
+    <span class="owner-step-num">4</span>
+    <div>
+      <h3 id="sec-features" class="font-semibold">Facilities</h3>
+      <p class="text-xs muted">Shown on the public branch page. Pick everything that applies.</p>
+    </div>
+  </div>
+  <fieldset>
+    <legend class="sr-only">Facilities</legend>
+    <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+      {% for name, ico in standard_features %}
+      <label class="owner-feature">
+        <input type="checkbox" name="features" value="{{ name }}" class="peer sr-only" {{ 'checked' if name in values.features }}>
+        <span class="owner-feature-box">
+          {{ icon(ico, "size-4 shrink-0") }}
+          <span class="min-w-0 leading-tight">{{ name }}</span>
+          {{ icon("check", "owner-feature-tick size-4 shrink-0") }}
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+  </fieldset>
+  {{ ui.field("custom_features", "Other facilities", value=values.custom_features, error=errors.custom_features, placeholder="Boxing ring, Kids area, Smoothie bar", help="Comma-separated, up to 10.", attrs='maxlength="700"') }}
+</section>

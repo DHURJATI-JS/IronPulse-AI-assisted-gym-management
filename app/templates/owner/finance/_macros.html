@@ -1,0 +1,117 @@
+{#- WP-C2 shared macros. Import WITH CONTEXT:  {% import "owner/finance/_macros.html" as fin with context %} -#}
+{% import "_ui.html" as ui with context %}
+
+{% macro finance_nav(section) %}
+<nav class="mb-8 flex flex-wrap items-center justify-between gap-3 animate-fade-up" aria-label="Finance sections">
+  <div class="tabs max-w-full overflow-x-auto">
+    {% for key, href, label, ico in [("overview", "/owner/finance", "Overview", "chart"), ("payroll", "/owner/payroll", "Payroll", "banknotes"), ("transactions", "/owner/finance/transactions", "Transactions", "receipt")] %}
+      <a href="{{ href }}" class="tab inline-flex items-center gap-1.5 whitespace-nowrap {{ 'tab-active' if section == key }}"{% if section == key %} aria-current="page"{% endif %}>{{ icon(ico, "size-4") }}{{ label }}</a>
+    {% endfor %}
+  </div>
+  {% if app.payments_test_mode %}
+    <span class="chip" title="No Cashfree keys are configured - payments and payouts are simulated">
+      <span class="dot bg-warn"></span>Test mode · payments simulated
+    </span>
+  {% endif %}
+</nav>
+{% endmacro %}
+
+{#- GET form with a gym picker (auto-submits; works without JS through the button) -#}
+{% macro gym_filter(gyms, gym, action, extra=None) %}
+{% if gyms | length > 1 %}
+<form method="get" action="{{ action }}" class="flex items-center gap-2">
+  {% if extra %}{% for k, v in extra.items() %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}{% endif %}
+  <label for="gym-filter" class="sr-only">Gym</label>
+  <select id="gym-filter" name="gym" class="input !w-auto !py-2.5 pr-9" data-autosubmit>
+    <option value="">All gyms</option>
+    {% for g in gyms %}<option value="{{ g.id }}" {{ 'selected' if gym and gym.id == g.id }}>{{ g.name }}</option>{% endfor %}
+  </select>
+  <noscript><button class="btn btn-secondary btn-sm">Apply</button></noscript>
+</form>
+{% endif %}
+{% endmacro %}
+
+{% macro kpi(label, value, hint=None, ico=None, tone="blue", href=None, value_cls="") %}
+{% set tag = "a" if href else "div" %}
+<{{ tag }} {% if href %}href="{{ href }}"{% endif %} class="card-flat block transition duration-300 ease-spring {{ 'hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/5 focus-visible:-translate-y-0.5' if href }}">
+  <div class="flex items-start justify-between gap-3">
+    <p class="text-sm muted">{{ label }}</p>
+    {% if ico %}<span class="grid size-8 shrink-0 place-items-center rounded-xl badge-{{ tone }}" aria-hidden="true">{{ icon(ico, "size-4") }}</span>{% endif %}
+  </div>
+  <p class="mt-2 break-words text-[26px] font-semibold leading-tight tracking-tight sm:text-[28px] {{ value_cls }}">{{ value }}</p>
+  {% if hint %}<p class="mt-1.5 text-xs muted">{{ hint }}</p>{% endif %}
+</{{ tag }}>
+{% endmacro %}
+
+{% macro direction_icon(tx) -%}
+{% if tx.direction.value == 'incoming' %}
+  <span class="fin-direction fin-direction-in" aria-hidden="true">{{ icon("download", "size-4") }}</span>
+{% else %}
+  <span class="fin-direction fin-direction-out" aria-hidden="true">{{ icon("upload", "size-4") }}</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro signed_amount(tx) -%}
+{% if tx.direction.value == 'incoming' %}
+  <span class="fin-amount-in font-semibold"><span class="sr-only">Incoming </span>+{{ tx.amount | money(tx.currency) }}</span>
+{% else %}
+  <span class="fin-amount-out font-semibold"><span class="sr-only">Outgoing </span>&minus;{{ tx.amount | money(tx.currency) }}</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro category_badge(category) -%}
+{% set tones = {'subscription': 'blue', 'salary': 'violet', 'gratuity': 'violet', 'tax': 'amber', 'refund': 'zinc', 'payout_fee': 'zinc', 'expense': 'zinc', 'other': 'zinc'} %}
+{{ ui.badge(category | humanize, tones.get(category.value, 'zinc')) }}
+{%- endmacro %}
+
+{#- Due-date chip for a statement (overdue in red) -#}
+{% macro due_chip(st, today) -%}
+{% if st.status.value in ('due', 'awaiting_proof') and st.due_date < today %}
+  <span class="badge badge-red">{{ icon("alert", "size-3.5") }}Overdue · {{ st.due_date | date("%d %b") }}</span>
+{% elif st.status.value in ('due', 'awaiting_proof', 'proof_review', 'draft') %}
+  <span class="text-xs muted">Due {{ st.due_date | date("%d %b %Y") }}</span>
+{% elif st.status.value == 'paid' %}
+  <span class="text-xs muted">Paid {{ st.paid_at | dt("%d %b %Y") }}</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro statement_status(st) -%}
+{% if st.status.value == 'proof_review' %}
+  <span class="badge badge-blue"><span class="spinner size-3"></span>Verifying proof</span>
+{% else %}
+  {{ ui.status(st.status) }}
+{% endif %}
+{%- endmacro %}
+
+{% macro empty_inline(title, body=None, ico="sparkles") %}
+<div class="flex flex-col items-center px-4 py-10 text-center">
+  <span class="grid size-12 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon(ico, "size-6") }}</span>
+  <p class="mt-3 font-semibold">{{ title }}</p>
+  {% if body %}<p class="mt-1 max-w-sm text-sm muted">{{ body }}</p>{% endif %}
+  {% if caller %}<div class="mt-5 flex flex-wrap justify-center gap-2">{{ caller() }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{#- Salary-by-days rows; long periods collapse the middle months -#}
+{% macro proration_row(p, salary, cur, show_salary=True) %}
+<div class="fin-row">
+  <span>{{ p.label }} <span class="muted">· {% if show_salary %}{{ salary | money(cur) }} × {% endif %}{{ p.paid_days }}/{{ p.days_in_month }} days{% if p.unpaid_leave_days %} ({{ p.unpaid_leave_days }} unpaid leave){% endif %}</span></span>
+  <span>{{ p.amount | money(cur) }}</span>
+</div>
+{% endmacro %}
+
+{% macro proration_rows(lines, salary, cur, show_salary=True) %}
+{% if lines | length > 6 %}
+  {% for p in lines[:2] %}{{ proration_row(p, salary, cur, show_salary) }}{% endfor %}
+  <details class="group">
+    <summary class="fin-row cursor-pointer list-none">
+      <span class="inline-flex items-center gap-1 font-medium text-accent">{{ icon("chevron-right", "size-4 transition group-open:rotate-90") }}{{ lines | length - 4 }} more months</span>
+      <span class="muted">{{ lines[2].label }} – {{ lines[-3].label }}</span>
+    </summary>
+    {% for p in lines[2:-2] %}{{ proration_row(p, salary, cur, show_salary) }}{% endfor %}
+  </details>
+  {% for p in lines[-2:] %}{{ proration_row(p, salary, cur, show_salary) }}{% endfor %}
+{% else %}
+  {% for p in lines %}{{ proration_row(p, salary, cur, show_salary) }}{% endfor %}
+{% endif %}
+{% endmacro %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_macros.html" as sm with context %}
+{% block title %}My schedule{% endblock %}
+{% block content %}
+{{ ui.page_header("My week", S.fmt_hours(week_minutes) ~ " hours across every gym you work for. Branch shifts use the branch's local time.", eyebrow="Schedule", back="/staff") }}
+
+{% if not employments %}
+  {{ ui.empty("No schedule yet", "Once a gym links you as staff and adds shifts, your week appears here.", "calendar", "Back to the portal", "/staff") }}
+{% else %}
+<section class="card mb-6 animate-fade-up">
+  {{ sm.week_strip(week_days, today_wd) }}
+</section>
+
+<div class="grid gap-3 lg:grid-cols-7">
+  {% for d in range(7) %}
+  <section class="card-flat flex flex-col !p-4 {{ 'ring-2 !ring-accent/50' if d == today_wd }} animate-fade-up" aria-labelledby="day-{{ d }}">
+    <header class="mb-3 flex items-baseline justify-between gap-2 lg:block">
+      <h2 id="day-{{ d }}" class="text-sm font-semibold {{ 'text-accent' if d == today_wd }}">
+        <span class="lg:hidden">{{ S.WEEKDAYS[d] }}</span><span class="hidden lg:inline">{{ S.WEEKDAYS_SHORT[d] }}</span>
+        {% if d == today_wd %}<span class="ml-1 text-[11px] font-medium">Today</span>{% endif %}
+      </h2>
+      <p class="text-xs tabular-nums muted">{{ S.fmt_hours(day_minutes[d]) }} h</p>
+    </header>
+    {% if days[d] %}
+      <ul class="space-y-2">
+        {% for item in days[d] %}
+        {% set s = item.shift %}
+        <li class="rounded-2xl px-3 py-2.5 {{ 'bg-accent/10' if s.mode.value == 'offline' else 'bg-violet/12' }} {{ 'opacity-50' if item.emp.status.value == 'suspended' }}">
+          <p class="text-sm font-semibold tabular-nums">{{ s.start_time.strftime("%H:%M") }}–{{ s.end_time.strftime("%H:%M") }}</p>
+          <p class="mt-0.5 truncate text-xs font-medium {{ 'text-accent-strong dark:text-[#64b5ff]' if s.mode.value == 'offline' else 'text-[#9333ea] dark:text-[#d8a4ff]' }}">{{ icon("building" if s.mode.value == "offline" else "globe", "size-3 inline -mt-0.5") }} {{ item.where }}</p>
+          {% if multi_gym %}<p class="truncate text-[11px] muted">{{ item.emp.gym.name }}</p>{% endif %}
+          {% if item.emp.status.value != "active" %}<p class="mt-1 text-[11px] text-[#b45309] dark:text-[#fbbf24]">{{ item.emp.status | humanize }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-xs text-zinc-400 dark:text-zinc-500">Free</p>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+
+<p class="mt-6 flex items-start gap-2 text-xs muted">{{ icon("info", "size-3.5 mt-0.5 shrink-0") }} Your gym admin manages shifts. IronPulse keeps shifts from overlapping, at least 6 hours apart between different branches, and never at branches of one gym that are 50 km or more apart.</p>
+{% endif %}
+{% endblock %}

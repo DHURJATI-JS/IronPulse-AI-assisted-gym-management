@@ -1,0 +1,13 @@
+/* staff work-package styles (use @layer components { ... }; prefer utility classes in templates) */
+@layer components {
+  /* Rounded-square ("squircle") staff portrait used across the team, staff and portal pages */
+  .staff-photo {
+    @apply inline-flex shrink-0 items-center justify-center overflow-hidden rounded-[28%] bg-gradient-to-br from-accent to-violet font-semibold text-white ring-1 ring-black/5 dark:ring-white/10;
+  }
+  .staff-photo img {
+    @apply size-full object-cover;
+  }
+  .staff-photo img.hidden {
+    @apply hidden;
+  }
+}

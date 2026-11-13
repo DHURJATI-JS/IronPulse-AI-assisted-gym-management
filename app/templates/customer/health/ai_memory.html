@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}What the AI knows about you{% endblock %}
+
+{% macro forget(kind, field, value, label) %}
+<form method="post" action="/me/health/profile/ai/forget" class="shrink-0" data-confirm="Forget “{{ label }}”? Your coach, the safety checks and every AI answer stop using it right away.">
+  {{ ui.csrf() }}
+  <input type="hidden" name="kind" value="{{ kind }}">
+  <input type="hidden" name="field" value="{{ field }}">
+  <input type="hidden" name="value" value="{{ value }}">
+  <button type="submit" class="btn btn-ghost btn-sm hover:!bg-bad/10 hover:!text-bad" aria-label="Forget {{ label }}">{{ icon("trash", "size-3.5") }} Forget</button>
+</form>
+{% endmacro %}
+
+{% macro chip_list(field, values, edit) %}
+{% if values %}
+<ul class="mt-2 flex flex-wrap gap-2">
+  {% for v in values %}
+  {% set label = fp.label_of(field, v) %}
+  <li class="flex items-center gap-1 rounded-full bg-zinc-100 py-1 pl-3 pr-1 text-sm dark:bg-white/[0.06]">
+    <span class="[overflow-wrap:anywhere]">{{ label }}</span>
+    <form method="post" action="/me/health/profile/ai/forget" data-confirm="Forget “{{ label }}”?">
+      {{ ui.csrf() }}
+      <input type="hidden" name="kind" value="list"><input type="hidden" name="field" value="{{ field }}"><input type="hidden" name="value" value="{{ v }}">
+      <button type="submit" class="grid size-7 place-items-center rounded-full hover:bg-bad/10 hover:text-bad" aria-label="Forget {{ label }}" title="Forget">{{ icon("x", "size-3.5") }}</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="mt-1 text-sm muted">Nothing saved. <a href="{{ edit }}" class="font-medium text-accent hover:underline">Add</a></p>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+{% call ui.page_header("What the AI knows about you", "Everything the assistant, your AI coach, the live coach and the plan and product advisors use about you. Edit anything, or make the AI forget it - it's gone from the very next answer. Only you can see this page.", eyebrow="Health profile", back="/me/health/profile") %}
+  <a href="{{ fitness_page }}" class="btn btn-secondary">{{ icon("pencil", "size-4") }} Training preferences</a>
+{% endcall %}
+
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+  <div class="min-w-0 space-y-6 lg:col-span-2">
+    {# ---------------------------------------------------------------- health #}
+    <section class="card" aria-labelledby="mem-health-title">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="mem-health-title" class="section-title">Health: conditions, injuries, medications, allergies</h2>
+        <span class="badge badge-zinc">{{ held if held <= max_conditions else max_conditions ~ "+" }} of {{ max_conditions }}</span>
+      </div>
+      <p class="mt-1 text-sm muted">The safety checks rule out unsafe exercises from these, and every AI answer takes them into account.</p>
+      {% if member.conditions %}
+      <ul class="mt-4 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+        {% for c in member.conditions %}
+        <li class="flex items-start gap-3 py-3">
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium [overflow-wrap:anywhere]">{{ c.name }}</p>
+            <p class="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs muted">
+              <span>{{ kind_labels.get(c.kind, c.kind) }}</span>
+              {% if c.tag %}<span class="badge badge-blue whitespace-nowrap !py-0.5">{{ tag_labels.get(c.tag, c.tag) }}</span>{% endif %}
+              {% if c.source in from_chat %}<span>· remembered from a chat</span>{% elif c.source in ("owner", "ai_intake") %}<span>· added by your gym</span>{% endif %}
+            </p>
+            {% if c.notes %}<p class="mt-1 text-xs muted [overflow-wrap:anywhere]">{{ c.notes }}</p>{% endif %}
+          </div>
+          <a href="/me/health/profile#conditions" class="btn btn-ghost btn-sm shrink-0">{{ icon("pencil", "size-3.5") }} Edit</a>
+          {{ forget("health", "", c.id, c.name) }}
+        </li>
+        {% endfor %}
+      </ul>
+      {% if held > member.conditions | length %}<p class="mt-2 text-xs muted">Showing the {{ member.conditions | length }} the AI reads (the safety-relevant ones first).</p>{% endif %}
+      {% else %}
+      <div class="mt-4 rounded-2xl bg-zinc-100/80 p-4 text-sm muted dark:bg-white/[0.04]">Nothing saved. Add conditions on your <a href="/me/health/profile#conditions" class="font-medium text-accent hover:underline">health profile</a>, or tell the assistant (“I have asthma”) and confirm.</div>
+      {% endif %}
+    </section>
+
+    {# ---------------------------------------------------------------- training #}
+    <section class="card space-y-5" aria-labelledby="mem-training-title">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="mem-training-title" class="section-title">Training</h2>
+        <a href="{{ fitness_page }}" class="btn btn-ghost btn-sm">{{ icon("pencil", "size-3.5") }} Edit</a>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <p class="text-xs font-medium muted">Main plan goal</p>
+          <p class="mt-1 text-sm font-medium">{{ goal_labels.get(member.goal, "General fitness") }} <a href="/me/health/profile" class="ml-1 text-xs text-accent hover:underline">Edit</a></p>
+        </div>
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <p class="text-xs font-medium muted">Experience level</p>
+            <p class="mt-1 text-sm font-medium">{{ level_labels.get(member.level, "Beginner") }}</p>
+          </div>
+          {% if member.level and member.level != "beginner" %}{{ forget("level", "level", member.level, "Experience level") }}{% endif %}
+        </div>
+      </div>
+      <div><p class="text-xs font-medium muted">Exercise you enjoy</p>{{ chip_list("likes", member.fitness.likes, fitness_page) }}</div>
+      <div><p class="text-xs font-medium muted">Exercise you avoid</p>{{ chip_list("avoids", member.fitness.avoids, fitness_page) }}</div>
+      <div><p class="text-xs font-medium muted">Goals</p>{{ chip_list("goals", member.fitness.goals, fitness_page) }}</div>
+      <div><p class="text-xs font-medium muted">Equipment</p>{{ chip_list("equipment", member.fitness.equipment, fitness_page) }}</div>
+      <div class="grid gap-3 sm:grid-cols-3">
+        {% for name in ("sessions_per_week", "session_minutes", "preferred_time") %}
+        {% set value = member.fitness[name] %}
+        <div class="flex items-start justify-between gap-2 rounded-2xl bg-zinc-100/80 p-3 dark:bg-white/[0.04]">
+          <div class="min-w-0">
+            <p class="text-xs font-medium muted">{{ fp.FIELD_LABELS[name] }}</p>
+            <p class="mt-1 text-sm font-medium">{{ fp.describe_scalar(name, value) if value is not none else "Not set" }}</p>
+          </div>
+          {% if value is not none %}{{ forget("scalar", name, value, fp.FIELD_LABELS[name]) }}{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% if member.fitness.notes %}
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0"><p class="text-xs font-medium muted">Training notes</p><p class="mt-1 text-sm [overflow-wrap:anywhere]">{{ member.fitness.notes }}</p></div>
+        {{ forget("fitness_notes", "notes", "", "Training notes") }}
+      </div>
+      {% endif %}
+    </section>
+
+    {% if member.health_notes %}
+    <section class="card" aria-labelledby="mem-notes-title">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 id="mem-notes-title" class="section-title">Notes for your coach</h2>
+          <p class="mt-2 text-sm [overflow-wrap:anywhere]">{{ member.health_notes }}</p>
+          <a href="/me/health/profile" class="mt-2 inline-block text-xs text-accent hover:underline">Edit</a>
+        </div>
+        {{ forget("health_notes", "health_notes", "", "Notes for your coach") }}
+      </div>
+    </section>
+    {% endif %}
+  </div>
+
+  <aside class="min-w-0 space-y-6">
+    <section class="card" aria-labelledby="mem-how-title">
+      <h2 id="mem-how-title" class="section-title">How the AI remembers</h2>
+      <ul class="mt-3 space-y-2 text-sm muted">
+        <li>When you tell the assistant or the live coach something lasting (“I have asthma”, “I only do yoga”), it asks before saving it - nothing about your health is stored silently.</li>
+        <li>Say “forget my asthma” in a chat, or press Forget here: it's removed everywhere at once and hidden from the AI's view of your past chats.</li>
+        <li>Your profile holds up to {{ max_conditions }} health items.</li>
+      </ul>
+    </section>
+    <details class="card">
+      <summary class="cursor-pointer text-sm font-semibold">Exactly what an AI answer is given</summary>
+      <pre class="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-zinc-100/80 p-3 text-xs dark:bg-white/[0.04]">{{ prompt_preview }}</pre>
+    </details>
+  </aside>
+</div>
+{% endblock %}

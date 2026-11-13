@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% block title %}Wishlist{% endblock %}
+{% block content %}
+<div class="relative isolate">
+  <div class="shop-glow" aria-hidden="true"></div>
+  {{ shop.toolbar("wishlist", cart_count) }}
+  {% call ui.page_header("Your wishlist", subtitle="Products you've saved. We'll keep them here until you're ready.", eyebrow="Shop") %}
+    <a href="/shop" class="btn btn-secondary btn-sm">{{ shop.svg("store", "size-4") }}Keep shopping</a>
+  {% endcall %}
+  {% if cards %}
+    {% if page.pages > 1 %}<p class="mb-4 text-sm muted" aria-live="polite">{{ page.total }} saved products · showing {{ page.first }}–{{ page.last }}</p>{% endif %}
+    <div class="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4">
+      {% for card in cards %}
+        <div class="animate-fade-up" data-wishlist-item>
+          {% if card.product.is_active and card.product.gym.is_active %}
+            {{ shop.product_card(card) }}
+          {% else %}
+            <article class="shop-card opacity-70">
+              <div class="shop-media">{{ shop.media(card.cover_key, "", card.product.category.value) }}</div>
+              {{ shop.wish_button(card.product, True, "absolute right-3 top-3 z-10") }}
+              <div class="p-5"><p class="font-semibold">{{ card.product.name }}</p><p class="mt-1 text-xs muted">No longer available</p></div>
+            </article>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+    {{ ui.pager(page, noun="saved products", label="Wishlist pages") }}
+  {% else %}
+    {{ ui.empty("Nothing saved yet", "Tap the heart on any product to save it here.", "heart", "Browse the shop", "/shop") }}
+  {% endif %}
+</div>
+{% endblock %}

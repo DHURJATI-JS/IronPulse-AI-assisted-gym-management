@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}Report #{{ report.id }}{% endblock %}
+{% block content %}
+{% set emp = report.employee %}
+{% set reporter = report.reporter %}
+{% call ui.page_header("Report about " ~ (emp.display_name if emp else "a staff member"), category_label(report.category) ~ " · " ~ report.gym.name ~ " · reported " ~ (report.created_at | timeago), eyebrow="Misconduct report #" ~ report.id, back="/owner/reports") %}
+  {% if report.status.value == 'open' %}{{ ui.badge("Awaiting your reply", "amber", "clock") }}
+  {% elif report.status.value == 'accepted' %}{{ ui.badge("Accepted", "green", "check-circle") }}
+  {% else %}{{ ui.badge("Declined", "zinc", "x-circle") }}{% endif %}
+{% endcall %}
+
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+  <div class="min-w-0 space-y-6">
+    <section class="card animate-fade-up" aria-labelledby="report-title">
+      <h2 id="report-title" class="section-title">What the member reported</h2>
+      <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+        <div><dt class="text-xs muted">Category</dt><dd class="mt-0.5 font-medium">{{ category_label(report.category) }}</dd></div>
+        <div><dt class="text-xs muted">Incident date</dt><dd class="mt-0.5 font-medium">{{ report.incident_date | date if report.incident_date else '—' }}</dd></div>
+        <div><dt class="text-xs muted">Received</dt><dd class="mt-0.5 font-medium">{{ report.created_at | dt }}</dd></div>
+      </dl>
+      <blockquote class="mt-5 rounded-2xl bg-zinc-100/80 p-4 text-[15px] leading-relaxed whitespace-pre-line dark:bg-white/[0.05]">{{ report.description }}</blockquote>
+    </section>
+
+    {% if report.status.value == 'open' %}
+    <form method="post" action="/owner/reports/{{ report.id }}" class="card space-y-5 animate-fade-up" novalidate aria-labelledby="respond-title">
+      {{ ui.csrf() }}
+      <div>
+        <h2 id="respond-title" class="section-title">Your reply</h2>
+        <p class="mt-0.5 text-sm muted">If the staff member was in the wrong, accept the report and apologise. Otherwise decline it and explain why. The member sees your reply.</p>
+      </div>
+      {{ ui.form_errors(errors.values() | list if errors else None) }}
+      <fieldset>
+        <legend class="sr-only">Decision</legend>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="flex cursor-pointer items-start gap-3 rounded-2xl p-4 ring-1 ring-black/[0.07] transition has-[:checked]:bg-ok/[0.07] has-[:checked]:ring-2 has-[:checked]:ring-ok dark:ring-white/10">
+            <input type="radio" name="decision" value="accept" class="mt-1 accent-[#30d158]" {{ 'checked' if values.decision == 'accept' }} required>
+            <span><span class="block font-semibold">Accept &amp; apologise</span><span class="mt-0.5 block text-xs muted">The member was treated badly. Say sorry and what you'll do about it.</span></span>
+          </label>
+          <label class="flex cursor-pointer items-start gap-3 rounded-2xl p-4 ring-1 ring-black/[0.07] transition has-[:checked]:bg-zinc-500/[0.08] has-[:checked]:ring-2 has-[:checked]:ring-zinc-500 dark:ring-white/10">
+            <input type="radio" name="decision" value="decline" class="mt-1" {{ 'checked' if values.decision == 'decline' }}>
+            <span><span class="block font-semibold">Decline with a reason</span><span class="mt-0.5 block text-xs muted">After checking, the report isn't accurate. Explain respectfully why.</span></span>
+          </label>
+        </div>
+        {% if errors.decision %}<p class="field-error mt-2">{{ errors.decision }}</p>{% endif %}
+      </fieldset>
+      {{ ui.textarea("response", "Message to the member", value=values.response, required=True, rows=6, error=errors.get("response"),
+                     placeholder="We're sorry this happened. We've spoken with … and …",
+                     attrs='minlength="' ~ response_min ~ '" maxlength="' ~ response_max ~ '" data-component="char-count" data-min="' ~ response_min ~ '" data-max="' ~ response_max ~ '"',
+                     help="At least " ~ response_min ~ " characters. Accepting requires an apology (e.g. “We're sorry…”).") }}
+      <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <a href="/owner/reports" class="btn btn-ghost">Back to reports</a>
+        <button type="submit" class="btn btn-primary">{{ icon("send", "size-4") }} Send reply</button>
+      </div>
+    </form>
+    {% else %}
+    <section class="card animate-fade-up" aria-labelledby="reply-title">
+      <div class="flex items-center gap-3">
+        <span class="grid size-10 place-items-center rounded-2xl {{ 'bg-ok/12 text-[#1f8c3a] dark:text-[#4ade80]' if report.status.value == 'accepted' else 'bg-zinc-500/12 text-zinc-500' }}">{{ icon("check-circle" if report.status.value == 'accepted' else "x-circle", "size-5") }}</span>
+        <div>
+          <h2 id="reply-title" class="section-title">{{ 'Accepted with an apology' if report.status.value == 'accepted' else 'Declined' }}</h2>
+          <p class="text-xs muted">{{ resolver or 'Gym admin' }} · {{ report.resolved_at | dt }}</p>
+        </div>
+      </div>
+      <p class="mt-4 rounded-2xl bg-zinc-100/80 p-4 text-[15px] leading-relaxed whitespace-pre-line dark:bg-white/[0.05]">{{ report.admin_response }}</p>
+      <p class="mt-3 text-xs muted">The member was notified in the app and by e-mail.</p>
+    </section>
+    {% endif %}
+  </div>
+
+  <aside class="space-y-4">
+    <section class="card-flat" aria-labelledby="staff-title">
+      <p id="staff-title" class="eyebrow">Staff member</p>
+      <div class="mt-3 flex items-center gap-3">
+        {{ ui.avatar(emp.photo_key if emp and not emp.deleted_at else None, emp.display_name if emp else 'Staff', "size-12", "text-sm") }}
+        <div class="min-w-0">
+          <p class="truncate font-semibold">{{ emp.display_name if emp else 'Staff member' }}</p>
+          <p class="truncate text-xs muted">{{ (emp.role_title or (emp.role.value | humanize)) if emp else '' }}</p>
+        </div>
+      </div>
+      {% if emp %}{{ ui.status(emp.status) }}{% endif %}
+      <p class="mt-3 text-sm muted">
+        {% set prev = (other_reports.get('open', 0) + other_reports.get('accepted', 0) + other_reports.get('declined', 0)) %}
+        {% if prev %}{{ prev }} other report{{ 's' if prev != 1 }} about this person ({{ other_reports.get('accepted', 0) }} accepted).{% else %}No other reports about this person.{% endif %}
+      </p>
+      {% if emp and not emp.deleted_at %}<a href="/owner/staff/{{ emp.id }}" class="btn btn-secondary btn-sm mt-4 w-full">{{ icon("user", "size-4") }} Staff profile</a>{% endif %}
+    </section>
+    <section class="card-flat" aria-labelledby="member-title">
+      <p id="member-title" class="eyebrow">Reported by</p>
+      <div class="mt-3 flex items-center gap-3">
+        {{ ui.avatar(reporter.photo_key if reporter and not reporter.deleted_at else None, reporter.display_name if reporter else 'Deleted user', "size-12", "text-sm") }}
+        <div class="min-w-0">
+          <p class="truncate font-semibold">{{ reporter.display_name if reporter else 'Deleted user' }}</p>
+          {% if reporter and not reporter.deleted_at %}<p class="truncate text-xs muted">{{ reporter.email or reporter.phone or '' }}</p>{% endif %}
+        </div>
+      </div>
+      {% if reporter and not reporter.deleted_at %}
+      <div class="mt-4 grid gap-2">
+        <a href="/owner/customers/{{ reporter.id }}" class="btn btn-secondary btn-sm">{{ icon("user", "size-4") }} Member profile</a>
+        {% if thread_id %}<a href="/chat/{{ thread_id }}" class="btn btn-ghost btn-sm">{{ icon("chat", "size-4") }} Open their chat</a>{% endif %}
+      </div>
+      {% endif %}
+    </section>
+  </aside>
+</div>
+{% endblock %}

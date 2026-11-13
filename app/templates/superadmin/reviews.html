@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% block title %}Review queue{% endblock %}
+{% block content %}
+{% call sa.header("Review queue", "Branches, trainer certifications and ID cards that the OCR engines and the AI could not decide on their own. Your decision is final and the person is notified.", section, sections, counts) %}
+  {{ ui.ai_chip(disclaimer=False) }}
+{% endcall %}
+
+{% set tabs_def = [("branches", "Branches", tab_sizes.branches, "building"), ("staff", "Trainer certifications", tab_sizes.staff, "academic"), ("identity", "ID cards", tab_sizes.identity, "id-card")] %}
+<nav class="tabs mb-6 max-w-full overflow-x-auto" aria-label="Queues">
+  {% for key, label, n, ico in tabs_def %}
+  <a href="/superadmin/reviews?tab={{ key }}" class="tab inline-flex shrink-0 items-center gap-1.5 {{ 'tab-active' if tab == key }}" {% if tab == key %}aria-current="page"{% endif %}>
+    {{ icon(ico, "size-4") }}{{ label }}
+    {% if n %}<span class="rounded-full bg-bad px-1.5 text-[11px] font-semibold leading-5 text-white tabular-nums">{{ n }}</span>{% endif %}
+  </a>
+  {% endfor %}
+</nav>
+
+{# ------------------------------------------------------------------ branches #}
+{% if tab == "branches" %}
+  {% if branches %}
+  <ul class="grid gap-4 md:grid-cols-2">
+    {% for b in branches %}
+    {% set fails = b.verification_checks | selectattr("status", "defined") | selectattr("status", "equalto", "fail") | list if b.verification_checks else [] %}
+    {% set ri = run_info.get(b.id) %}
+    <li class="card card-hover flex min-w-0 flex-col animate-fade-up">
+      <div class="flex items-start gap-3">
+        <span class="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("building", "size-5") }}</span>
+        <div class="min-w-0 flex-1">
+          <p class="truncate font-semibold">{{ b.name }}</p>
+          <p class="truncate text-sm muted">{{ b.gym.name }} · {{ b.city }}, {{ b.country_code }}</p>
+        </div>
+        {{ ui.status(b.verification_status) }}
+      </div>
+      {% if b.verification_summary %}<p class="mt-4 line-clamp-3 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{{ b.verification_summary }}</p>{% endif %}
+      <ul class="mt-4 flex flex-wrap gap-2 text-xs">
+        <li class="chip">{{ icon("document", "size-3.5") }}{{ doc_counts.get(b.id, 0) }} document{{ 's' if doc_counts.get(b.id, 0) != 1 }}</li>
+        {% if fails %}<li class="chip !bg-bad/10 !text-[#d1281e] dark:!text-[#ff6b61]">{{ icon("x-circle", "size-3.5") }}{{ fails | length }} failed check{{ 's' if fails | length != 1 }}</li>{% endif %}
+        {% if ri %}<li class="chip">{{ icon("clock", "size-3.5") }}{{ ri.n }} run{{ 's' if ri.n != 1 }} · last {{ ri.last | timeago }}</li>{% endif %}
+      </ul>
+      <div class="mt-auto flex items-center justify-between gap-3 pt-5">
+        <p class="min-w-0 truncate text-xs muted">Owner: {{ b.gym.owner.display_name }}</p>
+        <a href="/superadmin/reviews/branches/{{ b.id }}" class="btn btn-dark btn-sm shrink-0">Review {{ icon("arrow-right", "size-4") }}</a>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    {{ ui.empty("No branches waiting", "Branches land here when the AI is unavailable or the automatic checks need a human eye.", "check-circle") }}
+  {% endif %}
+
+{# ------------------------------------------------------------------ staff #}
+{% elif tab == "staff" %}
+  {% if employees %}
+  <ul class="grid gap-4 md:grid-cols-2">
+    {% for e in employees %}
+    <li class="card card-hover flex min-w-0 flex-col animate-fade-up">
+      <div class="flex items-start gap-3">
+        {{ ui.avatar(e.photo_key, e.display_name, "size-11", "text-sm") }}
+        <div class="min-w-0 flex-1">
+          <p class="truncate font-semibold">{{ e.display_name }}</p>
+          <p class="truncate text-sm muted">{{ e.role_title or (e.role | humanize) }} · {{ e.gym.name }}</p>
+        </div>
+        {{ ui.status(e.verification_status) }}
+      </div>
+      {% if e.verification_summary %}<p class="mt-4 line-clamp-3 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{{ e.verification_summary }}</p>{% endif %}
+      <ul class="mt-4 flex flex-wrap gap-2 text-xs">
+        <li class="chip">{{ icon("document", "size-3.5") }}{{ emp_docs.get(e.id, 0) }} document{{ 's' if emp_docs.get(e.id, 0) != 1 }}</li>
+        <li class="chip">{{ icon("id-card", "size-3.5") }}ID {{ e.id_status | humanize | lower }}</li>
+        <li class="chip">{{ icon("user", "size-3.5") }}{{ 'Account linked' if e.user else 'No account yet' }}</li>
+      </ul>
+      <div class="mt-auto flex items-center justify-end pt-5">
+        <a href="/superadmin/reviews/employees/{{ e.id }}" class="btn btn-dark btn-sm">Review {{ icon("arrow-right", "size-4") }}</a>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    {{ ui.empty("No certifications waiting", "Trainer certifications appear here when OCR and the AI could not confirm the holder's name.", "check-circle") }}
+  {% endif %}
+
+{# ------------------------------------------------------------------ identity #}
+{% else %}
+  {% if identities %}
+  <ul class="grid gap-4 md:grid-cols-2">
+    {% for d in identities %}
+    {% set subject = d.user if d.user else d.employee %}
+    <li class="card card-hover flex min-w-0 flex-col animate-fade-up">
+      <div class="flex items-start gap-3">
+        <span class="grid size-11 shrink-0 place-items-center rounded-2xl bg-violet/12 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("id-card", "size-5") }}</span>
+        <div class="min-w-0 flex-1">
+          <p class="truncate font-semibold">{{ subject.display_name if subject else 'Unknown holder' }}</p>
+          <p class="truncate text-sm muted">{{ d.doc_type | humanize }} · {{ d.country_code }}{% if d.user %} · {{ d.user.role.value | humanize }}{% elif d.employee %} · staff record{% endif %}</p>
+        </div>
+        {{ ui.status(d.status) }}
+      </div>
+      {% if d.ai_summary %}<p class="mt-4 line-clamp-3 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{{ d.ai_summary }}</p>{% endif %}
+      <ul class="mt-4 flex flex-wrap gap-2 text-xs">
+        {% if d.consensus_score is not none %}<li class="chip">{{ icon("layers", "size-3.5") }}Consensus {{ (d.consensus_score * 100) | round | int }}%</li>{% endif %}
+        {% if d.engines %}<li class="chip">{{ icon("cpu", "size-3.5") }}{{ d.engines | length }} OCR engine{{ 's' if d.engines | length != 1 }}</li>{% endif %}
+        <li class="chip">{{ icon("clock", "size-3.5") }}Uploaded {{ d.created_at | timeago }}</li>
+      </ul>
+      <div class="mt-auto flex items-center justify-end pt-5">
+        <a href="/superadmin/reviews/identity/{{ d.id }}" class="btn btn-dark btn-sm">Review {{ icon("arrow-right", "size-4") }}</a>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    {{ ui.empty("No ID cards waiting", "ID cards come here when the OCR engines disagree or a document looks unusual.", "check-circle") }}
+  {% endif %}
+{% endif %}
+{{ sa.pagination(pager, {"branches": "branches", "staff": "trainer certifications", "identity": "ID cards"}[tab]) }}
+{% if branches or employees or identities %}{{ ui.ai_disclaimer("Summaries above were written by the automated checks.") }}{% endif %}
+{% endblock %}

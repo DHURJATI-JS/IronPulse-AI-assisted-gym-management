@@ -1,0 +1,47 @@
+{#- Coach page macros (WP-E2). Plan items are dicts: use item["..."]; day["items"] (not day.items - dict method!) -#}
+
+{% macro dose(item) -%}
+{%- if item.get("reps_label") -%}{{ item.get("sets") or 1 }} × {{ item.get("reps_label") }}
+{%- elif item.get("reps") -%}{{ item.get("sets") or 1 }} × {{ item.get("reps") }} reps
+{%- elif item.get("duration_s") -%}{{ item.get("sets") or 1 }} × {% if item.get("duration_s") >= 60 and item.get("duration_s") % 60 == 0 %}{{ item.get("duration_s") // 60 }} min{% else %}{{ item.get("duration_s") }} s{% endif %}
+{%- else -%}{{ item.get("sets") or 1 }} sets{%- endif -%}
+{%- endmacro %}
+
+{% macro day_card(day, index, videos, can_videos) %}
+<section class="card coach-day animate-fade-up" id="day-{{ index }}" data-coach-day="{{ index - 1 }}" aria-label="Day {{ index }}: {{ day.get('name') }}">
+  <header class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+      <p class="eyebrow">Day {{ index }}</p>
+      <h3 class="mt-1 text-xl font-semibold tracking-tight">{{ day.get("name") }}</h3>
+      {% if day.get("focus") %}<p class="mt-0.5 text-sm muted">{{ day.get("focus") }}</p>{% endif %}
+    </div>
+    <div class="flex flex-wrap gap-1.5">
+      <span class="chip">{{ icon("layers", "size-3.5") }} {{ day["items"] | length }} exercise{{ "s" if day["items"] | length != 1 }}</span>
+      <span class="chip">{{ icon("clock", "size-3.5") }} ~{{ day["minutes"] }} min</span>
+    </div>
+  </header>
+  <ol class="mt-4 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+    {% for item in day["items"] %}
+      {% set vslug = item.get("video_slug") %}
+      <li class="flex gap-3 py-4 sm:gap-4">
+        <span class="coach-step" data-cat="{{ item.get('category') or 'strength' }}">{{ loop.index }}</span>
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p class="font-semibold">{{ item.get("exercise") }}</p>
+            <span class="text-xs muted">{{ (item.get("category") or "strength") | humanize }}</span>
+            {% if vslug and can_videos and videos.get(vslug) %}
+              <a href="/me/videos/{{ vslug }}" class="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2.5 py-0.5 text-xs font-semibold text-accent transition hover:bg-accent/20">{{ icon("play", "size-3.5") }} Watch</a>
+            {% endif %}
+          </div>
+          <div class="mt-2 flex flex-wrap gap-1.5">
+            <span class="rx">{{ icon("activity", "size-3.5") }} {{ dose(item) }}</span>
+            {% if item.get("load") %}<span class="rx">{{ icon("dumbbell", "size-3.5") }} {{ item.get("load") }}</span>{% endif %}
+            {% if item.get("rest_s") %}<span class="rx">{{ icon("clock", "size-3.5") }} Rest {{ item.get("rest_s") }} s</span>{% endif %}
+          </div>
+          {% if item.get("notes") %}<p class="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{{ item.get("notes") }}</p>{% endif %}
+        </div>
+      </li>
+    {% endfor %}
+  </ol>
+</section>
+{% endmacro %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_macros.html" as sm with context %}
+{% block title %}{{ emp.display_name }} · Staff{% endblock %}
+{% block content %}
+<a href="/owner/staff" class="mb-4 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">{{ icon("arrow-left", "size-4") }} Team</a>
+
+<header class="mb-8 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between animate-fade-up">
+  <div class="flex min-w-0 items-center gap-4 sm:gap-5">
+    {{ sm.photo(emp.photo_key, emp.display_name, "size-20 sm:size-24", "text-2xl") }}
+    <div class="min-w-0">
+      <p class="eyebrow mb-1 truncate">{{ emp.gym.name }}</p>
+      <h1 class="truncate text-[28px] font-semibold leading-tight tracking-tight sm:text-[40px]">{{ emp.display_name }}</h1>
+      <div class="mt-2 flex flex-wrap items-center gap-1.5">
+        {{ ui.status(emp.status) }}
+        <span class="chip">{{ icon(S.ROLE_ICONS[emp.role.value], "size-3.5") }}{{ emp.role_title or S.ROLE_LABELS[emp.role.value] }}</span>
+        <span class="chip">{{ icon(S.WORK_MODE_ICONS[emp.work_mode.value], "size-3.5") }}{{ S.WORK_MODE_LABELS[emp.work_mode.value] }}</span>
+        <span class="chip hidden sm:inline-flex">{{ S.EMPLOYMENT_TYPE_LABELS[emp.employment_type.value] }}</span>
+        {% if not emp.is_public %}<span class="chip">{{ icon("lock", "size-3.5") }}Not public</span>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="flex flex-wrap gap-2">
+    {% if not linked and emp.status.value not in ("terminated",) %}
+      <form method="post" action="/owner/staff/{{ emp.id }}/resend-invite">{{ ui.csrf() }}<button class="btn btn-secondary">{{ icon("send", "size-4") }} Resend invite</button></form>
+    {% endif %}
+    {% if emp.status.value in ("invited", "pending_verification") %}
+      <form method="post" action="/owner/staff/{{ emp.id }}/recheck">{{ ui.csrf() }}<button class="btn btn-secondary">{{ icon("refresh", "size-4") }} Re-check</button></form>
+    {% endif %}
+    <a href="/owner/payroll?employee={{ emp.id }}" class="btn btn-secondary">{{ icon("banknotes", "size-4") }} Payroll</a>
+    {% if emp.status.value == "suspended" %}
+      <form method="post" action="/owner/staff/{{ emp.id }}/reactivate">{{ ui.csrf() }}<button class="btn btn-success">{{ icon("check-circle", "size-4") }} Reactivate</button></form>
+    {% endif %}
+    {% if can_change_position %}
+      <a href="/owner/staff/{{ emp.id }}/change-position" class="btn btn-secondary">{{ icon("refresh", "size-4") }} Change position</a>
+    {% endif %}
+  </div>
+</header>
+
+{% if emp.is_deleted %}
+  <div class="mb-6">{{ ui.alert("This person deleted their IronPulse account. The record is kept for the retention period so salary dues stay visible.", "warning", "Deleted account") }}</div>
+{% elif emp.status.value == "suspended" %}
+  <div class="mb-6">{{ ui.alert("Suspended staff keep their record and shifts, but cannot see clients or work until you reactivate them.", "danger", "Suspended") }}</div>
+{% elif emp.status.value == "terminated" %}
+  <div class="alert alert-{{ 'danger' if removal and removal.category != 'benign' else 'info' }} mb-6" role="status">
+    {{ icon("logout", "size-5 shrink-0") }}
+    <div class="min-w-0">
+      <p class="font-semibold">Former staff member</p>
+      <p>This employment has ended{% if emp.termination_date %} on {{ emp.termination_date | date }}{% endif %}{% if removal %} · {{ removal.label }}{% endif %}. Records stay available for payroll.</p>
+      {% if removal %}
+        <p class="mt-1.5 flex flex-wrap items-center gap-1.5 text-sm">{{ ui.badge(removal.category_label, removal.tone) }}{% if removal.by %}<span>by {{ removal.by }}</span>{% endif %}{% if removal.at %}<span class="muted">· {{ removal.at | timeago }}</span>{% endif %}</p>
+        {% if removal.note %}<p class="mt-1.5 whitespace-pre-line break-words">“{{ removal.note }}”</p>{% endif %}
+      {% endif %}
+      {% if successor %}<p class="mt-1.5"><a href="/owner/staff/{{ successor.id }}" class="font-medium text-accent hover:underline">Re-added as {{ successor.role_title or S.ROLE_LABELS[successor.role.value] }} →</a></p>{% endif %}
+    </div>
+  </div>
+{% endif %}
+{% if predecessor %}
+  <div class="mb-6">{{ ui.alert("Re-added after a position change - previously " ~ (predecessor.role_title or S.ROLE_LABELS[predecessor.role.value]) ~ " (record #" ~ predecessor.id ~ ", kept in the staff history under Former).", "info", "Position change") }}</div>
+{% endif %}
+
+{% if page_error %}<div class="mb-6" role="alert">{{ ui.alert(page_error, "danger") }}</div>{% endif %}
+
+<nav class="-mx-4 mb-8 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Staff member sections">
+  <div class="tabs whitespace-nowrap">
+    {% for key, label, count in tabs %}
+      <a href="/owner/staff/{{ emp.id }}?tab={{ key }}" class="tab {{ 'tab-active' if tab == key }}"{% if tab == key %} aria-current="page"{% endif %}>{{ label }}{% if count %} <span class="ml-0.5 text-xs tabular-nums opacity-60">{{ count }}</span>{% endif %}</a>
+    {% endfor %}
+  </div>
+</nav>
+
+<div class="animate-fade-up">
+{% if tab == "schedule" %}{% include "owner/staff/_tab_schedule.html" %}
+{% elif tab == "clients" %}{% include "owner/staff/_tab_clients.html" %}
+{% elif tab == "documents" %}{% include "owner/staff/_tab_documents.html" %}
+{% elif tab == "profile" %}{% include "owner/staff/_tab_profile.html" %}
+{% elif tab == "activity" %}{% include "owner/staff/_tab_activity.html" %}
+{% else %}{% include "owner/staff/_tab_overview.html" %}{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% set u = p.user %}
+{% set prof = u.customer_profile %}
+{% set is_self = p.level == 'self' %}
+{% block title %}{{ u.display_name }}{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-5xl animate-fade-up">
+
+  {# ------------------------------------------------------------ hero #}
+  <section class="card relative overflow-hidden !p-0">
+    <div class="hero-gradient h-32 sm:h-40" aria-hidden="true"></div>
+    <div class="px-6 pb-6 sm:px-8">
+      <div class="-mt-14 flex flex-col gap-5 sm:-mt-16 sm:flex-row sm:items-end sm:justify-between">
+        <div class="flex items-end gap-4">
+          {{ ui.avatar(u.photo_key, u.display_name, "size-28 sm:size-32 ring-4 shadow-xl", "text-3xl") }}
+          <div class="pb-1">
+            <h1 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ u.display_name }}</h1>
+            <div class="mt-2 flex flex-wrap items-center gap-2">
+              <span class="badge badge-blue">{{ {'owner': 'Gym owner', 'staff': 'Staff', 'customer': 'Member', 'superadmin': 'Platform admin'}[u.role.value] }}</span>
+              {% if u.id_status.value == 'verified' %}<span class="badge badge-green">{{ icon("check-badge", "size-3.5") }} ID verified</span>{% endif %}
+              {% if prof and prof.activity_suspended and p.show_health %}<span class="badge badge-red">Activity paused</span>{% endif %}
+              {% if u.city %}<span class="chip">{{ icon("map-pin", "size-3.5") }}{{ u.city }}{% if u.country_code %}, {{ u.country_code }}{% endif %}</span>{% endif %}
+              <span class="chip">{{ icon("clock", "size-3.5") }}Joined {{ u.created_at | date("%b %Y") }}</span>
+            </div>
+          </div>
+        </div>
+        {% if is_self %}
+        <div class="flex flex-wrap gap-2">
+          <a href="/account" class="btn btn-secondary btn-sm">{{ icon("pencil", "size-4") }} Edit account</a>
+          <a href="/account/identity" class="btn btn-ghost btn-sm">{{ icon("id-card", "size-4") }} ID card</a>
+          {% if u.role.value == 'customer' %}<a href="/me/health/profile" class="btn btn-ghost btn-sm">{{ icon("heart", "size-4") }} Health profile</a>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </section>
+
+  <div class="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
+    <div class="grid content-start gap-6">
+
+      {# ------------------------------------------------------------ owner: gyms #}
+      {% if p.owned_gyms %}
+      <section class="card">
+        <p class="eyebrow">Gyms</p>
+        <h2 class="section-title mt-1">{{ 'Your gyms' if is_self else 'Runs these gyms' }}</h2>
+        <ul class="mt-4 grid gap-3 sm:grid-cols-2">
+          {% for gym, branches in p.owned_gyms %}
+          <li><a href="/gyms/{{ gym.slug }}" class="card-muted flex items-center gap-3 transition hover:bg-zinc-200/60 dark:hover:bg-white/[0.07]">
+            <span class="grid size-11 place-items-center rounded-2xl bg-accent/12 text-accent">{{ icon("building", "size-5") }}</span>
+            <span class="min-w-0">
+              <span class="block truncate font-semibold">{{ gym.name }}</span>
+              <span class="block text-xs muted">{{ branches }} verified branch{{ '' if branches == 1 else 'es' }}{% if gym.online_enabled %} · online{% endif %}</span>
+            </span>
+          </a></li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
+      {# ------------------------------------------------------------ staff: work #}
+      {% if p.employments %}
+      <section class="card">
+        <p class="eyebrow">Work</p>
+        <h2 class="section-title mt-1">{{ 'Your roles' if is_self else 'Works at' }}</h2>
+        <div class="mt-4 grid gap-4">
+          {% for e in p.employments %}
+          <article class="card-muted">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p class="font-semibold">{{ e.role_title or (e.role.value | humanize) }}</p>
+                <p class="text-sm muted">{{ e.gym.name }} · {{ e.work_mode.value | humanize }}{% if e.years_experience %} · {{ e.years_experience }} yrs experience{% endif %}</p>
+              </div>
+              {{ ui.status(e.status) }}
+            </div>
+            {% if e.bio %}<p class="mt-3 text-sm">{{ e.bio }}</p>{% endif %}
+            {% if e.specialties %}<div class="mt-3 flex flex-wrap gap-1.5">{% for s in e.specialties %}<span class="chip">{{ s }}</span>{% endfor %}</div>{% endif %}
+            {% set shifts = p.shifts_by_employee.get(e.id, []) %}
+            {% if shifts %}
+            <div class="mt-4">
+              <p class="text-xs font-semibold uppercase tracking-wider muted">Weekly schedule</p>
+              <ul class="mt-2 grid gap-1.5 text-sm sm:grid-cols-2">
+                {% for s in shifts %}
+                <li class="flex items-center justify-between rounded-xl bg-white/70 px-3 py-2 dark:bg-white/[0.04]">
+                  <span class="font-medium">{{ weekdays[s.weekday] }}</span>
+                  <span class="muted">{{ s.start_time.strftime('%H:%M') }}–{{ s.end_time.strftime('%H:%M') }} · {{ s.branch.name if s.branch else 'Online' }}</span>
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
+            {% endif %}
+          </article>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {# ------------------------------------------------------------ customer: memberships #}
+      {% if p.subscriptions %}
+      <section class="card">
+        <p class="eyebrow">Memberships</p>
+        <h2 class="section-title mt-1">Plans</h2>
+        <ul class="mt-4 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+          {% for s in p.subscriptions %}
+          <li class="flex flex-wrap items-center justify-between gap-2 py-3">
+            <div>
+              <p class="font-medium">{{ s.plan.name }}</p>
+              <p class="text-xs muted">{{ s.gym.name }}{% if s.branch %} · {{ s.branch.name }}{% endif %} · until {{ s.ends_on | date }}</p>
+            </div>
+            {{ ui.status(s.status) }}
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+
+      {# ------------------------------------------------------------ customer: health & safety (trainers/owners/self) #}
+      {% if p.show_health %}
+      <section class="card">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="eyebrow">Health &amp; safety</p>
+            <h2 class="section-title mt-1">What coaches should know</h2>
+          </div>
+          {% if not is_self %}<span class="chip">{{ icon("lock", "size-3.5") }} Visible to staff of their gym only</span>{% endif %}
+        </div>
+        {% if p.conditions %}
+          <ul class="mt-4 flex flex-wrap gap-2">
+            {% for c in p.conditions %}
+            <li class="badge {{ {'condition': 'badge-red', 'allergy': 'badge-amber', 'injury': 'badge-violet', 'medication': 'badge-blue'}[c.kind.value] }}">{{ c.kind.value | humanize }}: {{ c.name }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="mt-3 text-sm muted">No health conditions recorded.</p>
+        {% endif %}
+        {% if prof %}
+        <dl class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div class="card-muted !p-4"><dt class="text-xs muted">Goal</dt><dd class="mt-1 font-semibold">{{ prof.goal.value | humanize }}</dd></div>
+          <div class="card-muted !p-4"><dt class="text-xs muted">Level</dt><dd class="mt-1 font-semibold">{{ prof.fitness_level.value | humanize }}</dd></div>
+          {% if p.latest_metric %}
+          <div class="card-muted !p-4"><dt class="text-xs muted">Weight</dt><dd class="mt-1 font-semibold tabular-nums">{{ p.latest_metric.weight_kg }} kg</dd></div>
+          <div class="card-muted !p-4"><dt class="text-xs muted">BMI</dt><dd class="mt-1 font-semibold tabular-nums">{{ p.latest_metric.bmi }}</dd></div>
+          {% endif %}
+        </dl>
+        {% if u.is_minor and prof.guardian_name and (p.level in ('manager', 'admin', 'self')) %}
+          <p class="alert alert-info mt-4">{{ icon("users", "size-4 shrink-0") }} <span>Minor - guardian: <strong>{{ prof.guardian_name }}</strong>{% if prof.guardian_relation %} ({{ prof.guardian_relation }}){% endif %}{% if prof.guardian_phone %} · {{ prof.guardian_phone }}{% endif %}</span></p>
+        {% endif %}
+        {% endif %}
+      </section>
+      {% if gear %}{% include "partials/gear_card.html" %}{% endif %}
+      {% elif p.health_withheld %}
+      <section class="card">
+        <p class="eyebrow">Health &amp; safety</p>
+        <p class="alert alert-info mt-3">{{ icon("lock", "size-4 shrink-0") }} <span>{{ p.health_message }}</span></p>
+      </section>
+      {% endif %}
+
+      {% if not p.owned_gyms and not p.employments and not p.subscriptions and not p.show_health and not p.health_withheld %}
+        {{ ui.empty("Nothing to show yet", "This profile doesn't have public activity yet.", "user") }}
+      {% endif %}
+    </div>
+
+    {# ------------------------------------------------------------ side column #}
+    <aside class="grid content-start gap-6">
+      {% if p.stats %}
+      <section class="card">
+        <p class="eyebrow">Activity</p>
+        <dl class="mt-3 grid grid-cols-2 gap-3">
+          <div><dt class="text-xs muted">Live workouts</dt><dd class="kpi">{{ p.stats.workouts }}</dd></div>
+          <div><dt class="text-xs muted">Days logged (30d)</dt><dd class="kpi">{{ p.stats.logged_days_30 }}</dd></div>
+        </dl>
+      </section>
+      {% endif %}
+      {% if p.show_private %}
+      <section class="card">
+        <p class="eyebrow">Private details</p>
+        <dl class="mt-3 grid gap-3 text-sm">
+          <div><dt class="muted">E-mail</dt><dd class="font-medium break-all">{{ u.email or '—' }}</dd></div>
+          <div><dt class="muted">Phone</dt><dd class="font-medium">{{ u.phone or '—' }}</dd></div>
+          <div><dt class="muted">ID card</dt><dd>{{ ui.status(u.id_status) }}</dd></div>
+          <div><dt class="muted">Time zone</dt><dd class="font-medium">{{ u.timezone }}</dd></div>
+        </dl>
+        {% if is_self %}<p class="mt-4 text-xs muted">Only you and the platform admin can see this box.</p>{% endif %}
+      </section>
+      {% endif %}
+      <section class="card-muted text-sm">
+        <p class="flex items-center gap-2 font-semibold">{{ icon("shield", "size-4") }} Privacy</p>
+        <p class="mt-1 muted">Owner and trainer profiles are public. Member profiles are visible only to the member, the staff of their gym and the platform admin.</p>
+      </section>
+    </aside>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}Test payment{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-lg animate-fade-up">
+  <div class="shop-test-banner mb-6" role="note">
+    {{ icon("flag", "size-5 shrink-0") }}
+    <p><strong>Test mode - simulated payment.</strong> Cashfree keys aren't configured, so no real money moves and nothing is charged.</p>
+  </div>
+  <section class="card overflow-hidden !p-0" aria-labelledby="tg-title">
+    <div class="flex items-center gap-3 border-b border-black/[0.06] px-6 py-5 dark:border-white/[0.08]">
+      <span class="grid size-10 place-items-center rounded-xl bg-zinc-900 text-white dark:bg-white dark:text-black">{{ icon("credit-card", "size-5") }}</span>
+      <div>
+        <h1 id="tg-title" class="font-semibold">{{ app.name }} Test Gateway</h1>
+        <p class="text-xs muted">Simulated checkout for development and demos</p>
+      </div>
+    </div>
+    <div class="px-6 py-6">
+      <p class="text-sm muted">Paying {{ order.gym.name if order.gym else "the store" }}</p>
+      <p class="mt-1 text-4xl font-semibold tracking-tight tabular-nums">{{ order.total | money(order.currency) }}</p>
+      <dl class="mt-6 grid gap-3 text-sm">
+        <div class="flex justify-between gap-4"><dt class="muted">Order</dt><dd class="font-mono text-xs">{{ order.order_number }}</dd></div>
+        <div class="flex justify-between gap-4"><dt class="muted">Items</dt><dd class="text-right">{{ items | sum(attribute="quantity") }}</dd></div>
+        <div class="flex justify-between gap-4"><dt class="muted">Customer</dt><dd class="truncate text-right">{{ user.email }}</dd></div>
+      </dl>
+      <div class="mt-8 grid gap-3 sm:grid-cols-2">
+        <form method="post" action="/shop/orders/{{ order.id }}/test-gateway">
+          {{ ui.csrf() }}
+          <input type="hidden" name="decision" value="approve">
+          <button type="submit" class="btn btn-success btn-lg w-full">{{ icon("check", "size-4") }}Approve payment</button>
+        </form>
+        <form method="post" action="/shop/orders/{{ order.id }}/test-gateway">
+          {{ ui.csrf() }}
+          <input type="hidden" name="decision" value="decline">
+          <button type="submit" class="btn btn-danger btn-lg w-full">{{ icon("x", "size-4") }}Decline</button>
+        </form>
+      </div>
+    </div>
+  </section>
+  <p class="mt-5 text-center text-xs muted">To take real payments, add <code class="font-mono">CASHFREE_APP_ID</code> and <code class="font-mono">CASHFREE_SECRET_KEY</code> to the server's .env file.</p>
+</div>
+{% endblock %}

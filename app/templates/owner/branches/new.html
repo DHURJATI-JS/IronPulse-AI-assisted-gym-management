@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}New branch · {{ gym.name }}{% endblock %}
+{% block main_class %}owner-page{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ static('vendor/leaflet/leaflet.css') }}">{% endblock %}
+{% block content %}
+{{ ui.page_header("Add a branch", "A physical location of " ~ gym.name ~ ". After saving you'll upload the documents your country requires and submit it for AI verification.", eyebrow=gym.name, back="/owner/gyms/" ~ gym.id) }}
+
+<ol class="owner-stepper mb-8" aria-label="Branch setup steps">
+  {% for label, short, state in [("Details", "Details", "current"), ("Documents", "Docs", "todo"), ("AI verification", "AI check", "todo"), ("Photos", "Photos", "locked"), ("Live", "Live", "locked")] %}
+  <li class="owner-step" data-state="{{ state }}" {% if state == 'current' %}aria-current="step"{% endif %}>
+    <span class="owner-step-dot">{% if state == 'locked' %}{{ icon("lock", "size-3") }}{% else %}{{ loop.index }}{% endif %}</span>
+    <span class="owner-step-label"><span class="sm:hidden">{{ short }}</span><span class="hidden sm:inline">{{ label }}</span></span>
+  </li>
+  {% endfor %}
+</ol>
+
+{% if owner_missing %}
+<div class="mb-6">
+  {{ ui.alert("You can save branch details now, but submitting for verification needs a verified owner: " ~ (owner_missing | join(", ") | lower) ~ ".", "warning") }}
+</div>
+{% endif %}
+
+<form method="post" action="/owner/gyms/{{ gym.id }}/branches/new" class="max-w-4xl" novalidate>
+  {{ ui.csrf() }}
+  {{ ui.form_errors(errors) }}
+  <div class="card">
+    {% include "owner/branches/_form_fields.html" %}
+  </div>
+  <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+    <a href="/owner/gyms/{{ gym.id }}" class="btn btn-ghost">Cancel</a>
+    <button type="submit" class="btn btn-primary btn-lg">{{ icon("check", "size-4") }} Save branch &amp; continue</button>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}<script nonce="{{ csp_nonce }}" src="{{ static('vendor/leaflet/leaflet.js') }}" defer></script>{% endblock %}

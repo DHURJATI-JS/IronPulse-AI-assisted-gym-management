@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% block title %}Platform overview{% endblock %}
+{% block content %}
+{% call sa.header("Platform overview", "People, gyms, money, security and AI across the whole platform - aggregates only, refreshed on every visit.", section, sections, counts) %}
+  {{ ui.ai_chip(disclaimer=False) }}
+  <a href="/superadmin/selfcheck" class="btn btn-secondary btn-sm">{{ icon("check-circle", "size-4") }} Self-check</a>
+  <a href="/superadmin/load-test" class="btn btn-secondary btn-sm">{{ icon("chart", "size-4") }} Load test</a>
+{% endcall %}
+{% include "superadmin/insights_teaser.html" %}
+
+{# ------------------------------------------------------------------ needs attention #}
+{% if attention %}
+<section aria-label="Needs your attention" class="mb-8 grid gap-2 sm:grid-cols-2 xl:grid-cols-3 animate-fade-up">
+  {% for tone, ico, label, href in attention %}
+  <a href="{{ href }}" class="sa-attention sa-attention-{{ tone }}">
+    {{ icon(ico, "size-5 shrink-0") }}<span class="min-w-0 flex-1">{{ label }}</span>{{ icon("chevron-right", "size-4 shrink-0 opacity-60") }}
+  </a>
+  {% endfor %}
+</section>
+{% else %}
+<p class="mb-8 flex items-center gap-3 rounded-2xl bg-ok/10 px-4 py-3 text-sm font-medium text-[#166534] ring-1 ring-ok/15 animate-fade-up dark:text-[#86efac] dark:ring-ok/25">
+  {{ icon("check-circle", "size-5 shrink-0") }} All clear - nothing needs your attention right now.
+</p>
+{% endif %}
+
+{# ------------------------------------------------------------------ KPIs #}
+{% set rev = revenue[0] if revenue else None %}
+<section aria-label="Key figures" class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  <a href="/superadmin/users" class="sa-kpi">
+    {{ ui.stat("People", users_total, k.users_new ~ " joined this week · " ~ k.users_deleted ~ " in deletion window", "users", "blue") }}
+  </a>
+  <a href="/superadmin/reviews" class="sa-kpi">
+    {{ ui.stat("Gyms", k.gyms, branches_total ~ " branches · " ~ k.gyms_online ~ " online", "building", "violet") }}
+  </a>
+  <div class="sa-kpi">
+    {{ ui.stat("Active memberships", k.subs, k.subs_new ~ " activated in the last 30 days", "user-group", "green") }}
+  </div>
+  <div class="sa-kpi">
+    {% if rev %}
+      {% set others = revenue[1:] | map(attribute="currency") | join(", ") %}
+      {{ ui.stat("Revenue · 30 days", rev.total | money(rev.currency), ("Also: " ~ others) if others else ("Memberships " ~ (rev.subscriptions | money(rev.currency)) ~ " · shop " ~ (rev.shop | money(rev.currency))), "banknotes", "green") }}
+    {% else %}
+      {{ ui.stat("Revenue · 30 days", 0 | money("INR"), "No successful payments yet", "banknotes", "zinc") }}
+    {% endif %}
+  </div>
+  <a href="/superadmin/security" class="sa-kpi">
+    {{ ui.stat("Security events · 24 h", sa.num(k.events), sa.num(k.blocked) ~ " blocked · " ~ sa.num(k.untriaged) ~ " awaiting triage", "shield", "red" if k.untriaged_critical else ("amber" if k.events else "zinc")) }}
+  </a>
+  <a href="/superadmin/bans" class="sa-kpi">
+    {{ ui.stat("Active IP bans", sa.num(k.bans), sa.num(k.bans_perm) ~ " permanent · " ~ sa.num(k.bans_new) ~ " new today", "lock", "red" if k.bans else "zinc") }}
+  </a>
+  <a href="/superadmin/selfcheck" class="sa-kpi">
+    {{ ui.stat("Background jobs", sa.num(jobs.queued + jobs.running), sa.num(jobs.running) ~ " running · " ~ sa.num(jobs.paused) ~ " paused · " ~ sa.num(jobs.failed) ~ " failed", "layers", "red" if jobs.failed else "blue") }}
+  </a>
+  <a href="/superadmin/outbox" class="sa-kpi">
+    {{ ui.stat("E-mail outbox", sa.num(mails.queued + mails.sending), sa.num(mails.failed) ~ " failed · " ~ sa.num(mails.sent + mails.logged) ~ " delivered", "envelope", "red" if mails.failed else "blue") }}
+  </a>
+</section>
+
+{# ------------------------------------------------------------------ security #}
+<div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+  <section class="card min-w-0 lg:col-span-2" aria-labelledby="sec-title">
+    <div class="sa-card-head">
+      <div class="min-w-0">
+        <h2 id="sec-title" class="sa-card-title">Security events · last 24 hours</h2>
+        <p class="sa-card-sub">{{ "{:,}".format(chart.total) }}{{ "+" if chart.sampled }} event{{ 's' if chart.total != 1 }} · busiest hour {{ chart.peak }}{% if chart.sampled %} · drawn from the latest {{ "{:,}".format(chart.total) }}{% endif %}</p>
+      </div>
+      <a href="/superadmin/security" class="btn btn-secondary btn-sm shrink-0">Security centre {{ icon("arrow-right", "size-4") }}</a>
+    </div>
+    {{ sa.column_chart(chart, "Security events per hour, last 24 hours") }}
+    <div class="divider"></div>
+    <h3 class="mb-3 text-sm font-semibold">By category</h3>
+    {{ sa.ranked_bars(events_by_cat, events_max, "No security events in the last 24 hours - a quiet day.") }}
+  </section>
+
+  <section class="card min-w-0" aria-labelledby="ips-title">
+    <h2 id="ips-title" class="sa-card-title">Most active addresses</h2>
+    <p class="sa-card-sub">Last 24 hours, by number of events</p>
+    {% if top_ips %}
+    <ul class="mt-4 grid gap-1">
+      {% for r in top_ips %}
+      <li>
+        <a href="/superadmin/security/ip/{{ r.ip }}" class="flex items-center gap-3 rounded-2xl px-2.5 py-2 transition hover:bg-zinc-50 dark:hover:bg-white/[0.04]">
+          <span class="min-w-0 flex-1 truncate font-mono text-[13px]">{{ r.ip }}</span>
+          {{ sa.severity(r.sev) }}
+          <span class="w-10 text-right text-sm font-semibold tabular-nums">{{ r.n }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+      <div class="mt-4">{{ sa.inline_empty("No suspicious traffic", "Addresses appear here as soon as the gate logs an event.", "shield") }}</div>
+    {% endif %}
+    <div class="divider"></div>
+    <h3 class="text-sm font-semibold">Latest critical events</h3>
+    {% if critical %}
+    <ul class="mt-3 grid gap-2.5">
+      {% for e in critical %}
+      <li class="min-w-0 text-sm">
+        <div class="flex items-center gap-2">
+          {{ sa.severity(e.severity) }}
+          <span class="font-medium">{{ category_labels.get(e.category.value, e.category.value) }}</span>
+          <span class="ml-auto shrink-0 text-xs muted">{{ e.created_at | timeago }}</span>
+        </div>
+        <p class="mt-0.5 truncate text-xs muted">{{ sa.ip_link(e.ip) }} · {{ e.detail or e.path }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+      <p class="mt-3 text-sm muted">No severity 4-5 events recorded.</p>
+    {% endif %}
+  </section>
+</div>
+
+{# ------------------------------------------------------------------ people & gyms #}
+<div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+  <section class="card min-w-0" aria-labelledby="people-title">
+    <div class="sa-card-head">
+      <div>
+        <h2 id="people-title" class="sa-card-title">Accounts by role</h2>
+        <p class="sa-card-sub">{{ users_total }} active account{{ 's' if users_total != 1 }} · {{ k.users_locked }} locked · {{ k.users_deleted }} awaiting purge</p>
+      </div>
+      <a href="/superadmin/users" class="btn btn-ghost btn-sm">Manage {{ icon("arrow-right", "size-4") }}</a>
+    </div>
+    <div class="mt-5">{{ sa.segmented(roles, users_total) }}</div>
+  </section>
+  <section class="card min-w-0" aria-labelledby="branches-title">
+    <div class="sa-card-head">
+      <div>
+        <h2 id="branches-title" class="sa-card-title">Branches by verification</h2>
+        <p class="sa-card-sub">{{ branches_total }} branch{{ 'es' if branches_total != 1 }} · {{ k.reviews }} item{{ 's' if k.reviews != 1 }} in the review queue</p>
+      </div>
+      <a href="/superadmin/reviews" class="btn btn-ghost btn-sm">Review queue {{ icon("arrow-right", "size-4") }}</a>
+    </div>
+    {% if branches_total %}
+      <div class="mt-5">{{ sa.segmented(branch_states, branches_total) }}</div>
+    {% else %}
+      <div class="mt-5">{{ sa.inline_empty("No branches yet", "Gym owners add physical branches from their console; they show up here for verification.", "building") }}</div>
+    {% endif %}
+  </section>
+</div>
+
+{# ------------------------------------------------------------------ AI providers #}
+<section class="card mt-6" aria-labelledby="ai-title">
+  <div class="sa-card-head">
+    <div>
+      <h2 id="ai-title" class="sa-card-title">AI providers</h2>
+      <p class="sa-card-sub">Tried strictly in this order · call statistics from the last 24 hours</p>
+    </div>
+    <a href="/superadmin/ai" class="btn btn-secondary btn-sm">{{ icon("cpu", "size-4") }} AI status</a>
+  </div>
+  <ol class="mt-5 grid gap-3 md:grid-cols-3">
+    {% for p in providers %}
+    <li class="card-muted min-w-0 !p-4">
+      <div class="flex items-center gap-2.5">
+        <span class="sa-provider-rank">{{ p.rank }}</span>
+        <p class="min-w-0 flex-1 truncate font-semibold">{{ p.label }}</p>
+        {{ sa.provider_status(p.status) }}
+      </div>
+      <dl class="mt-3 grid grid-cols-3 gap-2 text-center">
+        <div><dt class="text-[11px] muted">Calls</dt><dd class="font-semibold tabular-nums">{{ p.calls_24h }}</dd></div>
+        <div><dt class="text-[11px] muted">Errors</dt><dd class="font-semibold tabular-nums {{ 'text-[#d1281e] dark:text-[#ff6b61]' if p.failures_24h }}">{{ (p.error_rate ~ '%') if p.error_rate is not none else '—' }}</dd></div>
+        <div><dt class="text-[11px] muted">Avg latency</dt><dd class="font-semibold tabular-nums">{{ (p.avg_ms ~ ' ms') if p.avg_ms is not none else '—' }}</dd></div>
+      </dl>
+      {% if p.last_error and p.status != 'up' %}<p class="mt-2 truncate text-xs muted" title="{{ p.last_error }}">{{ icon("alert", "inline size-3.5 -mt-0.5") }} {{ p.last_error }}</p>{% endif %}
+    </li>
+    {% else %}
+    <li class="text-sm muted">No AI providers are configured.</li>
+    {% endfor %}
+  </ol>
+</section>
+
+{# ------------------------------------------------------------------ shop + live #}
+<div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+  <section class="card min-w-0" aria-labelledby="shop-title">
+    <div class="sa-card-head">
+      <div>
+        <h2 id="shop-title" class="sa-card-title">Shop</h2>
+        <p class="sa-card-sub">
+          {% if shop_revenue %}Net sales · 30 days: {% for c, total in shop_revenue %}<span class="font-medium text-ink dark:text-white">{{ total | money(c) }}</span>{{ ', ' if not loop.last }}{% endfor %}
+          {% else %}No paid orders in the last 30 days{% endif %}
+        </p>
+      </div>
+      <span class="grid size-10 place-items-center rounded-2xl badge-blue">{{ icon("credit-card", "size-5") }}</span>
+    </div>
+    <div class="mt-5 grid grid-cols-2 gap-3">
+      {{ sa.mini("Products live", k.products_active, k.products ~ " in the catalogue") }}
+      {{ sa.mini("Low stock", k.low_stock, "at or below the alert level", "amber" if k.low_stock else None) }}
+      {{ sa.mini("Orders · 30 days", k.orders_30d, k.orders_open ~ " waiting to be fulfilled") }}
+      {{ sa.mini("Refunds pending", k.refunds_pending, "requested or processing", "red" if k.refunds_pending else None) }}
+    </div>
+  </section>
+  <section class="card min-w-0" aria-labelledby="live-title">
+    <div class="sa-card-head">
+      <div>
+        <h2 id="live-title" class="sa-card-title">Live AI coaching</h2>
+        <p class="sa-card-sub">Voice-guided workouts with the animated coach</p>
+      </div>
+      <span class="grid size-10 place-items-center rounded-2xl badge-violet">{{ icon("activity", "size-5") }}</span>
+    </div>
+    <div class="mt-5 grid grid-cols-2 gap-3">
+      {{ sa.mini("In progress now", k.live_now, "active or paused", "green" if k.live_now else None) }}
+      {{ sa.mini("Sessions · 7 days", k.live_7d, k.live_done_7d ~ " completed") }}
+      {{ sa.mini("Safety stops · 30 days", k.live_safety_30d, "stopped for the member's safety", "red" if k.live_safety_30d else None) }}
+      {{ sa.mini("Red flags · 7 days", k.live_red_flags_7d, "pain or warning signs reported", "amber" if k.live_red_flags_7d else None) }}
+    </div>
+  </section>
+</div>
+
+{# ------------------------------------------------------------------ platform plumbing #}
+<section class="card mt-6" aria-labelledby="plumbing-title">
+  <h2 id="plumbing-title" class="sa-card-title">Platform plumbing</h2>
+  <p class="sa-card-sub">Durable background jobs and transactional e-mail</p>
+  <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+    {{ sa.mini("Jobs queued", sa.num(jobs.queued), "waiting for the worker") }}
+    {{ sa.mini("Jobs running", sa.num(jobs.running), "claimed right now", "blue" if jobs.running else None) }}
+    {{ sa.mini("Jobs paused", sa.num(jobs.paused), "requester away - resume on return", "amber" if jobs.paused else None) }}
+    {{ sa.mini("Jobs failed", sa.num(jobs.failed), "after every retry", "red" if jobs.failed else None, "/superadmin/selfcheck") }}
+    {{ sa.mini("Jobs cancelled", sa.num(jobs.cancelled), "requester left or was deleted") }}
+    {{ sa.mini("Jobs done", sa.num(jobs.done), "completed") }}
+  </div>
+  <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+    {{ sa.mini("E-mails queued", sa.num(mails.queued + mails.sending), "sending shortly", None, "/superadmin/outbox?status=queued") }}
+    {{ sa.mini("E-mails sent", sa.num(mails.sent), "over SMTP") }}
+    {{ sa.mini("E-mails spooled", sa.num(mails.logged), "written to var/mail") }}
+    {{ sa.mini("E-mails failed", sa.num(mails.failed), "need a retry", "red" if mails.failed else None, "/superadmin/outbox?status=failed") }}
+  </div>
+</section>
+{% endblock %}

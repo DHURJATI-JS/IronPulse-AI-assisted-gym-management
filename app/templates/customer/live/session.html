@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "customer/live/_macros.html" as lv with context %}
+{% block title %}{{ session.title }} · Live{% endblock %}
+{% block content %}
+{% set cur = payload["items"][payload.current_index] if payload.current_index < payload.total else None %}
+{% set safety = payload.stopped_for_safety %}
+<div data-component="live-session" data-session="{{ payload | jsonattr }}" data-config="{{ config | jsonattr }}">
+  {# ------------------------------------------------------------ header #}
+  <header class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between animate-fade-up">
+    <div class="min-w-0">
+      <a href="/me/live" class="mb-2 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">{{ icon("arrow-left", "size-4") }} Live coach</a>
+      <h1 class="truncate text-2xl font-semibold tracking-tight sm:text-3xl" data-title>{{ session.title }}</h1>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="live-chip" data-status data-state="{{ 'alert' if safety else ('paused' if session.status == 'paused' else 'off') }}">
+        <span class="live-dot"></span><span data-status-text>{{ "Stopped for safety" if safety else ("Paused" if session.status == "paused" else ("Finished" if payload.ended else "Ready")) }}</span>
+      </span>
+      {{ ui.ai_chip(disclaimer=False) }}
+    </div>
+  </header>
+  <div class="live-progress mb-6" role="progressbar" aria-label="Workout progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" data-progress><span data-progress-bar></span></div>
+
+  {# ------------------------------------------------------------ safety screen #}
+  <section class="card relative mb-6 scroll-mt-24 overflow-hidden p-0 ring-2 ring-bad/40" data-safety {{ '' if safety else 'hidden' }} aria-labelledby="live-safety-title">
+    <div class="live-safety-glow"></div>
+    <div class="relative grid gap-8 p-6 sm:p-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-center">
+      <div>
+        <span class="badge badge-red">{{ icon("alert", "size-3.5") }} Safety stop</span>
+        <h2 id="live-safety-title" class="mt-4 text-3xl font-semibold tracking-tight">Workout stopped for your safety</h2>
+        <p class="mt-2 text-sm font-medium text-[#b91c1c] dark:text-[#fca5a5]" data-safety-reason>{{ session.end_reason or "" }}</p>
+        <p class="mt-4 text-[15px] leading-relaxed" data-safety-text>{{ safety_text or ("Stop exercising now and sit or lie down somewhere safe. If you feel worse, or you have chest pain, trouble breathing or you fainted, call " ~ emergency.number ~ " right away.") }}</p>
+        <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <a href="{{ emergency.tel }}" class="live-sos" data-safety-call>{{ icon("phone", "size-5") }} Call {{ emergency.number }}</a>
+          <button type="button" class="btn btn-secondary" data-act="im-ok">I'm OK now</button>
+        </div>
+        {% if emergency.note %}<p class="mt-3 text-sm muted">{{ emergency.note }}</p>{% endif %}
+        <p class="mt-4 hidden rounded-2xl bg-zinc-900/[0.04] p-4 text-sm dark:bg-white/[0.06]" data-ok-note role="status">
+          Glad to hear it. Please keep resting today. Your gym activities stay paused until a gym admin checks in with you and reactivates your account - the workout can't be restarted from here.
+        </p>
+      </div>
+      <ul class="grid gap-3">
+        {% for ico, title, body in [
+            ("alert", "Stop and rest", "Sit or lie down somewhere safe, away from equipment."),
+            ("phone", "Get help if needed", "Call " ~ emergency.number ~ " if symptoms are severe or don't ease."),
+            ("users", "Tell someone nearby", "Unlock your door and let someone know how you feel."),
+            ("shield", "Your gym has been alerted", "Your gym team and trainer were notified and will check in."),
+        ] %}
+        <li class="card-flat flex items-start gap-3 !p-4">
+          <span class="grid size-9 shrink-0 place-items-center rounded-xl bg-bad/12 text-bad">{{ icon(ico, "size-4") }}</span>
+          <div><p class="text-sm font-semibold">{{ title }}</p><p class="text-xs muted">{{ body }}</p></div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    <div class="relative flex flex-wrap gap-2 border-t border-black/[0.05] px-6 py-4 sm:px-10 dark:border-white/[0.08]">
+      <a href="/me/live" class="btn btn-ghost btn-sm">{{ icon("arrow-left", "size-4") }} Back to Live coach</a>
+      <a href="/chat" class="btn btn-ghost btn-sm">{{ icon("chat", "size-4") }} Message your gym</a>
+    </div>
+  </section>
+
+  <div class="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]" data-workout{% if safety %} data-mode="safety"{% endif %}>
+    {# ------------------------------------------------------------ coach stage #}
+    <section class="live-stage animate-fade-up" aria-label="Your coach">
+      <div class="flex w-full items-center justify-between gap-2">
+        <span class="live-chip" data-voice-state data-state="off"><span class="live-dot"></span><span data-voice-text>Coach ready</span></span>
+        <span class="live-chip" title="Intensity">
+          <span class="live-intensity" data-intensity aria-hidden="true">{% for i in range(-3, 4) %}<span data-on="{{ '1' if i <= payload.intensity else '0' }}" data-hot="{{ '1' if i > 0 else '0' }}"></span>{% endfor %}</span>
+          <span data-intensity-label>{{ payload.intensity_label }}</span>
+        </span>
+      </div>
+
+      <div class="live-face-wrap mt-2" data-face-wrap>
+        <canvas data-component="coach-face" class="live-face-canvas" aria-hidden="true"></canvas>
+        <div class="live-thinking" data-thinking hidden aria-hidden="true"><span></span><span></span><span></span></div>
+      </div>
+
+      {# ---- 1. ready panel: audio may only start after this tap (autoplay policies) #}
+      <div class="live-panel" data-ready {{ 'hidden' if payload.ended }}>
+        <p class="eyebrow">{{ payload.total }} exercise{{ 's' if payload.total != 1 }} · about {{ payload.minutes }} min</p>
+        <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl">{{ "Welcome back" if payload.current_index > 0 else "Ready when you are" }}, {{ first_name }}</h2>
+        <p class="max-w-sm text-sm muted">Turn your volume up and find some space. Pulse talks you through every set and listens when you speak.</p>
+        <button type="button" class="btn btn-primary btn-lg mt-1" data-act="begin">{{ lv.svg("play", "size-5") }} {{ "Resume workout" if payload.current_index > 0 else "Begin workout" }}</button>
+        <p class="max-w-sm text-xs muted" data-mic-note>Your browser will ask for microphone access. Speech is turned into text by your browser's speech service - IronPulse never stores audio.</p>
+      </div>
+
+      {# ---- 2. live panel: captions, controls #}
+      <div class="live-panel live-panel-live" data-live-main {{ '' if (payload.ended and safety) else 'hidden' }}>
+        <p class="live-caption" data-caption aria-live="polite" aria-atomic="true">{% if safety %}Your workout was stopped for your safety.{% else %}Let's go!{% endif %}</p>
+        <p class="live-interim" data-interim aria-hidden="true"></p>
+        <p class="mt-1 flex max-w-md items-start justify-center gap-1 text-center text-[11px] leading-snug muted" role="note">{{ icon("info", "size-3 shrink-0 mt-0.5") }}<span>{{ config.disclaimer }}</span></p>
+        <div class="live-controls" role="toolbar" aria-label="Session controls">
+          <button type="button" class="live-ctl" data-act="mic" aria-pressed="false" aria-label="Microphone" title="Microphone (M)">
+            <span data-icon-on hidden>{{ lv.svg("mic") }}</span><span data-icon-off>{{ lv.svg("mic-off") }}</span>
+          </button>
+          <button type="button" class="live-ctl live-ptt" data-act="ptt" aria-label="Hold to talk" title="Hold to talk">
+            {{ lv.svg("wave", "size-5") }}<span class="hidden sm:inline">Hold to talk</span>
+          </button>
+          <button type="button" class="live-ctl live-ctl-main" data-act="toggle" aria-label="Pause" title="Pause / resume (Space)">
+            <span data-icon-pause>{{ lv.svg("pause", "size-6") }}</span><span data-icon-play hidden>{{ lv.svg("play", "size-6") }}</span>
+          </button>
+          <button type="button" class="live-ctl" data-act="next" aria-label="Next exercise" title="Next exercise (N)">{{ lv.svg("skip") }}</button>
+          <button type="button" class="live-ctl" data-act="voice" aria-pressed="true" aria-label="AI voice" title="AI voice (V)">
+            <span data-icon-on>{{ lv.svg("volume") }}</span><span data-icon-off hidden>{{ lv.svg("volume-off") }}</span>
+          </button>
+          <button type="button" class="live-ctl live-ctl-end" data-act="end" aria-label="End workout" title="End workout">{{ lv.svg("stop") }}</button>
+        </div>
+        <p class="live-kbd mt-3" aria-hidden="true"><kbd>Space</kbd> pause <kbd>N</kbd> next <kbd>M</kbd> mic <kbd>V</kbd> voice</p>
+      </div>
+
+      {# ---- 3. summary panel #}
+      <div class="live-panel" data-done role="status" {{ '' if (payload.ended and not safety) else 'hidden' }}>
+        <span class="grid size-14 place-items-center rounded-[20px] bg-gradient-to-br from-accent via-indigo to-violet text-white shadow-lg shadow-indigo/30">{{ icon("check-badge", "size-7") }}</span>
+        <h2 class="text-2xl font-semibold tracking-tight sm:text-3xl" data-summary-title>{{ "Workout complete!" if session.status == "completed" else "Session ended" }}</h2>
+        <div class="grid w-full max-w-sm grid-cols-3 gap-2">
+          <div class="card-flat !p-3"><p class="text-xl font-semibold tabular-nums" data-summary-time>–</p><p class="text-[11px] muted">minutes</p></div>
+          <div class="card-flat !p-3"><p class="text-xl font-semibold tabular-nums" data-summary-ex>{{ payload.current_index }}</p><p class="text-[11px] muted">exercises</p></div>
+          <div class="card-flat !p-3"><p class="text-xl font-semibold tabular-nums" data-summary-sets>–</p><p class="text-[11px] muted">sets</p></div>
+        </div>
+        <div class="flex flex-wrap justify-center gap-2">
+          <a href="/me/live" class="btn btn-primary">{{ icon("refresh", "size-4") }} Another session</a>
+          <a href="/me/coach" class="btn btn-secondary">View my plan</a>
+        </div>
+      </div>
+    </section>
+
+    {# ------------------------------------------------------------ workout HUD #}
+    <div class="min-w-0 space-y-5" data-hud>
+      <section class="card animate-fade-up" aria-labelledby="live-ex-name" data-exercise-card>
+        <div class="flex items-center justify-between gap-3">
+          <p class="eyebrow" data-ex-position>{% if cur %}Exercise {{ payload.current_index + 1 }} of {{ payload.total }}{% else %}All done{% endif %}</p>
+          <span class="badge badge-zinc" data-ex-category>{{ (cur.category if cur else "done") | humanize }}</span>
+        </div>
+        <h2 id="live-ex-name" class="mt-2 text-2xl font-semibold tracking-tight sm:text-[28px]" data-ex-name>{{ cur.exercise if cur else "Workout finished" }}</h2>
+        <p class="mt-1 hidden text-xs font-medium text-[#b45309] dark:text-[#fbbf24]" data-ex-swap></p>
+        <div class="mt-5 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p class="live-metric"><span data-ex-metric>{{ (cur.effective.reps or cur.effective.duration_s) if cur else "✓" }}</span><span class="ml-2 text-lg font-medium muted" data-ex-unit>{{ ("reps" if cur.effective.reps else "sec") if cur else "" }}</span></p>
+            <p class="mt-1 text-sm muted" data-ex-setlabel>{% if cur %}Set 1 of {{ cur.sets }}{% endif %}</p>
+          </div>
+          <div class="live-sets" data-ex-sets aria-hidden="true"></div>
+        </div>
+        <p class="mt-4 flex items-start gap-2 text-sm {{ '' if (cur and cur.effective.load_note) else 'hidden' }}" data-ex-load>{{ lv.svg("flame", "size-4 mt-0.5 shrink-0 text-warn") }}<span data-ex-load-text>{{ cur.effective.load_note if cur else "" }}</span></p>
+        <ul class="mt-3 space-y-1.5" data-ex-cues>
+          {% if cur %}{% for c in cur.cues %}<li class="live-cue">{{ icon("check-circle", "size-4 mt-0.5 shrink-0 text-ok") }}<span>{{ c }}</span></li>{% endfor %}{% endif %}
+        </ul>
+        <div class="mt-6 grid gap-2 sm:grid-cols-2">
+          <button type="button" class="btn btn-success" data-act="setdone">{{ icon("check", "size-4") }} <span data-setdone-label>Set complete</span></button>
+          <button type="button" class="btn btn-secondary text-bad dark:text-[#ff6b61]" data-act="discomfort" aria-expanded="false" aria-controls="live-discomfort">{{ lv.svg("octagon", "size-4") }} I feel discomfort</button>
+        </div>
+      </section>
+
+      {# discomfort panel #}
+      <section id="live-discomfort" class="card ring-2 ring-warn/40 animate-fade-up" data-discomfort-panel hidden aria-labelledby="live-disc-title">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <h2 id="live-disc-title" class="section-title">Where do you feel it?</h2>
+            <p class="text-sm muted">Pulse stops this exercise and suggests a safer one.</p>
+          </div>
+          <button type="button" class="btn btn-ghost btn-icon btn-sm" data-act="cancel-discomfort" aria-label="Close">{{ icon("x", "size-4") }}</button>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Body part">
+          {% for part in body_parts %}
+          <button type="button" class="live-chipbtn" data-part="{{ part }}" aria-pressed="false" {% if part in ('chest', 'head') %}data-tone="danger"{% endif %}>{{ part | capitalize }}</button>
+          {% endfor %}
+        </div>
+        <p class="mt-5 text-sm font-medium">How bad is it?</p>
+        <div class="mt-2 flex flex-wrap gap-2" role="group" aria-label="Severity">
+          <button type="button" class="live-chipbtn" data-sev="mild" aria-pressed="false">Mild</button>
+          <button type="button" class="live-chipbtn" data-sev="moderate" data-tone="warn" aria-pressed="true">Moderate</button>
+          <button type="button" class="live-chipbtn" data-sev="severe" data-tone="danger" aria-pressed="false">Severe</button>
+        </div>
+        <label class="label mt-5" for="live-disc-note">Anything else? <span class="font-normal muted">(optional)</span></label>
+        <input id="live-disc-note" type="text" maxlength="300" class="input" placeholder="e.g. sharp when I bend it" data-discomfort-note autocomplete="off">
+        <p class="alert alert-danger mt-4 hidden" data-discomfort-warn>{{ icon("alert", "size-4 shrink-0") }}<span>Severe, chest or head symptoms stop the workout for your safety and alert your gym team.</span></p>
+        <div class="mt-5 flex flex-wrap gap-2">
+          <button type="button" class="btn btn-danger" data-act="report" disabled>{{ lv.svg("octagon", "size-4") }} Report discomfort</button>
+          <button type="button" class="btn btn-ghost" data-act="cancel-discomfort">Cancel</button>
+        </div>
+      </section>
+
+      <section class="card flex items-center gap-5 animate-fade-up" aria-label="Timer">
+        <div class="live-ring" data-ring data-phase="ready">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="live-ring-track" cx="60" cy="60" r="52" fill="none" stroke-width="9"></circle>
+            <circle class="live-ring-value" data-ring-value cx="60" cy="60" r="52" fill="none" stroke-width="9" stroke-linecap="round" stroke-dasharray="326.73" stroke-dashoffset="0"></circle>
+          </svg>
+          <div class="relative text-center">
+            <p class="text-2xl font-semibold tabular-nums" data-timer role="timer" aria-live="off">0:00</p>
+            <p class="text-[11px] font-semibold uppercase tracking-wider muted" data-phase-label>Ready</p>
+          </div>
+        </div>
+        <div class="min-w-0 flex-1">
+          <p class="text-xs font-semibold uppercase tracking-wider muted">Next up</p>
+          <p class="mt-1 truncate font-semibold" data-next-name>{% set nx = payload["items"][payload.current_index + 1] if payload.current_index + 1 < payload.total else None %}{{ nx.exercise if nx else "Finish" }}</p>
+          <p class="truncate text-sm muted" data-next-dose>{{ nx.dose if nx else "Cool down and celebrate" }}</p>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button type="button" class="btn btn-secondary btn-sm" data-act="easier">{{ lv.svg("minus", "size-4") }} Easier</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-act="harder">{{ icon("plus", "size-4") }} Harder</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card animate-fade-up" aria-labelledby="live-chat-title">
+        <div class="flex items-center justify-between gap-3">
+          <h2 id="live-chat-title" class="section-title">Conversation</h2>
+          {% if not ai_plan %}<span class="badge badge-zinc">Voice commands</span>{% endif %}
+        </div>
+        <div class="live-log mt-4" data-log role="log" aria-live="polite" aria-label="Conversation with your coach">
+          <p class="live-msg-note" data-log-empty>Say or type “easier”, “next”, “pause” - {% if ai_plan %}or just chat with Pulse.{% else %}or tell Pulse if something hurts.{% endif %}</p>
+        </div>
+        {% if not ai_plan %}
+        <div class="mt-3 hidden rounded-2xl bg-violet/10 p-3 text-xs text-[#7e22ce] dark:text-[#d8a4ff]" data-upsell>
+          {{ icon("sparkles", "inline size-3.5") }} Free conversation with the AI coach comes with AI plans. <a href="/me/subscriptions" class="font-semibold underline">See plans</a>
+        </div>
+        {% endif %}
+        <form class="mt-4 flex items-center gap-2" data-chat-form data-no-busy autocomplete="off">
+          <label for="live-chat-input" class="sr-only">Message your coach</label>
+          <input id="live-chat-input" type="text" maxlength="500" class="input" placeholder="{{ 'Ask Pulse anything…' if ai_plan else 'Type a command, e.g. easier' }}" data-chat-input enterkeyhint="send">
+          <button type="submit" class="btn btn-primary btn-icon shrink-0" aria-label="Send">{{ icon("send", "size-4") }}</button>
+        </form>
+        <p class="mt-3 hidden text-xs font-medium text-[#b45309] dark:text-[#fbbf24]" data-mic-unsupported>Voice input isn't supported in this browser - type instead.</p>
+        <details class="mt-3 text-xs muted">
+          <summary class="cursor-pointer font-medium text-zinc-600 dark:text-zinc-300">Microphone &amp; privacy</summary>
+          <p class="mt-2">Speech recognition is done by your browser's speech service (Chrome sends audio to Google, Safari uses Apple). IronPulse never stores audio - only the text of the conversation for this session. Turn the microphone off to type instead.</p>
+        </details>
+        {{ ui.ai_disclaimer() }}
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}

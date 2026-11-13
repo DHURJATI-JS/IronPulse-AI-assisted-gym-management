@@ -1,0 +1,12 @@
+{% if flashes %}
+<div class="mb-6 grid gap-2" data-component="flash">
+  {% for f in flashes %}
+    {% set tone = {'success': 'success', 'error': 'danger', 'danger': 'danger', 'warning': 'warning'}.get(f.c, 'info') %}
+    <div class="alert alert-{{ tone }} animate-fade-up" role="{{ 'alert' if tone == 'danger' else 'status' }}">
+      {{ icon({'success': 'check-circle', 'danger': 'x-circle', 'warning': 'alert'}.get(tone, 'info'), "size-5 shrink-0") }}
+      <p class="flex-1">{{ f.m }}</p>
+      <button type="button" class="opacity-60 hover:opacity-100" data-dismiss aria-label="Dismiss">{{ icon("x", "size-4") }}</button>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}

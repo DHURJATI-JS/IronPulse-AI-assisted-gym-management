@@ -1,0 +1,282 @@
+{#- Super-admin console building blocks (WP-G). Import WITH CONTEXT:
+      {% import "superadmin/_macros.html" as sa with context %}
+-#}
+{% import "_ui.html" as ui with context %}
+
+{#- Section navigation (all nine console areas). `counts` comes from the router (_nav_counts). -#}
+{% macro subnav(section, sections, counts=None) %}
+<nav class="sa-subnav animate-fade-up" aria-label="Super-admin sections">
+  <div class="sa-subnav-inner">
+    {% for key, label, href, ico in sections %}
+      {% set n = (counts or {}).get(key, 0) %}
+      <a href="{{ href }}" class="sa-subnav-link"{% if key == section %} aria-current="page"{% endif %}>
+        {{ icon(ico, "size-4") }}{{ label }}
+        {% if n %}<span class="sa-subnav-count {{ 'sa-subnav-count-soft' if key not in ('reviews', 'outbox') }}">{{ n if n < 100 else '99+' }}<span class="sr-only"> items</span></span>{% endif %}
+      </a>
+    {% endfor %}
+  </div>
+</nav>
+{% endmacro %}
+
+{#- Header used by every console page -#}
+{% macro header(title, subtitle, section, sections, counts=None, back=None) %}
+{% set body = caller() if caller else '' %}
+<header class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between animate-fade-up">
+  <div class="min-w-0">
+    {% if back %}<a href="{{ back }}" class="mb-3 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">{{ icon("arrow-left", "size-4") }} Back</a>{% endif %}
+    <p class="eyebrow mb-1.5 flex items-center gap-1.5">{{ icon("shield", "size-3.5") }} Super-admin</p>
+    <h1 class="text-3xl font-semibold tracking-tight sm:text-[40px] sm:leading-tight">{{ title }}</h1>
+    {% if subtitle %}<p class="mt-2 max-w-2xl text-[15px] muted">{{ subtitle }}</p>{% endif %}
+  </div>
+  {% if body | trim %}<div class="flex flex-wrap items-center gap-2">{{ body }}</div>{% endif %}
+</header>
+{{ subnav(section, sections, counts) }}
+{% endmacro %}
+
+{#- Severity pips 1..5 with an accessible label -#}
+{% macro severity(n) -%}
+{% set n = n | int %}
+<span class="sa-sev" data-sev="{{ n }}" role="img" aria-label="Severity {{ n }} of 5" title="Severity {{ n }} of 5">
+  {%- for i in range(1, 6) %}<i class="{{ 'on' if i <= n }}"></i>{% endfor -%}
+</span>
+{%- endmacro %}
+
+{% macro ip_link(ip, cls="") -%}
+<a href="/superadmin/security/ip/{{ ip }}" class="sa-mono {{ cls }}" title="Open everything about {{ ip }}">{{ ip }}</a>
+{%- endmacro %}
+
+{#- A ban's state badge -#}
+{% macro ban_badge(ban, now) -%}
+{% if ban.lifted_at %}
+  <span class="badge badge-zinc">{{ icon("check", "size-3.5") }}Lifted</span>
+{% elif ban.banned_until is none %}
+  <span class="badge badge-red">{{ icon("lock", "size-3.5") }}Permanent</span>
+{% elif ban.banned_until > now %}
+  <span class="badge badge-amber">{{ icon("clock", "size-3.5") }}Until {{ ban.banned_until | dt("%d %b, %H:%M") }}</span>
+{% else %}
+  <span class="badge badge-zinc">{{ icon("clock", "size-3.5") }}Expired</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro source_badge(created_by) -%}
+{% set tone = {'ai': 'violet', 'superadmin': 'blue'}.get(created_by, 'zinc') %}
+{% set label = {'ai': 'AI triage', 'superadmin': 'Super-admin', 'auto': 'Automatic'}.get(created_by, created_by | humanize) %}
+<span class="badge badge-{{ tone }}">{% if created_by == 'ai' %}{{ icon("sparkles", "size-3.5") }}{% elif created_by == 'superadmin' %}{{ icon("user", "size-3.5") }}{% else %}{{ icon("bolt", "size-3.5") }}{% endif %}{{ label }}</span>
+{%- endmacro %}
+
+{#- AI / rules verdict (dict from security_triage.parse_verdict) -#}
+{% macro verdict_badge(v) -%}
+{% if v %}
+  {% set tone = {'malicious': 'red', 'suspicious': 'amber', 'benign': 'green'}.get(v.verdict, 'zinc') %}
+  <span class="badge badge-{{ tone }}">{% if v.source == 'rules' %}{{ icon("sliders", "size-3.5") }}{% else %}{{ icon("sparkles", "size-3.5") }}{% endif %}{{ (v.verdict or 'unknown') | humanize }}</span>
+{% endif %}
+{%- endmacro %}
+
+{% macro verdict_block(v, ip=None) %}
+{% if v %}
+<div class="sa-verdict">
+  <div class="flex flex-wrap items-center gap-2">
+    {% if ip %}{{ ip_link(ip) }}{% endif %}
+    {{ verdict_badge(v) }}
+    {% if v.applied and v.applied not in ('none',) %}<span class="badge badge-{{ {'banned': 'red', 'extended': 'red', 'lifted': 'green', 'kept': 'zinc', 'skipped': 'zinc'}.get(v.applied, 'zinc') }}">{{ v.applied | humanize }}</span>{% endif %}
+    <span class="ml-auto text-xs muted">{{ 'Rules' if v.source == 'rules' else (v.source or 'AI') | humanize }}</span>
+  </div>
+  {% if v.rationale %}<p class="mt-2 leading-relaxed text-zinc-700 dark:text-zinc-300">{{ v.rationale }}</p>{% endif %}
+  {% if v.applied_detail %}<p class="mt-1 text-xs muted">{{ v.applied_detail }}</p>{% endif %}
+</div>
+{% endif %}
+{% endmacro %}
+
+{#- Self-check / verification check status -#}
+{% macro check_icon(status) -%}
+{% set cls = {'ok': 'sa-check-ok', 'pass': 'sa-check-ok', 'warn': 'sa-check-warn', 'fail': 'sa-check-fail'}.get(status, 'sa-check-warn') %}
+{% set ico = {'ok': 'check', 'pass': 'check', 'warn': 'alert', 'fail': 'x'}.get(status, 'info') %}
+<span class="sa-check-icon {{ cls }}">{{ icon(ico, "size-4", label={'ok': 'OK', 'pass': 'Passed', 'warn': 'Warning', 'fail': 'Failed'}.get(status, status)) }}</span>
+{%- endmacro %}
+
+{#- Verification evidence list: checks = [{check|label, status|passed, detail}] (any work package's shape) -#}
+{% macro evidence(checks) %}
+{% if checks %}
+<ul class="grid gap-2">
+  {% for c in checks %}
+    {% if c is mapping %}
+      {% set st = c.status if c.status in ('pass', 'warn', 'fail', 'info') else ('pass' if c.passed else ('fail' if c.passed is sameas false else 'info')) %}
+      <li class="sa-evidence sa-evidence-{{ st }}">
+        {{ check_icon({'pass': 'ok', 'warn': 'warn', 'fail': 'fail'}.get(st, 'warn')) }}
+        <div class="min-w-0">
+          <p class="text-sm font-medium">{{ c.label or c.check or c.key or 'Check' }}{% if c.critical %} <span class="badge badge-red ml-1">Critical</span>{% endif %}</p>
+          {% if c.detail %}<p class="mt-0.5 text-xs leading-relaxed break-words muted">{{ c.detail }}</p>{% endif %}
+        </div>
+      </li>
+    {% else %}
+      <li class="sa-evidence sa-evidence-info"><p class="text-sm">{{ c }}</p></li>
+    {% endif %}
+  {% endfor %}
+</ul>
+{% else %}
+<p class="rounded-2xl bg-zinc-100/70 px-4 py-3 text-sm muted dark:bg-white/[0.04]">No automated checks were recorded.</p>
+{% endif %}
+{% endmacro %}
+
+{#- Simple scalar key/values of a JSON blob (assessments, engine results) -#}
+{% macro json_facts(data, limit=8) %}
+{% if data is mapping %}
+<dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 text-xs sm:grid-cols-2">
+  {% for k, v in data.items() if v is not mapping and (v is string or v is number or v is boolean or v is none) %}
+    {% if loop.index <= limit %}
+    <div class="flex min-w-0 gap-1.5"><dt class="shrink-0 muted">{{ k | humanize }}:</dt><dd class="min-w-0 truncate font-medium">{{ 'yes' if v is sameas true else ('no' if v is sameas false else (v if v is not none else '—')) }}</dd></div>
+    {% endif %}
+  {% endfor %}
+</dl>
+{% endif %}
+{% endmacro %}
+
+{#- Pagination. pager: routers.superadmin.Pager -#}
+{#- A bounded count from the router ("10,000+" once it reached count_cap) -#}
+{% macro num(value) -%}
+{%- set v = value | int -%}
+{%- if count_cap and v > count_cap -%}{{ "{:,}".format(count_cap) }}+{%- else -%}{{ "{:,}".format(v) }}{%- endif -%}
+{%- endmacro %}
+
+{% macro pagination(pager, noun="items") %}
+{% if pager.total > 0 %}
+<nav class="sa-pager" aria-label="Pagination">
+  <p class="muted">Showing <span class="font-semibold text-ink tabular-nums dark:text-white">{{ pager.first }}–{{ pager.last }}</span> of <span class="tabular-nums">{{ "{:,}".format(pager.total) }}{{ "+" if pager.capped }}</span> {{ noun }}</p>
+  {% if pager.pages > 1 %}
+  <div class="flex items-center gap-2">
+    {% if pager.has_prev %}<a href="{{ pager.url(pager.page - 1) }}" class="btn btn-secondary btn-sm" rel="prev">{{ icon("arrow-left", "size-4") }} Newer</a>{% else %}<span class="btn btn-secondary btn-sm opacity-40" aria-disabled="true">{{ icon("arrow-left", "size-4") }} Newer</span>{% endif %}
+    <span class="text-xs muted tabular-nums">Page {{ pager.page }} / {{ pager.pages }}{{ "+" if pager.capped }}</span>
+    {% if pager.has_next %}<a href="{{ pager.url(pager.page + 1) }}" class="btn btn-secondary btn-sm" rel="next">Older {{ icon("arrow-right", "size-4") }}</a>{% else %}<span class="btn btn-secondary btn-sm opacity-40" aria-disabled="true">Older {{ icon("arrow-right", "size-4") }}</span>{% endif %}
+  </div>
+  {% endif %}
+</nav>
+{% endif %}
+{% endmacro %}
+
+{#- Newer / Older links of a keyset window of events (no page numbers: the cost never depends on the depth) -#}
+{% macro window_nav(newer_url, older_url, newest_url, shown, noun="events") %}
+{% if newer_url or older_url %}
+<nav class="sa-pager" aria-label="Pagination" data-pager>
+  <p class="muted"><span class="font-semibold text-ink tabular-nums dark:text-white">{{ shown }}</span> {{ noun }} shown · newest first{% if newest_url %} · <a href="{{ newest_url }}" class="text-accent hover:underline">back to the newest</a>{% endif %}</p>
+  <div class="flex items-center gap-2">
+    {% if newer_url %}<a href="{{ newer_url }}" class="btn btn-secondary btn-sm" rel="prev">{{ icon("arrow-left", "size-4") }} Newer</a>{% else %}<span class="btn btn-secondary btn-sm opacity-40" aria-disabled="true">{{ icon("arrow-left", "size-4") }} Newer</span>{% endif %}
+    {% if older_url %}<a href="{{ older_url }}" class="btn btn-secondary btn-sm" rel="next">Older {{ icon("arrow-right", "size-4") }}</a>{% else %}<span class="btn btn-secondary btn-sm opacity-40" aria-disabled="true">Older {{ icon("arrow-right", "size-4") }}</span>{% endif %}
+  </div>
+</nav>
+{% endif %}
+{% endmacro %}
+
+{#- Ranked horizontal bars: rows = [(label, value, href|None)] ; single hue, largest first -#}
+{% macro ranked_bars(rows, max_value, empty_text="Nothing recorded.") %}
+{% if rows %}
+<ul class="grid gap-3" data-component="sa-bars">
+  {% for label, value, href in rows %}
+  <li>
+    <div class="mb-1.5 flex items-baseline justify-between gap-3 text-sm">
+      {% if href %}<a href="{{ href }}" class="min-w-0 truncate font-medium hover:text-accent">{{ label }}</a>{% else %}<span class="min-w-0 truncate font-medium">{{ label }}</span>{% endif %}
+      <span class="shrink-0 tabular-nums muted">{{ value }}</span>
+    </div>
+    <div class="sa-hbar" role="presentation"><span data-pct="{{ ((value / max_value * 100) if max_value else 0) | round(1) }}"></span></div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p class="text-sm muted">{{ empty_text }}</p>
+{% endif %}
+{% endmacro %}
+
+{#- Thin segmented bar + legend rows: parts = [(label, value, dot_tone, href|None)] -#}
+{% macro segmented(parts, total, legend=True) %}
+{% if total %}
+<div class="sa-seg" role="img" aria-label="{% for label, value, tone, href in parts if value %}{{ label }} {{ value }}{{ ', ' if not loop.last }}{% endfor %}" data-component="sa-bars">
+  {% for label, value, tone, href in parts if value %}<span class="sa-dot-{{ tone }}" data-pct="{{ (value / total * 100) | round(2) }}" title="{{ label }}: {{ value }}"></span>{% endfor %}
+</div>
+{% endif %}
+{% if legend %}
+<ul class="mt-4 grid gap-2 text-sm">
+  {% for label, value, tone, href in parts %}
+  <li class="flex items-center gap-2.5">
+    <span class="sa-dot sa-dot-{{ tone }}" aria-hidden="true"></span>
+    {% if href %}<a href="{{ href }}" class="min-w-0 flex-1 truncate hover:text-accent">{{ label }}</a>{% else %}<span class="min-w-0 flex-1 truncate">{{ label }}</span>{% endif %}
+    <span class="font-semibold tabular-nums">{{ value }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endmacro %}
+
+{#- Empty state that sits inside a card -#}
+{% macro inline_empty(title, body=None, ico="check-circle") %}
+<div class="flex flex-col items-center rounded-[24px] bg-zinc-50 px-6 py-10 text-center dark:bg-white/[0.03]">
+  <span class="grid size-12 place-items-center rounded-2xl bg-ok/12 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon(ico, "size-6") }}</span>
+  <p class="mt-3 font-semibold">{{ title }}</p>
+  {% if body %}<p class="mt-1 max-w-sm text-sm muted">{{ body }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{#- Small figure tile used inside cards -#}
+{% macro mini(label, value, hint=None, tone=None, href=None) %}
+{% set value_cls = {'red': 'text-[#d1281e] dark:text-[#ff6b61]', 'amber': 'text-[#b45309] dark:text-[#fbbf24]', 'green': 'text-[#1f8c3a] dark:text-[#4ade80]', 'blue': 'text-accent-strong dark:text-[#64b5ff]'}.get(tone, '') %}
+{% if href %}<a href="{{ href }}" class="sa-mini sa-mini-link">{% else %}<div class="sa-mini">{% endif %}
+  <p class="truncate text-xs font-medium muted">{{ label }}</p>
+  <p class="mt-1 truncate text-2xl font-semibold tracking-tight tabular-nums {{ value_cls }}">{{ value }}</p>
+  {% if hint %}<p class="mt-0.5 truncate text-xs muted">{{ hint }}</p>{% endif %}
+{% if href %}</a>{% else %}</div>{% endif %}
+{% endmacro %}
+
+{#- AI provider state badge (describe()["status"]) -#}
+{% macro provider_status(status) -%}
+{% set label = {'up': 'Online', 'down': 'Offline', 'unknown': 'Not checked yet', 'not_configured': 'Not configured'}.get(status, status | humanize) %}
+{% set tone = {'up': 'green', 'down': 'red', 'unknown': 'amber', 'not_configured': 'zinc'}.get(status, 'zinc') %}
+<span class="badge badge-{{ tone }}"><span class="dot bg-current opacity-70"></span>{{ label }}</span>
+{%- endmacro %}
+
+{#- Reachability badge for a probe dict ({configured, ok, skipped}) -#}
+{% macro reach(p, up="Reachable", down="Unreachable") -%}
+{% if not p.configured %}<span class="badge badge-zinc">Not configured</span>
+{% elif p.skipped %}<span class="badge badge-zinc">Not probed</span>
+{% elif p.ok %}<span class="badge badge-green"><span class="dot bg-current opacity-70"></span>{{ up }}</span>
+{% else %}<span class="badge badge-red"><span class="dot bg-current opacity-70"></span>{{ down }}</span>{% endif %}
+{%- endmacro %}
+
+{#- 24-column chart (geometry from routers.superadmin.column_chart). SVG bars + HTML tick labels. -#}
+{% macro column_chart(chart, label) %}
+<figure class="sa-chart mt-5" data-component="sa-chart">
+  <svg viewBox="0 0 {{ chart.width }} {{ chart.height - 24 }}" preserveAspectRatio="none" class="h-36 w-full" role="img"
+       aria-label="{{ label }}: {{ chart.total }} in total, at most {{ chart.peak }} in one hour">
+    <line class="sa-axis" x1="0" x2="{{ chart.width }}" y1="{{ chart.baseline + 0.5 }}" y2="{{ chart.baseline + 0.5 }}" stroke-width="1" vector-effect="non-scaling-stroke"/>
+    {% for b in chart.bars %}
+      <rect class="{{ 'sa-bar-zero' if b.zero else 'sa-bar' }}" x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" rx="2" data-bar="{{ loop.index0 }}"/>
+    {% endfor %}
+    {% for b in chart.bars %}
+      <rect class="sa-hit" x="{{ b.slot_x }}" y="0" width="{{ b.slot_w }}" height="{{ chart.baseline }}" data-tip="{{ b.tip }}" data-bar="{{ loop.index0 }}"/>
+    {% endfor %}
+  </svg>
+  <div class="mt-2 grid grid-cols-[repeat(24,minmax(0,1fr))] text-[11px] tabular-nums muted" aria-hidden="true">
+    {% for b in chart.bars %}<span class="{{ 'col-span-1 whitespace-nowrap' }}">{{ b.tick }}</span>{% endfor %}
+  </div>
+</figure>
+{% endmacro %}
+
+{#- Decision panel for the review pages -#}
+{% macro decision(action, form, errors, decidable, subject, blocked_reason) %}
+<form method="post" action="{{ action }}" class="card lg:sticky lg:top-24" aria-labelledby="decision-title" novalidate>
+  {{ ui.csrf() }}
+  <h2 id="decision-title" class="sa-card-title">Your decision</h2>
+  <p class="sa-card-sub">The note is sent to {{ subject }} by notification and e-mail, and kept in the review history.</p>
+  {% if not decidable %}
+    <div class="mt-5">{{ ui.alert(blocked_reason, "info") }}</div>
+  {% else %}
+    <fieldset class="mt-5">
+      <legend class="label">Outcome <span class="text-bad">*</span></legend>
+      <div class="sa-decision">
+        <label class="sa-choice sa-choice-approve"><input type="radio" name="decision" value="approve" class="sr-only" {{ 'checked' if form.decision == 'approve' }} required>{{ icon("check-circle", "size-4") }} Approve</label>
+        <label class="sa-choice sa-choice-reject"><input type="radio" name="decision" value="reject" class="sr-only" {{ 'checked' if form.decision == 'reject' }}>{{ icon("x-circle", "size-4") }} Reject</label>
+      </div>
+      {% if errors.decision %}<p class="field-error">{{ errors.decision }}</p>{% endif %}
+    </fieldset>
+    {{ ui.textarea("note", "Note", value=form.note, required=True, error=errors.note, rows=5, placeholder="What you checked and why you decided this way.", attrs='maxlength="2000" minlength="3"', cls="mt-5") }}
+    <button type="submit" class="btn btn-dark mt-5 w-full" data-busy-label="Saving…">{{ icon("send", "size-4") }} Submit decision</button>
+  {% endif %}
+</form>
+{% endmacro %}

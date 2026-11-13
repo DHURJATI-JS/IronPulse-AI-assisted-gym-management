@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% import "owner/shop/_macros.html" as os with context %}
+{% block title %}Shop · Owner{% endblock %}
+{% block content %}
+{% call ui.page_header("Your shop", subtitle="Sell whey, creatine, bags, watches and more to your members - with payments, refunds and AI product answers built in.", eyebrow="Owner") %}
+  {% if gyms %}
+    <a href="/owner/shop/orders?status=to_fulfil" class="btn btn-secondary btn-sm">{{ icon("receipt", "size-4") }}Orders{% if d and d.to_fulfil %}<span class="badge badge-amber !py-0.5">{{ d.to_fulfil }}</span>{% endif %}</a>
+    {{ os.new_product(gyms) }}
+  {% endif %}
+{% endcall %}
+{{ os.tabs("overview") }}
+
+{% if not gyms %}
+  {{ ui.empty("Create a gym first", "Your shop lives inside a gym brand. Create your gym, then add products for your members.", "building", "Create a gym", "/owner/gyms/new") }}
+{% else %}
+  {% set primary = d.sales[0] if d.sales else None %}
+  {% set cur = primary.currency if primary else gyms[0].currency %}
+
+  {% if d.product_total == 0 %}
+    <section class="card mb-8 overflow-hidden animate-fade-up" aria-labelledby="start-title">
+      <div class="grid gap-6 md:grid-cols-[1fr_auto] md:items-center">
+        <div class="flex items-start gap-4">
+          <span class="grid size-14 shrink-0 place-items-center rounded-[20px] bg-gradient-to-br from-accent via-indigo to-violet text-white shadow-lg shadow-indigo/30">{{ shop.svg("bag", "size-7") }}</span>
+          <div>
+            <h2 id="start-title" class="text-xl font-semibold tracking-tight">Open your shop in minutes</h2>
+            <p class="mt-1 max-w-xl text-sm leading-relaxed muted">Add products with photos, prices (with MRP and GST), stock, allergens and safety tags. Members get a personalised safety check and can ask the AI about any product.</p>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-2">{{ os.new_product(gyms) }}</div>
+      </div>
+    </section>
+  {% endif %}
+
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-fade-up">
+    {{ ui.stat("Sales today", (primary.today if primary else 0) | money(cur), (primary.orders_today ~ " paid order" ~ ('s' if primary.orders_today != 1 else '')) if primary else "No sales yet today", "banknotes", "green") }}
+    {{ ui.stat("This month", (primary.month if primary else 0) | money(cur), ((primary.orders_month ~ (" order" if primary.orders_month == 1 else " orders") ~ " · net of refunds") if primary else "Net of refunds") ~ ((" · +" ~ (d.sales | length - 1) ~ " other currency") if d.sales | length > 1 else ""), "trending-up", "blue") }}
+    {{ ui.stat("To fulfil", d.to_fulfil, "paid, processing, ready or shipped", "receipt", "amber") }}
+    {{ ui.stat("Products live", d.product_active ~ " / " ~ d.product_total, (d.product_out ~ " out of stock") if d.product_out else "all in stock", "layers", "violet") }}
+  </div>
+
+  {% if d.by_status %}
+    <section class="mt-6 flex flex-wrap gap-2 animate-fade-up" aria-label="Orders by status">
+      {% for status, n in d.by_status | dictsort(by="value", reverse=True) %}
+        <a href="/owner/shop/orders?status={{ status.value }}" class="chip !py-1.5 hover:ring-1 hover:ring-black/10 dark:hover:ring-white/20">{{ shop.order_status(status) }}<span class="font-semibold tabular-nums">{{ n }}</span></a>
+      {% endfor %}
+    </section>
+  {% endif %}
+
+  <div class="mt-8 grid gap-6 lg:grid-cols-2">
+    <section class="card" aria-labelledby="refunds-title">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="refunds-title" class="section-title">Refund requests</h2>
+        {% if d.refunds %}<span class="badge badge-amber">{{ d.refunds | length }} waiting</span>{% endif %}
+      </div>
+      {% if d.refunds %}
+        <ul class="mt-4 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+          {% for r in d.refunds %}
+            <li class="py-3">
+              <a href="/owner/shop/orders/{{ r.order.id }}#refunds" class="flex items-center justify-between gap-3 hover:text-accent">
+                <span class="min-w-0"><span class="block font-mono text-sm font-semibold">{{ r.order.order_number }}</span><span class="block truncate text-xs muted">{{ r.order.customer_label.split(' <')[0] }} · “{{ r.reason[:70] }}”</span></span>
+                <span class="shrink-0 text-sm font-semibold tabular-nums">{{ r.amount | money(r.order.currency) }}</span>
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="mt-4 flex items-center gap-2 text-sm muted">{{ icon("check-circle", "size-4 text-ok") }}No pending refund requests.</p>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="low-title">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="low-title" class="section-title">Low stock</h2>
+        <a href="/owner/shop/products?status=low" class="text-sm font-semibold text-accent hover:underline">View all</a>
+      </div>
+      {% if d.low_stock %}
+        <ul class="mt-4 grid gap-3">
+          {% for p, cover in d.low_stock %}
+            <li class="flex items-center gap-3">
+              {{ shop.thumb(cover, p.name, p.category.value) }}
+              <div class="min-w-0 flex-1"><p class="truncate text-sm font-semibold">{{ p.name }}</p><p class="truncate text-xs muted">{{ p.gym.name }} · alert at {{ p.low_stock_threshold }}</p></div>
+              {{ os.stock_badge(p) }}
+              <a href="/owner/shop/products/{{ p.id }}#stock" class="btn btn-secondary btn-sm">Restock</a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="mt-4 flex items-center gap-2 text-sm muted">{{ icon("check-circle", "size-4 text-ok") }}Everything is well stocked.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <section class="card mt-6" aria-labelledby="top-title">
+    <h2 id="top-title" class="section-title">Top products · last 30 days</h2>
+    {% if d.top %}
+      <ol class="mt-4 grid gap-2">
+        {% for row in d.top %}
+          <li class="flex items-center gap-4 rounded-2xl px-3 py-2.5 hover:bg-zinc-900/[0.03] dark:hover:bg-white/[0.03]">
+            <span class="grid size-8 shrink-0 place-items-center rounded-full bg-zinc-900/[0.06] text-sm font-semibold tabular-nums dark:bg-white/10">{{ loop.index }}</span>
+            <span class="min-w-0 flex-1 truncate text-sm font-medium">{% if row.product_id %}<a href="/owner/shop/products/{{ row.product_id }}" class="hover:text-accent">{{ row.product_name }}</a>{% else %}{{ row.product_name }}{% endif %}</span>
+            <span class="text-sm tabular-nums muted">{{ row.units }} sold</span>
+            <span class="w-28 text-right text-sm font-semibold tabular-nums">{{ row.revenue | money(row.currency) }}</span>
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <p class="mt-4 text-sm muted">Sales will appear here once members start ordering.</p>
+    {% endif %}
+  </section>
+
+  <section class="mt-6 grid gap-3 md:grid-cols-3" aria-label="How the shop works">
+    <div class="card-muted flex gap-3"><span class="grid size-10 shrink-0 place-items-center rounded-xl bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("shield", "size-5") }}</span><div><p class="text-sm font-semibold">Safety first</p><p class="text-xs muted">Allergens and caution tags are matched to each member's health profile. Under-18s can't buy 18+ items.</p></div></div>
+    <div class="card-muted flex gap-3"><span class="grid size-10 shrink-0 place-items-center rounded-xl bg-accent/12 text-accent">{{ icon("credit-card", "size-5") }}</span><div><p class="text-sm font-semibold">Payments &amp; refunds</p><p class="text-xs muted">{{ "Test mode - payments are simulated until Cashfree keys are added." if app.payments_test_mode else "Cashfree payments; refunds go back to the original method." }}</p></div></div>
+    <div class="card-muted flex gap-3"><span class="grid size-10 shrink-0 place-items-center rounded-xl bg-violet/12 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("bell", "size-5") }}</span><div><p class="text-sm font-semibold">Stay notified</p><p class="text-xs muted">New orders, refund requests and a daily low-stock digest arrive in your notifications and e-mail.</p></div></div>
+  </section>
+{% endif %}
+{% endblock %}

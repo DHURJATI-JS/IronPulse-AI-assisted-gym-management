@@ -1,0 +1,88 @@
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_macros.html" as sm with context %}
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_23rem]">
+  <div class="min-w-0 space-y-6">
+    {% if emp.is_trainer and emp.verification_status.value == "needs_review" %}
+      <section class="card ring-2 !ring-warn/40">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <span class="grid size-11 shrink-0 place-items-center rounded-2xl bg-warn/15 text-[#b45309] dark:text-[#fbbf24]">{{ icon("alert", "size-5") }}</span>
+          <div class="min-w-0 flex-1">
+            <h2 class="section-title">Certification needs your review</h2>
+            <p class="mt-1 text-sm muted">{{ latest_run.summary if latest_run else "The automatic check could not confirm the name on the certificate." }} Open the document below; if it is genuine and belongs to {{ emp.full_name }}, approve it.</p>
+            <div class="mt-4 flex flex-wrap gap-2">
+              {{ ui.confirm_button("/owner/staff/" ~ emp.id ~ "/verify-documents", "Approve certification", "Approve the certification of " ~ emp.full_name ~ "? This is recorded in the audit log.", variant="success", ico="check-badge") }}
+              <form method="post" action="/owner/staff/{{ emp.id }}/recheck">{{ ui.csrf() }}<button class="btn btn-secondary btn-sm">{{ icon("refresh", "size-4") }} Run the check again</button></form>
+            </div>
+          </div>
+        </div>
+      </section>
+    {% endif %}
+
+    <section class="card min-w-0">
+      <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div class="flex items-start gap-3">
+          <span class="grid size-9 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">{{ icon("document", "size-[18px]") }}</span>
+          <div>
+            <h2 class="section-title">Documents</h2>
+            <p class="mt-0.5 text-sm muted">Encrypted at rest · only you can open them</p>
+          </div>
+        </div>
+        {% if emp.is_trainer %}
+          <div class="flex flex-wrap items-center gap-2">
+            {{ ui.ai_chip() }}
+            <span class="badge badge-{{ emp.verification_status | tone }}">{{ icon("check-badge", "size-3.5") }}Certification {{ emp.verification_status | humanize | lower }}</span>
+          </div>
+        {% endif %}
+      </div>
+      {% if documents %}
+        <ul class="divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+          {% for d in documents %}
+          {% set a = d.assessment or {} %}
+          <li class="flex flex-wrap items-center gap-3 py-3.5 sm:flex-nowrap">
+            <span class="grid size-11 shrink-0 place-items-center rounded-2xl {{ 'bg-bad/10 text-bad' if d.content_type == 'application/pdf' else 'bg-accent/10 text-accent' }}">{{ icon("document" if d.content_type == "application/pdf" else "photo", "size-5") }}</span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium">{{ d.original_filename }}</p>
+              <p class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs muted">
+                <span class="badge badge-zinc !py-0.5">{{ S.DOC_TYPE_LABELS.get(d.doc_type, d.doc_type | humanize) }}</span>
+                <span>{{ S.fmt_size(d.size_bytes) }}</span><span aria-hidden="true">·</span><span>{{ d.created_at | timeago }}</span>
+                {% if d.doc_type == "certification" %}
+                  {% if a.get("name_match") is sameas true %}<span class="badge badge-green !py-0.5">{{ icon("check", "size-3") }}{{ "Approved by you" if a.get("method") == "manual" else "Name matches" }}</span>
+                  {% elif a.get("name_match") is sameas false %}<span class="badge badge-amber !py-0.5">Name not confirmed</span>
+                  {% elif emp.verification_status.value != "verified" %}<span class="badge badge-zinc !py-0.5">Check pending</span>{% endif %}
+                {% endif %}
+              </p>
+            </div>
+            <div class="flex items-center gap-1">
+              <a href="/owner/staff/{{ emp.id }}/documents/{{ d.id }}" target="_blank" rel="noopener" class="btn btn-secondary btn-sm">{{ icon("eye", "size-4") }} Open</a>
+              <form method="post" action="/owner/staff/{{ emp.id }}/documents/{{ d.id }}/delete" data-confirm="Delete {{ d.original_filename }}? This cannot be undone.">
+                {{ ui.csrf() }}
+                <button class="btn btn-ghost btn-icon !size-9 hover:!text-bad" aria-label="Delete {{ d.original_filename }}">{{ icon("trash", "size-4") }}</button>
+              </form>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="rounded-2xl bg-zinc-100/70 px-6 py-10 text-center dark:bg-white/[0.04]">
+          <span class="mx-auto grid size-12 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("document", "size-6") }}</span>
+          <p class="mt-3 font-semibold">No documents yet</p>
+          <p class="mx-auto mt-1 max-w-sm text-sm muted">{% if emp.is_trainer %}Trainers need at least one certification before they can be approved.{% else %}Keep the résumé and signed contract here - encrypted and private.{% endif %}</p>
+        </div>
+      {% endif %}
+    </section>
+  </div>
+
+  <aside class="space-y-6">
+    <section class="card" id="upload">
+      {{ sm.card_title("Upload a document", "PDF or photo, up to " ~ app.max_upload_mb ~ " MB.", "upload") }}
+      {% if doc_errors %}<div class="mb-4">{{ ui.form_errors(doc_errors) }}</div>{% endif %}
+      <form method="post" action="/owner/staff/{{ emp.id }}/documents#upload" enctype="multipart/form-data" class="space-y-4">
+        {{ ui.csrf() }}
+        {{ ui.select("doc_type", "Type", S.DOC_TYPE_LABELS.items() | list, value=("certification" if emp.is_trainer else "resume"), required=True) }}
+        {{ ui.file("document", "File", accept="application/pdf,image/jpeg,image/png,image/webp", required=True) }}
+        <button class="btn btn-primary w-full">{{ icon("upload", "size-4") }} Upload</button>
+      </form>
+      {% if emp.is_trainer %}<p class="mt-3 text-xs muted">New certifications are OCR-checked automatically against {{ emp.full_name }}'s name.</p>{% endif %}
+    </section>
+  </aside>
+</div>

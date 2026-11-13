@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "auth/_macros.html" as am with context %}
+{% import "identity/_fields.html" as idf with context %}
+{% block title %}Create your account{% endblock %}
+{% block description %}Join {{ app.name }} as a member or as a gym owner.{% endblock %}
+{% block content %}
+{% set e = errors or {} %}
+{% set is_owner = form.role == 'owner' %}
+<div class="mx-auto max-w-6xl">
+  <header class="mx-auto max-w-2xl text-center animate-fade-up">
+    <span class="chip">{{ icon("sparkles", "size-3.5") }} Free to join · ID-verified community</span>
+    <h1 class="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">Create your <span class="gradient-text">{{ app.name }}</span> account</h1>
+    <p class="mt-4 text-[15px] leading-relaxed muted sm:text-base">One account for training, coaching and running your gym. It takes about three minutes - keep your ID card handy.</p>
+    <p class="mt-3 text-sm muted">Already registered? <a href="/auth/login" class="font-semibold text-accent hover:underline">Sign in</a></p>
+  </header>
+
+  {% if e %}
+  <div class="mx-auto mt-8 max-w-3xl animate-fade-up">
+    {{ ui.form_errors(e) }}
+    <p class="-mt-3 flex items-center gap-2 text-xs muted">{{ icon("info", "size-3.5 shrink-0") }} For your privacy, attached files are never kept after an error - please choose your photo and ID card again.</p>
+  </div>
+  {% endif %}
+
+  <div class="mt-10 grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)] xl:gap-12">
+    {# ---------------------------------------------------------------- progress rail (desktop) #}
+    <aside class="hidden lg:block">
+      <nav class="sticky top-24" aria-label="Sign-up steps">
+        <p class="eyebrow mb-4">Your progress</p>
+        <ol class="space-y-1" data-signup-steps>
+          {% for key, label in steps %}
+          <li{% if key == 'guardian' %} data-guardian-step{% if not show_guardian %} hidden{% endif %}{% endif %}>
+            <a href="#step-{{ key }}" class="signup-step{{ ' signup-step-sub' if key == 'guardian' }}" data-step-link="{{ key }}">
+              <span class="signup-step-dot">{% if key == 'guardian' %}{{ icon("users", "size-3") }}{% else %}{{ loop.index if loop.index < 3 else loop.index - 1 }}{% endif %}</span>
+              <span>{{ label }}</span>
+            </a>
+          </li>
+          {% endfor %}
+        </ol>
+        <div class="card-muted mt-8 !p-4">
+          <p class="flex items-center gap-2 text-xs font-semibold">{{ icon("shield", "size-4 text-accent") }} Private by default</p>
+          <p class="mt-1.5 text-xs leading-relaxed muted">ID images are encrypted at rest and only the last four digits of the number stay visible.</p>
+        </div>
+      </nav>
+    </aside>
+
+    {# ---------------------------------------------------------------- the form #}
+    <form method="post" action="/auth/signup" enctype="multipart/form-data" class="acct-form min-w-0 space-y-6" data-component="signup-form" aria-describedby="signup-intro">
+      {{ ui.csrf() }}
+      <input type="hidden" name="timezone" value="{{ form.timezone or '' }}" data-tz-hidden data-component="tz-hidden">
+      <p id="signup-intro" class="sr-only">Fields marked with an asterisk are required.</p>
+
+      {# mobile progress bar #}
+      <div class="glass sticky top-16 z-30 -mx-4 border-b border-black/[0.06] px-4 py-3 sm:-mx-6 sm:px-6 lg:hidden dark:border-white/[0.08]" data-signup-mobile-progress hidden>
+        <div class="flex items-center justify-between text-xs font-medium muted"><span data-progress-label>Let's get started</span><span data-progress-count></span></div>
+        <div class="strength-track mt-2"><span class="progress-fill" data-progress-bar></span></div>
+      </div>
+
+      {# 1. account type #}
+      <section id="step-account" class="card scroll-mt-28 sm:p-8" data-step="account">
+        {{ am.section_head(1, "How will you use " ~ app.name ~ "?", "Pick the account that fits you. Gym staff join through the invitation their gym e-mails them.") }}
+        <fieldset>
+          <legend class="sr-only">Account type</legend>
+          <div class="grid gap-3 sm:grid-cols-2">
+            {% for value, ico, title, body in [
+              ("customer", "dumbbell", "I'm a member", "Train at verified gyms or online, get AI coaching that respects your health, chat with trainers."),
+              ("owner", "building", "I run a gym", "Publish gyms and branches, manage staff, payroll, plans and members in one place."),
+            ] %}
+            <label class="role-card">
+              <input type="radio" name="role" value="{{ value }}" class="sr-only" {{ 'checked' if form.role == value }} required data-role-radio>
+              <span class="role-card-check" aria-hidden="true">{{ icon("check", "size-3.5") }}</span>
+              <span class="role-card-icon">{{ icon(ico, "size-5") }}</span>
+              <span class="mt-4 block text-base font-semibold">{{ title }}</span>
+              <span class="mt-1 block text-sm leading-relaxed muted">{{ body }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% if e.role %}<p class="field-error">{{ e.role }}</p>{% endif %}
+        </fieldset>
+      </section>
+
+      {# 2. about you #}
+      <section id="step-about" class="card scroll-mt-28 sm:p-8" data-step="about">
+        {{ am.section_head(2, "About you", "We use these details for your profile and reminders, and to match your ID card.") }}
+        <div class="grid gap-5 sm:grid-cols-2">
+          {{ ui.field("full_name", "Full name (as on your ID)", value=form.full_name, required=True, error=e.full_name, autocomplete="name",
+                      placeholder="Priya Sharma", attrs='maxlength="120"', cls="sm:col-span-2") }}
+          {{ ui.field("email", "E-mail address", type="email", value=form.email, required=True, error=e.email, autocomplete="email",
+                      placeholder="you@example.com", attrs='maxlength="254" autocapitalize="off" spellcheck="false"') }}
+          {{ am.username_input(form.username, error=e.username) }}
+          {{ am.phone_input(form.phone, form.phone_country, error=e.phone) }}
+          {{ ui.field("date_of_birth", "Date of birth", type="date", value=form.date_of_birth, required=True, error=e.date_of_birth, autocomplete="bday",
+                      attrs='max="' ~ today ~ '" min="' ~ min_dob ~ '" data-dob-input', help="Members under 18 need a parent or guardian's consent. Gym owners must be 18+.") }}
+          {{ ui.select("country", "Country", countries, value=form.country, required=True, error=e.country, attrs='autocomplete="country" data-country-select') }}
+          {{ ui.field("city", "City", value=form.city, required=True, error=e.city, autocomplete="address-level2", placeholder="Bengaluru",
+                      attrs='maxlength="120"', help="Shows gyms near you when location access is off.") }}
+        </div>
+      </section>
+
+      {# 2b. guardian (customers under 18) #}
+      <section id="step-guardian" class="card scroll-mt-28 ring-2 ring-violet/25 sm:p-8 dark:ring-violet/30" data-step="guardian" data-guardian-block {% if not show_guardian %}hidden{% endif %}>
+        {{ am.section_head(None, "Parent or guardian", "You're under 18, so a parent or guardian must agree to your membership. They get a copy of every e-mail we send you.", ico="users") }}
+        <fieldset class="grid gap-5 sm:grid-cols-2" data-guardian-fieldset {% if not show_guardian %}disabled{% endif %}>
+          <legend class="sr-only">Guardian details</legend>
+          {{ ui.field("guardian_name", "Guardian's full name", value=form.guardian_name, required=True, error=e.guardian_name, attrs='maxlength="120" autocomplete="off"') }}
+          {{ ui.select("guardian_relation", "Relationship to you", guardian_relations, value=form.guardian_relation, required=True, error=e.guardian_relation, empty="Choose…") }}
+          {{ ui.field("guardian_email", "Guardian's e-mail", type="email", value=form.guardian_email, required=True, error=e.guardian_email,
+                      attrs='maxlength="254" autocapitalize="off" spellcheck="false" autocomplete="off"') }}
+          {{ am.phone_input(form.guardian_phone, form.guardian_phone_country or form.phone_country, error=e.guardian_phone, label="Guardian's phone", name="guardian_phone", country_name="guardian_phone_country") }}
+          <div class="card-muted !p-4 sm:col-span-2">
+            <label class="flex items-start gap-3 text-sm">
+              <input type="checkbox" name="guardian_consent" value="1" class="checkbox mt-0.5" required {{ 'checked' if form.guardian_consent }}>
+              <span><span class="font-medium">My parent or guardian agrees to this membership <span class="text-bad">*</span></span>
+                <span class="block text-xs muted">They confirm you may train and use AI coaching, and that they'll be contacted about payments and safety alerts.</span></span>
+            </label>
+            {% if e.guardian_consent %}<p class="field-error">{{ e.guardian_consent }}</p>{% endif %}
+          </div>
+        </fieldset>
+      </section>
+
+      {# 3. photo #}
+      <section id="step-photo" class="card scroll-mt-28 sm:p-8" data-step="photo">
+        {{ am.section_head(3, "Profile photo", "Members and staff recognise you by it on gym pages and in chat.") }}
+        <div class="flex flex-col gap-6 sm:flex-row sm:items-center" data-component="photo-preview">
+          <span class="avatar size-24 shrink-0 text-2xl ring-4 ring-accent/15">
+            <img alt="Selected photo preview" class="hidden" data-photo-img>
+            <span data-photo-placeholder>{{ icon("camera", "size-8") }}</span>
+          </span>
+          <div class="min-w-0 flex-1">
+            <label class="label" for="f-photo">Photo <span class="text-bad" data-photo-required-mark {% if not is_owner %}hidden{% endif %}>*</span></label>
+            <input id="f-photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-sm muted"
+                   {% if is_owner %}required{% endif %} data-photo-input {% if e.photo %}aria-invalid="true" aria-describedby="e-photo"{% endif %}>
+            {% if e.photo %}<p class="field-error" id="e-photo">{{ e.photo }}</p>{% endif %}
+            <p class="help" data-photo-help="owner" {% if not is_owner %}hidden{% endif %}>Required for gym owners - your members see it next to your gyms. JPG, PNG or WEBP up to {{ app.max_upload_mb }} MB.</p>
+            <p class="help" data-photo-help="customer" {% if is_owner %}hidden{% endif %}>Optional for members - you can add one later. JPG, PNG or WEBP up to {{ app.max_upload_mb }} MB.</p>
+          </div>
+        </div>
+      </section>
+
+      {# 4. password #}
+      <section id="step-security" class="card scroll-mt-28 sm:p-8" data-step="security">
+        {{ am.section_head(4, "Choose a password", "Use something long and unique - it's hashed with Argon2id and never stored readable.") }}
+        <div class="grid gap-5 sm:grid-cols-2">
+          {{ am.password_input("password", "Password", autocomplete="new-password", error=e.password, strength=True,
+                               help="At least 10 characters, mixing three of: lowercase, uppercase, digits, symbols.") }}
+          {{ am.password_input("password_confirm", "Confirm password", autocomplete="new-password", error=e.password_confirm, match="password") }}
+        </div>
+      </section>
+
+      {# 5. identity #}
+      <section id="step-identity" class="card scroll-mt-28 sm:p-8" data-step="identity">
+        {{ am.section_head(5, "Government ID card", "Mandatory for every account - it keeps gyms safe and unlocks memberships. Verification usually takes a minute.") }}
+        {{ idf.id_fields(prefix="id", default_country=(form.id_country or form.country or "IN"), doc_type=(form.id_doc_type or None)) }}
+        {% for k in ("id_front", "id_doc_type", "id_country") %}{% if e[k] %}<p class="field-error">{{ e[k] }}</p>{% endif %}{% endfor %}
+      </section>
+
+      {# 6. review #}
+      <section id="step-terms" class="card scroll-mt-28 sm:p-8" data-step="terms">
+        {{ am.section_head(6, "Review & create", "A few things worth knowing before you join.") }}
+        <ul class="grid gap-3 sm:grid-cols-3">
+          {% for ico, title, body in [
+            ("envelope", "E-mail for everything", "Every notification also lands in your inbox - guardians get a copy for minors."),
+            ("lock", "Encrypted documents", "ID scans are encrypted; only masked numbers are ever shown."),
+            ("trash", "Leave any time", "Deleted accounts are kept 30 days, then erased for good."),
+          ] %}
+          <li class="card-muted !p-4">
+            <span class="grid size-8 place-items-center rounded-xl bg-accent/10 text-accent">{{ icon(ico, "size-4") }}</span>
+            <p class="mt-3 text-sm font-semibold">{{ title }}</p>
+            <p class="mt-1 text-xs leading-relaxed muted">{{ body }}</p>
+          </li>
+          {% endfor %}
+        </ul>
+        <div class="mt-6">{{ am.terms_checkbox(form.accept_terms, e.accept_terms) }}</div>
+        <div class="mt-8 flex flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <p class="text-xs muted">We'll e-mail you a link to confirm your address.</p>
+          <button type="submit" class="btn btn-primary btn-lg w-full sm:w-auto" data-busy-label="Creating your account…">Create my account {{ icon("arrow-right", "size-4") }}</button>
+        </div>
+      </section>
+    </form>
+  </div>
+</div>
+{% endblock %}

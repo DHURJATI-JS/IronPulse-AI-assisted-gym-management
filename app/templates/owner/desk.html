@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}Front desk{% endblock %}
+{% block content %}
+<div data-component="desk-live">
+{% call ui.page_header("Front desk", subtitle="Customers buying a gym membership in person confirm it with a 6-digit code. Codes are sent only to you - read them out to the customer standing at your desk, never over the phone.", eyebrow="Branch desk") %}
+  <span class="chip"><span class="live-dot" aria-hidden="true"></span>Live</span>
+{% endcall %}
+
+<div class="grid gap-4 sm:grid-cols-3 animate-fade-up">
+  {{ ui.stat("Waiting now", challenges | length, "open desk codes", "key", "amber") }}
+  {{ ui.stat("Desk sales today", stats.today_count, "codes + cash registrations", "check-badge", "green") }}
+  {{ ui.stat("Taken at the desk today", stats.today_amount, "all currencies combined" if stats.mixed else "membership payments", "banknotes", "blue") }}
+</div>
+
+<div class="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
+  <div class="min-w-0 space-y-10">
+    <section aria-labelledby="waiting-title">
+      <h2 id="waiting-title" class="section-title mb-4">Waiting at the desk</h2>
+      {% if challenges %}
+        <div class="space-y-4">
+          {% for c in challenges %}
+            <article id="otp-{{ c.challenge.id }}" class="card flex flex-col gap-5 !p-5 sm:flex-row sm:items-center animate-fade-up">
+              <div class="flex min-w-0 flex-1 items-center gap-4">
+                {{ ui.avatar(c.customer.photo_key, c.customer.display_name, "size-12", "text-sm") }}
+                <div class="min-w-0">
+                  <p class="truncate font-semibold">{{ c.customer.display_name }}</p>
+                  <p class="truncate text-sm muted">{{ c.plan.name }} · {{ c.sub.price | money(c.sub.currency) }}</p>
+                  <p class="mt-1 flex flex-wrap items-center gap-1.5 text-xs muted">
+                    <span class="inline-flex items-center gap-1">{{ icon("building", "size-3.5") }}{{ c.branch.name }}</span>
+                    {% if c.flags %}<span class="badge badge-amber">{{ icon("alert", "size-3") }}{{ c.flags | map('replace', '_', ' ') | join(', ') }}</span>{% endif %}
+                  </p>
+                </div>
+              </div>
+              <div class="flex items-center justify-between gap-4 sm:flex-col sm:items-end sm:justify-center">
+                <p class="otp-code" aria-label="Desk code">{{ c.code or '••••••' }}</p>
+                <p class="text-xs muted">
+                  <span data-component="countdown" data-expires="{{ c.challenge.expires_at.isoformat() }}" data-reload="1" class="font-semibold tabular-nums text-ink dark:text-white">{{ c.minutes_left }} min</span>
+                  · {{ c.attempts_left }} {{ 'try' if c.attempts_left == 1 else 'tries' }} left
+                </p>
+              </div>
+            </article>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="card flex flex-col items-center px-6 py-12 text-center">
+          <span class="grid size-14 place-items-center rounded-2xl bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("check-circle", "size-7") }}</span>
+          <h3 class="mt-4 text-lg font-semibold">Nobody is waiting</h3>
+          <p class="mt-1 max-w-sm text-sm muted">When a customer taps “I'm at the desk”, their code appears here instantly - no refresh needed.</p>
+        </div>
+      {% endif %}
+    </section>
+
+    <section aria-labelledby="recent-title">
+      <h2 id="recent-title" class="section-title mb-4">Recent desk sales</h2>
+      {% if recent %}
+        <div class="table-wrap">
+          <table class="table">
+            <thead><tr><th scope="col">Customer</th><th scope="col">Plan</th><th scope="col" class="hidden md:table-cell">Branch</th><th scope="col" class="hidden sm:table-cell">How</th><th scope="col" class="text-right">Amount</th></tr></thead>
+            <tbody>
+              {% for s in recent %}
+              <tr>
+                <td>
+                  <span class="flex items-center gap-2.5">{{ ui.avatar(s.customer.photo_key, s.customer.display_name, "size-8", "text-xs") }}
+                    <span class="min-w-0"><span class="block truncate font-medium">{{ s.customer.display_name }}</span><span class="block text-xs muted">{{ s.activated_at | timeago }}</span></span>
+                  </span>
+                </td>
+                <td class="muted">{{ s.plan.name }}</td>
+                <td class="hidden muted md:table-cell">{{ s.branch.name if s.branch else '—' }}</td>
+                <td class="hidden sm:table-cell">{% if s.channel.value == 'owner_manual' %}<span class="badge badge-violet">Cash</span>{% else %}<span class="badge badge-blue">Desk code</span>{% endif %}</td>
+                <td class="text-right tabular-nums">{{ s.price | money(s.currency) }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="card-muted text-sm muted">No desk sales in the last 7 days.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <aside class="lg:sticky lg:top-24 lg:self-start" aria-labelledby="manual-title">
+    <form method="post" action="/owner/subscriptions/manual" class="card space-y-5" data-component="manual-sale" novalidate>
+      {{ ui.csrf() }}
+      <div>
+        <h2 id="manual-title" class="section-title">Register a cash membership</h2>
+        <p class="mt-1 text-sm muted">For customers paying cash at the desk - including people outside the 30 km online-purchase radius.</p>
+      </div>
+      {% if manual_errors %}{{ ui.form_errors(manual_errors) }}{% endif %}
+      {% if not plan_options %}
+        <p class="alert alert-info">{{ icon("info", "size-5 shrink-0") }}<span>Seed and enable plans for your gym first.</span></p>
+      {% else %}
+        {{ ui.field("customer", "Customer e-mail or phone", value=form.customer, required=True, error=manual_errors.customer, placeholder="name@example.com", autocomplete="off", help="The customer chooses this plan in their IronPulse app first (that's their consent) - or you registered them under Members. Then record the cash here. They need an IronPulse account with a verified ID card.") }}
+        <div>
+          <label class="label" for="f-plan_id">Plan <span class="text-bad">*</span></label>
+          <select id="f-plan_id" name="plan_id" class="input ip-select {{ 'input-error' if manual_errors.plan_id }}" required data-plan-select>
+            <option value="">Choose a plan</option>
+            {% for g in plan_options %}
+              <optgroup label="{{ g.gym.name }}">
+                {% for p in g.plans %}
+                  <option value="{{ p.id }}" data-gym="{{ g.gym.id }}" data-needs-branch="{{ '1' if p.needs_branch else '0' }}" {{ 'selected' if form.plan_id == p.id | string }}>{{ p.name }} — {{ p.price | money(p.currency) }}</option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          </select>
+          {% if manual_errors.plan_id %}<p class="field-error">{{ manual_errors.plan_id }}</p>{% endif %}
+        </div>
+        <div data-branch-field>
+          <label class="label" for="f-branch_id">Branch <span class="text-bad">*</span></label>
+          <select id="f-branch_id" name="branch_id" class="input ip-select {{ 'input-error' if manual_errors.branch_id }}" data-branch-select>
+            <option value="">Choose a branch</option>
+            {% for b in branch_options %}
+              <option value="{{ b.id }}" data-gym="{{ b.gym_id }}" {{ 'selected' if form.branch_id == b.id | string }}>{{ b.name }} · {{ b.city }}</option>
+            {% endfor %}
+          </select>
+          {% if manual_errors.branch_id %}<p class="field-error">{{ manual_errors.branch_id }}</p>{% else %}<p class="help">Required for gym and combo plans.</p>{% endif %}
+        </div>
+        {{ ui.textarea("note", "Note (optional)", value=form.note, rows=2, error=manual_errors.note, placeholder="Receipt number, who took the cash…") }}
+        <button type="submit" class="btn btn-primary w-full">{{ icon("check", "size-4") }}Register &amp; activate</button>
+        <p class="text-xs muted">The plan price is recorded as cash received. The customer (and guardian, for minors) is notified by e-mail.</p>
+      {% endif %}
+    </form>
+  </aside>
+</div>
+</div>
+{% endblock %}

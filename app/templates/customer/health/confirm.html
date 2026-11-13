@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}Check this reading{% endblock %}
+{% block content %}
+{% set severe = level_rank >= 3 %}
+{% set lt = level.value == 'life_threatening' %}
+<div class="mx-auto max-w-2xl animate-fade-up">
+  <a href="/me/health" class="mb-4 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">{{ icon("arrow-left", "size-4") }} Back to health</a>
+
+  <section class="card relative overflow-hidden !p-6 sm:!p-8" aria-labelledby="confirm-title">
+    <div aria-hidden="true" class="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full blur-3xl {{ 'bg-bad/15' if severe else 'bg-warn/20' }}"></div>
+    <div class="relative">
+      <span class="grid size-14 place-items-center rounded-2xl {{ 'bg-bad/12 text-bad' if severe else 'bg-warn/15 text-warn' }}">{{ icon("heart" if severe else "scale", "size-7") }}</span>
+      <p class="eyebrow mt-6 {{ '!text-bad' if severe else '!text-[#b45309] dark:!text-[#fbbf24]' }}">{{ 'Needs your attention' if severe else 'Quick double-check' }}</p>
+      <h1 id="confirm-title" class="mt-1 text-3xl font-semibold tracking-tight sm:text-4xl">
+        {{ "Let's make sure you're okay" if severe else "Let's double-check this reading" }}
+      </h1>
+      <p class="mt-3 text-[15px] leading-relaxed muted">
+        {% if severe %}This reading is outside the range we consider safe{% if minor %} for your age{% endif %}. Please re-measure if you can. If the numbers are right, confirm them so we can look out for you.
+        {% else %}This is quite different from your recent readings. Scales, clothing and posture can all play a part - re-measure if you can, or confirm if it's right.{% endif %}
+      </p>
+
+      <dl class="mt-6 grid grid-cols-3 gap-3">
+        <div class="rounded-2xl bg-zinc-100/80 p-4 dark:bg-white/[0.05]"><dt class="text-xs font-medium muted">Height</dt><dd class="mt-1 text-xl font-semibold tabular-nums">{{ fmt(entry.height_cm) }}<span class="ml-0.5 text-sm font-medium muted">cm</span></dd></div>
+        <div class="rounded-2xl bg-zinc-100/80 p-4 dark:bg-white/[0.05]"><dt class="text-xs font-medium muted">Weight</dt><dd class="mt-1 text-xl font-semibold tabular-nums">{{ fmt(entry.weight_kg) }}<span class="ml-0.5 text-sm font-medium muted">kg</span></dd></div>
+        <div class="rounded-2xl bg-zinc-100/80 p-4 dark:bg-white/[0.05]"><dt class="text-xs font-medium muted">BMI</dt><dd class="mt-1 text-xl font-semibold tabular-nums">{{ '%.1f' | format(entry.bmi) }}</dd></div>
+      </dl>
+
+      <ul class="mt-6 space-y-3">
+        {% for f in findings %}
+        {% set fl = f.level %}
+        <li class="rounded-2xl p-4 {{ 'bg-bad/[0.08] dark:bg-bad/[0.12]' if fl in ('critical', 'life_threatening') else 'bg-warn/10 dark:bg-warn/[0.12]' }}">
+          <div class="flex flex-wrap items-center gap-2"><p class="font-semibold">{{ f.title }}</p>{{ ui.status(fl) }}</div>
+          <p class="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{{ f.message }}</p>
+        </li>
+        {% endfor %}
+      </ul>
+
+      {% if lt %}
+      <div class="alert alert-danger mt-6" role="alert">
+        {{ icon("alert", "size-5 shrink-0") }}
+        <div>
+          <p class="font-semibold">If you confirm, gym activities pause for your safety.</p>
+          <p>They stay paused until a gym admin reactivates them after a healthcare professional has checked you{% if minor %}, and we'll let your guardian know{% endif %}. If you feel faint, weak or unwell right now, call your local emergency number (112 in India and the EU, 911 in the US).</p>
+        </div>
+      </div>
+      {% elif severe %}
+      <div class="alert alert-warning mt-6">
+        {{ icon("info", "size-5 shrink-0") }}
+        <p>If you confirm, we'll add a health alert and suggest seeing a healthcare professional{% if minor %} - and your guardian will get a copy{% endif %}. Your training isn't paused.</p>
+      </div>
+      {% endif %}
+
+      <div class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <a href="/me/health#log" class="btn btn-secondary">{{ icon("refresh", "size-4") }} Re-measure</a>
+        <form method="post" action="/me/health/metrics/confirm">
+          {{ ui.csrf() }}
+          <input type="hidden" name="token" value="{{ token }}">
+          <input type="hidden" name="next" value="{{ next }}">
+          <button type="submit" class="btn {{ 'btn-danger' if lt else 'btn-primary' }} w-full sm:w-auto">{{ icon("check", "size-4") }} Yes, that’s correct</button>
+        </form>
+      </div>
+      <p class="mt-5 text-xs muted">Your reading is already saved as unconfirmed, so nothing gets lost. This confirmation link expires in 30 minutes.</p>
+    </div>
+  </section>
+</div>
+{% endblock %}

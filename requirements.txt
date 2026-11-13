@@ -1,0 +1,63 @@
+# IronPulse - runtime dependencies (Python 3.10 - 3.15, Windows / macOS / Linux)
+# Install:  python -m pip install -r requirements.txt
+
+# --- web framework -----------------------------------------------------------
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+httptools>=0.6
+uvloop>=0.19; sys_platform != "win32"
+python-multipart>=0.0.18
+jinja2>=3.1.4
+itsdangerous>=2.2
+
+# --- database (async SQLAlchemy + asyncpg + pgvector) -------------------------
+sqlalchemy[asyncio]>=2.0.36,<2.2
+asyncpg>=0.30
+pgvector>=0.3.6
+greenlet>=3.1
+
+# --- settings / validation -----------------------------------------------------
+pydantic>=2.9,<3
+pydantic-settings>=2.6
+email-validator>=2.2
+tzdata>=2024.1
+
+# --- security ------------------------------------------------------------------
+argon2-cffi>=23.1
+cryptography>=43
+
+# --- AI providers (OpenAI-compatible Gemma gateway / Docker Ollama, Claude) ------
+openai>=1.50,<4
+anthropic>=0.40,<3
+httpx>=0.27
+
+# --- OCR, imaging, documents (several engines cross-validate ID cards) --------------
+pytesseract>=0.3.13                                   # needs the Tesseract binary (setup scripts install it)
+pillow>=10.4
+numpy>=1.26
+pypdfium2>=4.30
+pyobjc-framework-Vision>=10; sys_platform == "darwin"   # Apple Vision OCR (macOS)
+winrt-runtime>=2; sys_platform == "win32"               # Windows.Media.Ocr (Windows 10/11)
+winrt-Windows.Media.Ocr>=2; sys_platform == "win32"
+winrt-Windows.Graphics.Imaging>=2; sys_platform == "win32"
+winrt-Windows.Storage.Streams>=2; sys_platform == "win32"
+winrt-Windows.Foundation>=2; sys_platform == "win32"
+winrt-Windows.Foundation.Collections>=2; sys_platform == "win32"
+winrt-Windows.Globalization>=2; sys_platform == "win32"
+rapidocr>=3.0; python_version < "3.14"                   # PaddleOCR models on ONNX Runtime
+onnxruntime>=1.20; python_version < "3.14"
+
+# --- realtime (WebSocket live chat) -------------------------------------------------
+websockets>=13
+
+# --- sessions: optional Redis store (app/security/sessions.py; REDIS_URL) --------------
+redis>=5.0
+
+# --- e-mail -------------------------------------------------------------------------
+aiosmtplib>=3.0
+
+# --- build tooling: JS/CSS minification + generated exercise videos ------------------
+rjsmin>=1.2.2
+rcssmin>=1.1.2
+imageio>=2.35
+imageio-ffmpeg>=0.5.1

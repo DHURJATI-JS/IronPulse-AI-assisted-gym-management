@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_macros.html" as sm with context %}
+{% block title %}{{ job.title if job else "New job posting" }}{% endblock %}
+{% block content %}
+{% if job %}
+  {% call ui.page_header(job.title, "Edit the posting, open or close it, and review applicants.", eyebrow=gym.name ~ " · Hiring", back="/owner/jobs") %}
+    <a href="/owner/jobs/{{ job.id }}/enquiries" class="btn btn-secondary">{{ icon("envelope", "size-4") }} Enquiries{% if enquiry_new %} <span class="badge badge-amber !py-0.5">{{ enquiry_new }} new</span>{% endif %}</a>
+  {% endcall %}
+{% else %}
+  {{ ui.page_header("New job posting", "Applicants enquire from the public Jobs page; you'll see every enquiry here and can e-mail them updates.", eyebrow=gym.name ~ " · Hiring", back="/owner/jobs") }}
+{% endif %}
+
+{{ ui.form_errors(errors) }}
+
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+  <form method="post" action="{{ '/owner/jobs/' ~ job.id if job else '/owner/gyms/' ~ gym.id ~ '/jobs/new' }}" class="card min-w-0 space-y-8 animate-fade-up" id="job-form" data-component="job-form">
+    {{ ui.csrf() }}
+    <section class="space-y-5">
+      {{ sm.card_title("The role", None, "briefcase") }}
+      {{ ui.field("title", "Title", value=values.title, required=True, error=errors.title, placeholder="e.g. Strength & conditioning coach", attrs='maxlength="120"') }}
+      <div class="fieldset">
+        {{ ui.select("role", "Role", S.ROLE_LABELS.items() | list, value=values.role, required=True, error=errors.role) }}
+        {{ ui.select("employment_type", "Employment type", S.EMPLOYMENT_TYPE_LABELS.items() | list, value=values.employment_type, required=True, error=errors.employment_type) }}
+      </div>
+    </section>
+
+    <section class="space-y-5 border-t border-black/[0.06] pt-8 dark:border-white/[0.08]">
+      {{ sm.card_title("Where", None, "map-pin") }}
+      <div class="fieldset">
+        {% set branch_opts = [] %}
+        {% for b in branches %}{% set _ = branch_opts.append((b.id, b.name ~ " · " ~ b.city)) %}{% endfor %}
+        {{ ui.select("branch_id", "Branch", branch_opts, value=values.branch_id, error=errors.branch_id, empty="Not branch-specific", help="Optional - leave empty for gym-wide or remote roles.") }}
+        <div data-location-field>
+          {{ ui.field("location", "Location", value=values.location, error=errors.location, placeholder="City or area", attrs='maxlength="160"', help="Defaults to the branch city when empty.") }}
+        </div>
+      </div>
+      {{ ui.checkbox("remote", "Remote position", checked=values.remote, help="Shown as “Remote” - great for online coaching, accounting or development roles.", attrs='data-remote-toggle') }}
+    </section>
+
+    <section class="space-y-5 border-t border-black/[0.06] pt-8 dark:border-white/[0.08]">
+      {{ sm.card_title("Pay", "Optional, but postings with a salary range get more enquiries.", "banknotes") }}
+      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {{ ui.field("salary_min", "Minimum", value=values.salary_min, error=errors.salary_min, placeholder="25000", attrs='inputmode="decimal" autocomplete="off"') }}
+        {{ ui.field("salary_max", "Maximum", value=values.salary_max, error=errors.salary_max, placeholder="40000", attrs='inputmode="decimal" autocomplete="off"') }}
+        <div>
+          <label class="label" for="f-currency">Currency</label>
+          <input id="f-currency" name="currency" class="input uppercase {{ 'input-error' if errors.currency }}" value="{{ values.currency }}" maxlength="3" list="ip-job-currencies" autocomplete="off" required>
+          <datalist id="ip-job-currencies">{% for c in S.CURRENCIES %}<option value="{{ c }}"></option>{% endfor %}</datalist>
+          {% if errors.currency %}<p class="field-error">{{ errors.currency }}</p>{% endif %}
+        </div>
+        {{ ui.select("salary_period", "Period", S.SALARY_PERIOD_LABELS.items() | list, value=values.salary_period, error=errors.salary_period) }}
+      </div>
+    </section>
+
+    <section class="space-y-5 border-t border-black/[0.06] pt-8 dark:border-white/[0.08]">
+      {{ sm.card_title("Details", None, "document") }}
+      {{ ui.textarea("requirements", "Requirements", value=values.requirements, required=True, error=errors.requirements, rows=5, placeholder="Certifications, experience, languages, availability…", attrs='maxlength="4000"', help="Mandatory - be specific so the right people apply.") }}
+      {{ ui.textarea("description", "Description", value=values.description, error=errors.description, rows=6, placeholder="What the day looks like, who they'll work with, perks…", attrs='maxlength="8000"') }}
+      {% if not job %}
+        {{ ui.checkbox("is_open", "Publish now", checked=values.is_open, help="Open postings appear on the public Jobs page and show “Enquire for jobs” in the navigation.") }}
+      {% endif %}
+    </section>
+
+    <div class="flex flex-col-reverse gap-2 border-t border-black/[0.06] pt-6 sm:flex-row sm:justify-end dark:border-white/[0.08]">
+      <a href="/owner/jobs" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">{{ icon("check", "size-4") }} {{ "Save posting" if job else "Create posting" }}</button>
+    </div>
+  </form>
+
+  <aside class="space-y-6">
+    {% if job %}
+    <section class="card">
+      {{ sm.card_title("Visibility", None, "eye") }}
+      <div class="flex items-center gap-3 rounded-2xl {{ 'bg-ok/10' if job.is_open else 'bg-zinc-100/80 dark:bg-white/[0.05]' }} px-4 py-3">
+        <span class="size-2.5 rounded-full {{ 'bg-ok' if job.is_open else 'bg-zinc-400' }}"></span>
+        <p class="text-sm font-semibold">{{ "Open - accepting enquiries" if job.is_open else "Closed - hidden from the public" }}</p>
+      </div>
+      <form method="post" action="/owner/jobs/{{ job.id }}/toggle" class="mt-4">
+        {{ ui.csrf() }}
+        {% if job.is_open %}<button class="btn btn-secondary w-full">{{ icon("x-circle", "size-4") }} Close posting</button>
+        {% else %}<button class="btn btn-success w-full">{{ icon("check-circle", "size-4") }} Open posting</button>{% endif %}
+      </form>
+      <dl class="mt-4 divide-y divide-black/[0.05] text-sm dark:divide-white/[0.06]">
+        {{ sm.fact("Enquiries", enquiry_total) }}
+        {{ sm.fact("Posted", job.created_at | dt("%d %b %Y")) }}
+        {{ sm.fact("Updated", job.updated_at | timeago) }}
+      </dl>
+    </section>
+    {% endif %}
+    <section class="card-muted text-sm">
+      <p class="flex items-center gap-2 font-semibold">{{ icon("sparkles", "size-4 text-accent") }} Tips</p>
+      <ul class="mt-3 space-y-2 text-xs leading-relaxed muted">
+        <li>Mention certifications you expect (e.g. ACE, NASM, CPR) - trainers must upload one before they're approved.</li>
+        <li>Remote roles can be filled by people anywhere in the world; payroll follows their country.</li>
+        <li>When you mark an applicant hired, use “Add as staff” to send their invitation in one click.</li>
+      </ul>
+    </section>
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{#- Protective-gear card. Context: gear = GearAdvice (app.services.gear). Optional: compact=True -#}
+{% if gear and (gear.items or gear.blocked) %}
+<section class="card" aria-labelledby="gear-title">
+  <div class="flex items-start justify-between gap-3">
+    <div>
+      <p class="eyebrow">Protective gear</p>
+      <h2 id="gear-title" class="section-title mt-1">Recommended for your conditions</h2>
+    </div>
+    {% if gear.ai_provider %}<span class="chip">{{ icon("sparkles", "size-3.5") }} Personalised by AI</span>{% endif %}
+  </div>
+  <ul class="mt-5 grid gap-3 {{ '' if compact else 'sm:grid-cols-2' }}">
+    {% for g in (gear.items[:3] if compact else gear.items) %}
+    <li class="card-muted flex gap-3">
+      <span class="grid size-10 shrink-0 place-items-center rounded-2xl {{ 'bg-bad/12 text-bad' if g.priority == 'essential' else ('bg-accent/12 text-accent' if g.priority == 'recommended' else 'bg-zinc-500/12 text-zinc-500') }}">{{ icon(g.icon, "size-5") }}</span>
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-2">
+          <p class="font-semibold">{{ g.name }}</p>
+          <span class="badge {{ 'badge-red' if g.priority == 'essential' else ('badge-blue' if g.priority == 'recommended' else 'badge-zinc') }}">{{ g.priority | capitalize }}</span>
+        </div>
+        <p class="mt-1 text-sm muted">{{ g.reasons | join(' ') }}</p>
+        {% if g.ai_tip %}<p class="mt-1 text-sm">{{ icon("sparkles", "inline size-3.5 text-violet") }} {{ g.ai_tip }}</p>{% endif %}
+        {% if not compact %}<p class="mt-2 text-xs muted">{{ g.how_to_use }}</p>{% endif %}
+        {% for c in g.cautions %}<p class="mt-2 text-xs font-medium text-[#b45309] dark:text-[#fbbf24]">{{ icon("alert", "inline size-3.5") }} {{ c }}</p>{% endfor %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% for b in gear.blocked %}
+  <p class="alert alert-warning mt-3">{{ icon("alert", "size-4 shrink-0") }} <span><strong>Not recommended: {{ b.name }}.</strong> {{ b.reason }}</span></p>
+  {% endfor %}
+  <p class="mt-4 text-xs muted">{{ gear.disclaimer }}</p>
+</section>
+{% endif %}

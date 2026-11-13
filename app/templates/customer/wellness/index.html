@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}Stress check-in{% endblock %}
+{% block content %}
+{% call ui.page_header("Stress check-in", "Four questions about the last month (the PSS-4 scale), a quick symptom check and an optional selfie. It takes about a minute and is not a diagnosis.", eyebrow="Wellness") %}
+  {{ ui.ai_chip() }}
+{% endcall %}
+
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+  <form method="post" action="/me/wellness" enctype="multipart/form-data" class="min-w-0 space-y-6 lg:col-span-2" novalidate>
+    {{ ui.csrf() }}
+    {{ ui.form_errors(errors.values() | list if errors else None) }}
+
+    <section class="card" aria-labelledby="pss-title">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 id="pss-title" class="section-title">In the last month…</h2>
+        <span class="chip">{{ icon("clock", "size-3.5") }} 4 questions</span>
+      </div>
+      <div class="mt-2 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+        {% for n, question in questions %}
+        {% set key = "q" ~ n %}
+        <div class="py-5">
+        <fieldset {% if errors.get(key) %}aria-describedby="e-{{ key }}"{% endif %}>
+          <legend class="flex gap-3 text-[15px] font-medium leading-snug">
+            <span class="grid size-7 shrink-0 place-items-center rounded-full bg-accent/10 text-xs font-semibold text-accent">{{ n }}</span>
+            <span>{{ question | replace("In the last month, how often have you ", "How often have you ") }}</span>
+          </legend>
+          <div class="mt-3 flex flex-wrap gap-2 sm:pl-10" role="radiogroup">
+            {% for value, label in options %}
+            <label class="relative">
+              <input type="radio" name="{{ key }}" value="{{ value }}" class="peer sr-only" required {{ 'checked' if form.get(key) == value | string }}>
+              <span class="hp-option">{{ label }}</span>
+            </label>
+            {% endfor %}
+          </div>
+          {% if errors.get(key) %}<p class="field-error sm:pl-10" id="e-{{ key }}">{{ errors.get(key) }}</p>{% endif %}
+        </fieldset>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="symptoms-title" data-component="symptoms">
+      <h2 id="symptoms-title" class="section-title">Any of these right now?</h2>
+      <p class="mt-1 text-sm muted">Choose all that apply - or “None of these”.</p>
+      <fieldset class="mt-4" {% if errors.get('symptoms') %}aria-describedby="e-symptoms"{% endif %}>
+        <legend class="sr-only">Symptoms</legend>
+        <div class="flex flex-wrap gap-2">
+          {% for value, label in symptoms %}
+          <label class="relative">
+            <input type="checkbox" name="symptoms" value="{{ value }}" class="peer sr-only" {{ 'checked' if value in form.get('symptoms', []) }}
+                   {% if value in red_flags %}data-red-flag{% endif %}>
+            <span class="hp-option {{ 'hp-option-danger' if value in red_flags }}">{{ icon("check", "hp-check size-3.5") }}{{ label }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        {% if errors.get('symptoms') %}<p class="field-error" id="e-symptoms">{{ errors.get('symptoms') }}</p>{% endif %}
+      </fieldset>
+      <div class="alert alert-danger mt-4" role="alert" data-red-flag-note hidden>
+        {{ icon("alert", "size-5 shrink-0") }}
+        <div><p class="font-semibold">These can be signs of a medical emergency.</p>
+          <p>If they're happening now, stop and call your local emergency number (112 in India and the EU, 911 in the US). Submitting this check-in pauses gym activities for your safety.</p></div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="selfie-title" data-component="photo-preview">
+      <div class="flex items-start gap-3">
+        <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-violet/12 text-violet">{{ icon("camera", "size-5") }}</span>
+        <div>
+          <h2 id="selfie-title" class="section-title">Selfie <span class="text-sm font-normal muted">(optional)</span></h2>
+          <p class="mt-1 text-sm muted">The AI vision model looks for visible signs of tiredness. The photo is analysed in memory and <strong class="font-semibold text-ink dark:text-white">never stored</strong>.</p>
+        </div>
+      </div>
+      <div class="mt-5">
+        <label class="label" for="f-photo">Face photo</label>
+        <input id="f-photo" name="photo" type="file" accept="image/*" capture="user"
+               class="block w-full text-sm muted {{ 'rounded-2xl ring-2 ring-bad/60' if errors.get('photo') }}"
+               {% if errors.get('photo') %}aria-invalid="true" aria-describedby="e-photo"{% endif %}>
+        {% if errors.get('photo') %}<p class="field-error" id="e-photo">{{ errors.get('photo') }}</p>
+        {% elif not ai_status.available %}<p class="help">AI is offline right now - your result will be based on the questions only.</p>
+        {% else %}<p class="help">Good light, face the camera, no filters.</p>{% endif %}
+      </div>
+      <div class="mt-4 flex items-center gap-3 rounded-2xl bg-zinc-100/80 p-3 dark:bg-white/[0.05]" data-preview hidden>
+        <img alt="Selected selfie preview" class="size-16 rounded-xl object-cover" data-preview-img>
+        <p class="min-w-0 flex-1 truncate text-xs muted" data-preview-name></p>
+        <button type="button" class="btn btn-ghost btn-sm" data-preview-clear>{{ icon("x", "size-4") }} Remove</button>
+      </div>
+    </section>
+
+    <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <p class="text-xs muted">Not a medical diagnosis. In an emergency, call your local emergency number.</p>
+      <button type="submit" class="btn btn-primary">{{ icon("sparkles", "size-4") }} See my result</button>
+    </div>
+  </form>
+
+  <aside class="min-w-0 space-y-6">
+    <section class="card" aria-labelledby="about-title">
+      <h2 id="about-title" class="section-title">How it works</h2>
+      <ul class="mt-4 space-y-3 text-sm">
+        <li class="flex gap-3">{{ icon("check-circle", "mt-0.5 size-4 shrink-0 text-ok") }}<span><strong class="font-semibold">PSS-4</strong> is a short, validated stress scale. Scores run from 0 to 16; 9 or more means high stress.</span></li>
+        <li class="flex gap-3">{{ icon("shield", "mt-0.5 size-4 shrink-0 text-accent") }}<span>Chest pain, fainting or breathlessness at rest pause gym activities straight away and point you to emergency care.</span></li>
+        <li class="flex gap-3">{{ icon("sparkles", "mt-0.5 size-4 shrink-0 text-violet") }}<span>The selfie read-out can raise your result by one level at most - your answers always lead.</span></li>
+      </ul>
+    </section>
+
+    <section class="card" aria-labelledby="history-title">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="history-title" class="section-title">Recent check-ins</h2>
+        {% if history %}<span class="badge badge-zinc">{{ history | length }}</span>{% endif %}
+      </div>
+      {% if history %}
+      <ul class="mt-3 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+        {% for c in history %}
+        <li>
+          <a href="/me/wellness/{{ c.id }}" class="-mx-2 flex items-center gap-3 rounded-xl px-2 py-3 transition hover:bg-zinc-900/[0.04] dark:hover:bg-white/[0.05]">
+            <span class="grid size-10 shrink-0 place-items-center rounded-2xl text-sm font-semibold tabular-nums {{ {'high': 'bg-bad/12 text-bad', 'moderate': 'bg-warn/15 text-[#b45309] dark:text-[#fbbf24]'}.get(c.stress_level.value, 'bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]') }}">{{ c.pss_score }}</span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-sm font-medium">{{ c.stress_level.value | humanize }} stress</span>
+              <span class="block text-xs muted">{{ c.created_at | dt("%d %b %Y, %H:%M") }}{% if c.symptoms %} · {{ c.symptoms | length }} symptom{{ 's' if c.symptoms | length != 1 }}{% endif %}</span>
+            </span>
+            {{ icon("chevron-right", "size-4 text-zinc-400") }}
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="mt-4 rounded-2xl bg-zinc-100/80 p-4 text-sm muted dark:bg-white/[0.04]">Your check-ins will appear here, so you can see how stress changes over time.</div>
+      {% endif %}
+    </section>
+  </aside>
+</div>
+{% endblock %}

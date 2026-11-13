@@ -1,0 +1,145 @@
+{#- WP-A2 form macros shared by auth/* and account/* pages. Import WITH CONTEXT:
+      {% import "auth/_macros.html" as am with context %}
+    Behaviour (show/hide, strength meter, time-zone autofill ...) lives in static/src/js/11-account.js.
+-#}
+{% import "_ui.html" as ui with context %}
+
+{% macro password_input(name, label, autocomplete="current-password", error=None, help=None, strength=False, match=None, required=True, placeholder="") %}
+<div data-component="password-field"{% if strength %} data-strength="1"{% endif %}{% if match %} data-match="{{ match }}"{% endif %}>
+  <div class="flex items-baseline justify-between gap-3">
+    <label class="label" for="f-{{ name }}">{{ label }}{% if required %} <span class="text-bad">*</span>{% endif %}</label>
+    {% if caller %}{{ caller() }}{% endif %}
+  </div>
+  <div class="relative">
+    <input id="f-{{ name }}" name="{{ name }}" type="password" class="input pr-20 {{ 'input-error' if error }}" autocomplete="{{ autocomplete }}"
+           maxlength="128" spellcheck="false" autocapitalize="off" {% if required %}required{% endif %} {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+           {% if error %}aria-invalid="true" aria-describedby="e-{{ name }}"{% elif help %}aria-describedby="h-{{ name }}"{% endif %} data-password-input>
+    <button type="button" class="pw-toggle" data-password-toggle aria-controls="f-{{ name }}" aria-pressed="false" hidden>Show</button>
+  </div>
+  {% if strength %}
+  <div class="mt-3" data-strength-meter hidden>
+    <div class="strength-track" aria-hidden="true"><span class="strength-bar" data-strength-bar data-level="0"></span></div>
+    <p class="mt-1.5 text-xs font-medium muted" data-strength-label aria-live="polite">Start typing to check your password.</p>
+    <ul class="pw-rules mt-2 grid gap-1 sm:grid-cols-2">
+      <li data-rule="length">At least 10 characters</li>
+      <li data-rule="mix">3 of: a–z, A–Z, 0–9, symbols</li>
+      <li data-rule="common">Not a common password</li>
+      <li data-rule="personal">Not your name or e-mail</li>
+    </ul>
+  </div>
+  {% endif %}
+  {% if match %}<p class="mt-1.5 text-xs font-medium" data-match-hint hidden aria-live="polite"></p>{% endif %}
+  {% if error %}<p class="field-error" id="e-{{ name }}">{{ error }}</p>{% elif help %}<p class="help" id="h-{{ name }}">{{ help }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro phone_input(value="", country="IN", error=None, required=True, label="Phone number", name="phone", country_name="phone_country", help=None, attrs="") %}
+<div>
+  <label class="label" for="f-{{ name }}">{{ label }}{% if required %} <span class="text-bad">*</span>{% endif %}</label>
+  <div class="grid grid-cols-[7.25rem_minmax(0,1fr)] gap-2">
+    <select name="{{ country_name }}" class="input !pl-3 !pr-8" aria-label="{{ label }} - country calling code" data-phone-country {{ attrs | safe }}>
+      {% for code, short, full in phone_countries %}<option value="{{ code }}" title="{{ full }}" {{ 'selected' if code == (country or 'IN') }}>{{ short }}</option>{% endfor %}
+    </select>
+    <input id="f-{{ name }}" name="{{ name }}" type="tel" inputmode="tel" autocomplete="{{ 'tel-national' if name == 'phone' else 'off' }}" maxlength="32"
+           value="{{ value or '' }}" class="input {{ 'input-error' if error }}" placeholder="98765 43210" {% if required %}required{% endif %} {{ attrs | safe }}
+           {% if error %}aria-invalid="true" aria-describedby="e-{{ name }}"{% endif %}>
+  </div>
+  {% if error %}<p class="field-error" id="e-{{ name }}">{{ error }}</p>{% elif help %}<p class="help">{{ help }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro username_input(value="", error=None, label="Username", optional=True, help=None) %}
+<div>
+  <label class="label" for="f-username">{{ label }}{% if optional %} <span class="font-normal muted">(optional)</span>{% else %} <span class="text-bad">*</span>{% endif %}</label>
+  <div class="relative">
+    <span class="pointer-events-none absolute inset-y-0 left-4 flex items-center text-sm font-medium text-zinc-400 dark:text-zinc-500" aria-hidden="true">@</span>
+    <input id="f-username" name="username" value="{{ value or '' }}" class="input pl-9 {{ 'input-error' if error }}" maxlength="31" minlength="3"
+           autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="priya.sharma" pattern="@?[A-Za-z0-9][A-Za-z0-9._\-]{1,28}[A-Za-z0-9]"
+           {% if not optional %}required{% endif %} {% if error %}aria-invalid="true" aria-describedby="e-username"{% else %}aria-describedby="h-username"{% endif %}>
+  </div>
+  {% if error %}<p class="field-error" id="e-username">{{ error }}</p>{% else %}<p class="help" id="h-username">{{ help or "Sign in with it instead of your e-mail. Leave it blank and we'll create one for you." }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro timezone_select(value="UTC", error=None, name="timezone", label="Time zone", autofill=False) %}
+<div data-component="tz-select"{% if autofill %} data-autofill="1"{% endif %}>
+  <div class="flex items-baseline justify-between gap-3">
+    <label class="label" for="f-{{ name }}">{{ label }}</label>
+    <button type="button" class="text-xs font-semibold text-accent hover:underline" data-tz-device hidden>Use this device's time zone</button>
+  </div>
+  <select id="f-{{ name }}" name="{{ name }}" class="input {{ 'input-error' if error }}" data-tz-input>
+    {% set ns = namespace(found=false) %}
+    {% for region, zones in timezone_groups %}
+    <optgroup label="{{ region }}">
+      {% for z, lbl in zones %}{% if z == value %}{% set ns.found = true %}{% endif %}<option value="{{ z }}" {{ 'selected' if z == value }}>{{ lbl }}</option>{% endfor %}
+    </optgroup>
+    {% endfor %}
+    {% if value and not ns.found %}<option value="{{ value }}" selected>{{ value }}</option>{% endif %}
+  </select>
+  {% if error %}<p class="field-error">{{ error }}</p>{% else %}<p class="help" data-tz-hint>Reminders, bedtime nudges and every date are shown in this time zone.</p>{% endif %}
+</div>
+{% endmacro %}
+
+{#- Numbered (or icon) heading used by the multi-section forms -#}
+{% macro section_head(n, title, subtitle=None, ico=None) %}
+<div class="mb-6 flex items-start gap-4">
+  <span class="step-badge" aria-hidden="true">{% if ico %}{{ icon(ico, "size-4") }}{% else %}{{ n }}{% endif %}</span>
+  <div class="min-w-0">
+    <h2 class="text-xl font-semibold tracking-tight">{{ title }}</h2>
+    {% if subtitle %}<p class="mt-1 text-sm muted">{{ subtitle }}</p>{% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro card_icon(name, tone="accent") -%}
+<span class="auth-icon auth-icon-{{ tone }}">{{ icon(name, "size-6") }}</span>
+{%- endmacro %}
+
+{% macro aside_points(points) %}
+<ul class="mt-10 space-y-6">
+  {% for ico, title, body in points %}
+  <li class="flex gap-4">
+    <span class="auth-aside-icon">{{ icon(ico, "size-5") }}</span>
+    <div class="min-w-0">
+      <p class="font-semibold">{{ title }}</p>
+      <p class="mt-0.5 text-sm leading-relaxed text-white/70">{{ body }}</p>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+
+{#- Terms checkbox with a real link (ui.checkbox escapes its label) -#}
+{% macro terms_checkbox(checked=False, error=None, name="accept_terms") %}
+<div>
+  <label class="flex items-start gap-3 text-sm">
+    <input type="checkbox" name="{{ name }}" value="1" class="checkbox mt-0.5" required {{ 'checked' if checked }} {% if error %}aria-invalid="true" aria-describedby="e-{{ name }}"{% endif %}>
+    <span><span class="font-medium">I agree to the <a href="/terms" target="_blank" rel="noopener" class="font-semibold text-accent hover:underline">Terms &amp; disclaimer</a> <span class="text-bad">*</span></span>
+      <span class="block text-xs muted">IronPulse is a student-grade project: coaching and health hints are not medical advice, and payments run in test mode unless the gym enabled a real gateway.</span></span>
+  </label>
+  {% if error %}<p class="field-error" id="e-{{ name }}">{{ error }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{#- Invalid / used / expired / withdrawn one-time link card ("withdrawn": the sender can no longer accept the person -
+    neutral, never why) -#}
+{% macro token_problem(state, what="link", retry_href=None, retry_label=None) %}
+{% set refused = state in ("missing", "withdrawn") %}
+<div class="card p-7 text-center sm:p-10">
+  <div class="flex justify-center">{{ card_icon("x-circle" if refused else "clock", "red" if refused else "amber") }}</div>
+  <h1 class="mt-6 text-2xl font-semibold tracking-tight">
+    {% if state == "used" %}This {{ what }} was already used{% elif state == "expired" %}This {{ what }} has expired{% elif state == "withdrawn" %}This {{ what }} can't be accepted{% else %}This {{ what }} isn't valid{% endif %}
+  </h1>
+  <p class="mx-auto mt-2 max-w-sm text-[15px] muted">
+    {% if state == "used" %}Each link works only once, so nobody can reuse it from your inbox.
+    {% elif state == "expired" %}For your security these links stop working after a while.
+    {% elif state == "withdrawn" %}It is no longer available, so nothing was changed.
+    {% else %}The link may be incomplete - try copying the whole address from the e-mail.{% endif %}
+    {{ caller() if caller else "" }}
+  </p>
+  <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+    {% if retry_href %}<a href="{{ retry_href }}" class="btn btn-primary">{{ retry_label or "Try again" }}</a>{% endif %}
+    <a href="/" class="btn btn-secondary">{{ icon("home", "size-4") }} Home</a>
+  </div>
+</div>
+{% endmacro %}

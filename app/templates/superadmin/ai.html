@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% block title %}AI providers{% endblock %}
+{% block content %}
+{% call sa.header("AI providers", "Live health of every AI provider, the services around them and what each feature costs in latency - plus who uses AI, the fair AI queue and paused accounts.", section, sections, counts) %}
+  <a href="#usage" class="btn btn-secondary btn-sm">{{ icon("users", "size-4") }} Usage &amp; abuse{% if usage.cooldowns %} <span class="rounded-full bg-warn/20 px-1.5 text-[11px] tabular-nums">{{ usage.cooldowns | length }}</span>{% endif %}</a>
+  <form method="post" action="/superadmin/ai/test" data-component="sa-ai-test" data-no-busy>
+    {{ ui.csrf() }}
+    <button type="submit" class="btn btn-primary btn-sm" data-busy-label="Testing…">{{ icon("bolt", "size-4") }} Test providers</button>
+  </form>
+{% endcall %}
+
+{# ------------------------------------------------------------------ routing order #}
+<section class="card mb-6 animate-fade-up" aria-labelledby="flow-title">
+  <div class="sa-card-head">
+    <div>
+      <h2 id="flow-title" class="sa-card-title">How AI requests are routed</h2>
+      <p class="sa-card-sub">Strict failover order. A provider that fails twice is skipped for {{ settings.ai_circuit_cooldown_seconds }} s (circuit breaker), then retried.</p>
+    </div>
+    {{ ui.ai_chip(disclaimer=False) }}
+  </div>
+  <ol class="sa-flow mt-5">
+    {% for p in providers %}
+      <li class="sa-flow-step"><span class="sa-provider-rank !size-6">{{ p.rank }}</span>{{ p.label }}<span class="sa-dot sa-dot-{{ {'up': 'green', 'down': 'red', 'unknown': 'amber'}.get(p.status, 'zinc') }}" aria-hidden="true"></span><span class="sr-only">{{ p.status | humanize }}</span></li>
+      <li aria-hidden="true" class="text-zinc-400">{{ icon("arrow-right", "size-4") }}</li>
+    {% endfor %}
+    <li class="sa-flow-step !bg-zinc-900 !text-white dark:!bg-white dark:!text-ink">{{ icon("wifi-off", "size-4") }}AI unavailable</li>
+  </ol>
+  <p class="mt-4 text-sm leading-relaxed muted">
+    Every feature first asks the <strong class="font-semibold text-ink dark:text-white">Gemma gateway</strong> (llama.cpp behind an OpenAI-compatible API),
+    then <strong class="font-semibold text-ink dark:text-white">Gemma in Docker</strong> (Ollama) as the local failsafe, then <strong class="font-semibold text-ink dark:text-white">Claude</strong> as the last resort.
+    When all three fail, pages show "AI unavailable" and fall back to deterministic rules - pre-recorded videos, safety checks and payroll maths keep working.
+  </p>
+</section>
+
+<div class="mb-6 hidden" data-ai-test-result aria-live="polite"></div>
+
+{# ------------------------------------------------------------------ provider cards #}
+<section aria-labelledby="prov-title">
+  <div class="mb-3 flex items-end justify-between gap-3">
+    <h2 id="prov-title" class="section-title">Providers</h2>
+    <p class="text-sm muted tabular-nums">{{ calls_24h }} call{{ 's' if calls_24h != 1 }} · {{ failures_24h }} failure{{ 's' if failures_24h != 1 }}{% if cancelled_24h %} · {{ cancelled_24h }} stopped because people left{% endif %} in 24 h</p>
+  </div>
+  <ol class="grid gap-4 lg:grid-cols-3">
+    {% for p in providers %}
+    <li class="card sa-provider min-w-0">
+      <div class="flex items-start gap-3">
+        <span class="sa-provider-rank">{{ p.rank }}</span>
+        <div class="min-w-0 flex-1">
+          <h3 class="truncate font-semibold">{{ p.label }}</h3>
+          <p class="truncate font-mono text-xs muted" title="{{ p.model }}">{{ p.model }}</p>
+        </div>
+        {{ sa.provider_status(p.status) }}
+      </div>
+      <dl class="mt-5 grid grid-cols-2 gap-3">
+        {{ sa.mini("Calls · 24 h", p.calls_24h, (p.failures_24h ~ " failed" ~ ((" · " ~ p.cancelled_24h ~ " stopped") if p.cancelled_24h else "")) if p.calls_24h else "no calls yet", "red" if p.failures_24h and p.completed_24h and p.failures_24h * 2 >= p.completed_24h else None) }}
+        {{ sa.mini("Error rate", (p.error_rate ~ "%") if p.error_rate is not none else "—", "of completed calls in 24 h", "red" if (p.error_rate or 0) >= 25 else ("amber" if (p.error_rate or 0) > 0 else None)) }}
+        {{ sa.mini("Avg latency", (p.avg_ms ~ " ms") if p.avg_ms is not none else "—", "successful calls") }}
+        {{ sa.mini("p95 latency", (p.p95_ms ~ " ms") if p.p95_ms is not none else "—", "slowest 5 % above this") }}
+      </dl>
+      <ul class="mt-4 grid gap-1.5 text-xs">
+        <li class="flex justify-between gap-3"><span class="muted">Since server start</span><span class="tabular-nums">{{ p.calls }} calls · {{ p.failures }} failed</span></li>
+        <li class="flex justify-between gap-3"><span class="muted">Last success</span><span>{{ p.last_ok | timeago if p.last_ok else "never" }}</span></li>
+        <li class="flex justify-between gap-3"><span class="muted">Last call logged</span><span>{{ p.last_at | timeago if p.last_at else "—" }}</span></li>
+      </ul>
+      {% if not p.configured %}
+        <p class="mt-4 rounded-2xl bg-zinc-100/80 px-3 py-2 text-xs muted dark:bg-white/[0.05]">Not configured - set its URL / API key in .env to add it to the chain.</p>
+      {% elif p.last_error %}
+        <p class="mt-4 rounded-2xl bg-bad/10 px-3 py-2 text-xs break-words text-[#991b1b] dark:text-[#fca5a5]">{{ icon("alert", "inline size-3.5 -mt-0.5") }} {{ p.last_error }}</p>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+
+{# ------------------------------------------------------------------ supporting services #}
+{% set gw = services.gateway %}
+{% set tts = services.tts %}
+{% set rd = services.redis %}
+{% set demo = services.demo %}
+<div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+  <section class="card min-w-0" aria-labelledby="gw-title">
+    <div class="sa-card-head">
+      <div class="min-w-0">
+        <h2 id="gw-title" class="sa-card-title">Gemma gateway backends</h2>
+        <p class="sa-card-sub truncate">{{ gw.url or "AI_GATEWAY_STATUS_URL not set" }}{% if gw.latency_ms is not none %} · {{ gw.latency_ms }} ms{% endif %}</p>
+      </div>
+      {{ sa.reach(gw, "Status page up", "Status page down") }}
+    </div>
+    {% if gw.ok and gw.backends %}
+      <ul class="mt-4 grid gap-2">
+        {% for b in gw.backends %}
+        <li class="flex items-center gap-3 rounded-2xl bg-zinc-50 px-3.5 py-2.5 ring-1 ring-black/[0.04] dark:bg-white/[0.03] dark:ring-white/[0.06]">
+          <span class="sa-dot {{ 'sa-dot-green' if b.online and not b.overloaded else ('sa-dot-amber' if b.online else 'sa-dot-red') }}" aria-hidden="true"></span>
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-medium">{{ b.name }}</p>
+            {% if b.url %}<p class="truncate font-mono text-[11px] muted">{{ b.url }}</p>{% endif %}
+          </div>
+          {% if b.busy %}<span class="chip tabular-nums">{{ b.busy }} busy</span>{% endif %}
+          <span class="badge badge-{{ 'green' if b.online and not b.overloaded else ('amber' if b.online else 'red') }}">{{ 'Overloaded' if b.online and b.overloaded else ('Online' if b.online else 'Offline') }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% if gw.cpu is not none %}<p class="mt-3 text-xs muted">Gateway host CPU {{ gw.cpu }}%</p>{% endif %}
+    {% elif gw.ok %}
+      <p class="mt-4 text-sm muted">The status page lists no backends.</p>
+    {% elif gw.configured and not gw.skipped %}
+      <p class="mt-4 text-sm muted">Could not read the status page ({{ gw.error }}). The router still tries the gateway's API directly.</p>
+    {% else %}
+      <p class="mt-4 text-sm muted">{{ gw.error or "Set AI_GATEWAY_STATUS_URL to see which llama.cpp backends are online." }}</p>
+    {% endif %}
+  </section>
+
+  <section class="card min-w-0" aria-labelledby="svc-title">
+    <h2 id="svc-title" class="sa-card-title">Supporting services</h2>
+    <ul class="mt-4 sa-list -mx-1">
+      <li class="flex items-start gap-3 px-1 py-3">
+        <span class="grid size-9 shrink-0 place-items-center rounded-xl badge-violet">{{ icon("activity", "size-4") }}</span>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium">Voice · Kokoro TTS</p>
+          <p class="truncate text-xs muted">{% if tts.ok %}{{ tts.latency_ms }} ms · {{ (tts.models | join(", ")) or tts.model }} · voice {{ tts.voice }}{% elif tts.configured %}{{ tts.error or "Not probed" }} - the live coach uses the browser's soft voice{% else %}Not configured - browser voice only{% endif %}</p>
+          {% set tsvc = tts.service or {} %}
+          {% if tsvc.cached is defined %}<p class="truncate text-xs muted">Lines cached (per member) {{ tsvc.cached }} · cache hits {{ tsvc.hits }} · refused {{ tsvc.refused }}</p>{% endif %}
+        </div>
+        {{ sa.reach(tts) }}
+      </li>
+      <li class="flex items-start gap-3 px-1 py-3">
+        <span class="grid size-9 shrink-0 place-items-center rounded-xl badge-red">{{ icon("key", "size-4") }}</span>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium">Session store · Redis</p>
+          <p class="truncate text-xs muted">{% if rd.ok %}Sessions cached in Redis; PostgreSQL keeps the durable record{% elif rd.configured %}Unreachable ({{ rd.error or "no answer" }}) - PostgreSQL sessions are used{% else %}Not configured - PostgreSQL sessions only{% endif %}</p>
+        </div>
+        {{ sa.reach(rd, "Connected", "Unreachable") }}
+      </li>
+      <li class="flex items-start gap-3 px-1 py-3">
+        <span class="grid size-9 shrink-0 place-items-center rounded-xl badge-blue">{{ icon("sparkles", "size-4") }}</span>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium">Demo data</p>
+          <p class="truncate text-xs muted">{% if demo.accounts %}{{ demo.accounts }} demo account{{ 's' if demo.accounts != 1 }} @{{ demo.domain }}{% elif demo.accounts == 0 %}No demo accounts loaded{% else %}Unknown{% endif %}</p>
+        </div>
+        {% if demo.accounts %}<span class="badge badge-{{ 'amber' if demo.production else 'green' }}">{{ 'Remove before launch' if demo.production else 'Loaded' }}</span>
+        {% else %}<span class="badge badge-zinc">None</span>{% endif %}
+      </li>
+    </ul>
+  </section>
+</div>
+
+{# ------------------------------------------------------------------ features #}
+<div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
+  <section class="card min-w-0 lg:col-span-2" aria-labelledby="feat-title">
+    <h2 id="feat-title" class="sa-card-title">Busiest features · 24 h</h2>
+    {% if features %}
+    <ul class="mt-4 grid gap-3">
+      {% for r in features %}
+      <li>
+        <div class="mb-1.5 flex items-baseline justify-between gap-3 text-sm">
+          <span class="min-w-0 truncate font-medium">{{ r.feature | humanize }}</span>
+          <span class="shrink-0 tabular-nums muted">{{ r.calls }}{% if r.failures %} · <span class="text-[#d1281e] dark:text-[#ff6b61]">{{ r.failures }} failed</span>{% endif %}{% if r.cancelled %} · {{ r.cancelled }} stopped{% endif %}{% if r.avg_ms is not none %} · {{ r.avg_ms | round | int }} ms{% endif %}</span>
+        </div>
+        <div class="sa-hbar" role="presentation" data-component="sa-bars"><span data-pct="{{ ((r.calls / features_max * 100) if features_max else 0) | round(1) }}"></span></div>
+        {% if r.queue_ms and r.queue_ms >= 50 %}<p class="mt-1 text-xs muted">waited {{ wait_text(r.queue_ms) }} in the AI queue on average</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+      <div class="mt-4">{{ sa.inline_empty("No AI calls in 24 hours", "Calls appear here a few seconds after any AI feature is used.", "cpu") }}</div>
+    {% endif %}
+  </section>
+
+  <section class="min-w-0 lg:col-span-3" aria-labelledby="log-title">
+    <h2 id="log-title" class="section-title mb-3">Recent calls</h2>
+    {% if recent %}
+    <div class="table-wrap !overflow-visible">
+      <div class="sa-row-head sa-cols-ai" aria-hidden="true"><span>When</span><span>Feature</span><span>Provider</span><span>Latency</span><span>Result</span></div>
+      <ul class="sa-list">
+        {% for c in recent %}
+        <li class="sa-row sa-cols-ai">
+          <p class="text-sm tabular-nums">{{ c.created_at | dt("%d %b, %H:%M:%S") }}</p>
+          <p class="min-w-0 truncate text-sm font-medium">{{ c.feature | humanize }}</p>
+          <p class="min-w-0 truncate text-sm">{{ c.provider }} <span class="font-mono text-[11px] muted">{{ c.model }}</span></p>
+          <p class="text-sm tabular-nums">{{ c.latency_ms }} ms</p>
+          <div class="min-w-0">
+            {% if c.ok %}<span class="badge badge-green">OK</span>
+            {% elif c.cancelled %}<span class="badge badge-zinc">Stopped</span><p class="mt-1 truncate text-xs muted">{{ stop_reasons.get(c.id, "Stopped") }} - not a provider failure</p>
+            {% else %}<span class="badge badge-red">Failed</span><p class="mt-1 truncate text-xs muted" title="{{ c.error or '' }}">{{ c.error }}</p>{% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% else %}
+      {{ ui.empty("No AI calls logged yet", "Use “Test providers” to send a tiny request through the chain.", "cpu") }}
+    {% endif %}
+  </section>
+</div>
+
+{# ------------------------------------------------------------------ usage & abuse (docs/ai-guard-and-queue.md section 8) #}
+{% set u = usage %}
+{% set pr = u.presence %}
+<section id="usage" class="mt-10 scroll-mt-24" aria-labelledby="usage-title">
+  <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+    <div class="min-w-0">
+      <h2 id="usage-title" class="section-title">AI usage &amp; abuse</h2>
+      <p class="mt-1 max-w-2xl text-sm muted">Per-person limits, the fair AI queue and the AI work stopped because people left. The queue, presence and running jobs are live figures of this server process.</p>
+    </div>
+    <span class="chip shrink-0" title="Server process">{{ icon("monitor", "size-4") }}<span class="font-mono text-[11px]">{{ pr.process }}</span></span>
+  </div>
+
+  {# ---------------------------------------------------------------- queue now + compute saved #}
+  <div class="grid grid-cols-1 gap-6 lg:grid-cols-5">
+    <section class="card min-w-0 lg:col-span-3" aria-labelledby="queue-title">
+      {% set waiting_now = u.lanes | sum(attribute="queued") %}
+      <div class="sa-card-head">
+        <div class="min-w-0">
+          <h3 id="queue-title" class="sa-card-title">AI queue now</h3>
+          <p class="sa-card-sub">{{ u.counters.submitted }} request{{ 's' if u.counters.submitted != 1 }} since the server started · average wait {{ u.avg_wait or "—" }}</p>
+        </div>
+        <span class="badge badge-{{ 'amber' if waiting_now else 'green' }}">{{ (waiting_now ~ " waiting") if waiting_now else "No queue" }}</span>
+      </div>
+      <ul class="mt-5 grid gap-3 sm:grid-cols-2" data-component="sa-bars">
+        {% for lane in u.lanes %}
+        <li class="sa-mini">
+          <div class="flex items-center justify-between gap-2">
+            <p class="flex min-w-0 items-center gap-1.5 truncate text-xs font-medium muted">{{ icon(lane.icon, "size-3.5") }}{{ lane.label }}</p>
+            <span class="shrink-0 text-xs tabular-nums muted">{{ lane.capacity }} slot{{ 's' if lane.capacity != 1 }}</span>
+          </div>
+          <p class="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{{ lane.running }}<span class="text-sm font-medium muted"> / {{ lane.capacity }} running</span></p>
+          <div class="sa-hbar mt-2" role="presentation"><span data-pct="{{ lane.pct }}"></span></div>
+          <p class="mt-2 truncate text-xs muted">{{ lane.queued }} waiting{% if lane.oldest %} · oldest {{ lane.oldest }}{% endif %}{% if lane.service %} · {{ lane.service }} per call{% endif %}</p>
+        </li>
+        {% endfor %}
+      </ul>
+      <ul class="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+        {% for p in u.priorities %}
+        <li class="rounded-2xl bg-zinc-50 px-3.5 py-2.5 ring-1 ring-black/[0.04] dark:bg-white/[0.03] dark:ring-white/[0.06]">
+          <p class="font-medium">{{ p.label }}</p>
+          <p class="truncate text-xs muted">{{ p.hint }}</p>
+          <p class="mt-1 text-xs tabular-nums">{{ p.running }} running · {{ p.queued }} waiting</p>
+        </li>
+        {% endfor %}
+      </ul>
+      <div class="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {{ sa.mini("Started", u.counters.started, "since start") }}
+        {{ sa.mini("Answered", u.counters.completed, "finished normally") }}
+        {{ sa.mini("Failed", u.counters.failed, "every provider failed", "red" if u.counters.failed else None) }}
+        {{ sa.mini("Waited too long", u.counters.expired, "answered as busy", "amber" if u.counters.expired else None) }}
+      </div>
+      {% if u.waiting %}
+      <h4 class="mt-5 text-xs font-semibold tracking-wider text-zinc-500 uppercase dark:text-zinc-400">Waiting longest</h4>
+      <ul class="mt-1 sa-list -mx-1">
+        {% for w in u.waiting %}
+        <li class="flex items-center gap-3 px-1 py-2 text-sm">
+          <a href="{{ w.href }}" class="min-w-0 flex-1 truncate font-medium hover:text-accent">{{ w.name }}</a>
+          <span class="shrink-0 text-xs tabular-nums muted">{{ w.queued }} waiting · {{ w.running }} running · {{ w.wait }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+
+    <section class="card min-w-0 lg:col-span-2" aria-labelledby="saved-title">
+      <h3 id="saved-title" class="sa-card-title">Compute saved</h3>
+      <p class="sa-card-sub">AI work stopped because nobody was left to read the answer</p>
+      <div class="mt-4 grid grid-cols-3 gap-3">
+        {{ sa.mini("Stopped", u.saved_total, "calls in total", "green" if u.saved_total else None) }}
+        {{ sa.mini("Running", u.saved.cancelled_running or 0, "provider freed") }}
+        {{ sa.mini("Queued", u.saved.cancelled_queued or 0, "never started") }}
+      </div>
+      <h4 class="mt-5 mb-3 text-sm font-semibold">Why work stopped</h4>
+      {{ sa.ranked_bars(u.stopped, u.stopped_max, "Nothing was stopped since the server started.") }}
+      <h4 class="mt-5 mb-3 text-sm font-semibold">Refused by the queue</h4>
+      {{ sa.ranked_bars(u.refusals, u.refusals_max, "The queue refused nothing since the server started.") }}
+      {% set g = u.guard %}
+      <div class="mt-5 mb-3 flex items-baseline justify-between gap-3">
+        <h4 id="guard-refusals-title" class="text-sm font-semibold">Refused by the per-person guard</h4>
+        <span class="shrink-0 text-xs tabular-nums muted">today{% if g.refused_total %} · {{ g.refused_total }}{% endif %}</span>
+      </div>
+      {{ sa.ranked_bars(g.refusals, g.refusals_max, "The guard refused nothing today." if g.available else "The guard's counters are unavailable right now.") }}
+      <div class="mt-3 grid grid-cols-2 gap-3">
+        {{ sa.mini("Pauses started", g.cooldowns, "accounts paused today", "amber" if g.cooldowns else None) }}
+        {{ sa.mini("Escalated", g.escalations, "pauses reported to security", "red" if g.escalations else None, "/superadmin/security?category=ai_abuse" if g.escalations else None) }}
+      </div>
+      <p class="mt-4 text-xs leading-relaxed muted" data-guard-scope>Queue figures: this server process since it started. Guard figures: {{ g.day ~ " (UTC)" if g.day else "today (UTC)" }}, {{ "every server process" if g.shared else "this server process only (no Redis)" }}. Limit, duplicate and spam refusals earn strike points - enough of them pause the account (below), and pauses of an hour or more are reported to the security centre.</p>
+    </section>
+  </div>
+
+  {# ---------------------------------------------------------------- people #}
+  <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <section class="card min-w-0" aria-labelledby="top-users-title">
+      <h3 id="top-users-title" class="sa-card-title">Top AI users · 24 h</h3>
+      <p class="sa-card-sub">Calls per person, their background jobs included</p>
+      {% if u.top_users %}
+      <ol class="mt-4 grid gap-3" data-component="sa-bars">
+        {% for t in u.top_users %}
+        <li>
+          <div class="mb-1.5 flex items-center justify-between gap-3 text-sm">
+            <span class="flex min-w-0 items-center gap-2">
+              <a href="{{ t.href }}" class="min-w-0 truncate font-medium hover:text-accent">{{ t.name }}</a>
+              {% if t.deleted %}<span class="badge badge-zinc">Deleted</span>{% elif t.role %}<span class="badge badge-{{ role_tones.get(t.role, 'zinc') }}">{{ role_names.get(t.role, t.role | humanize) }}</span>{% endif %}
+            </span>
+            <span class="shrink-0 font-semibold tabular-nums">{{ t.calls }}</span>
+          </div>
+          <div class="sa-hbar" role="presentation"><span data-pct="{{ ((t.calls / u.top_max * 100) if u.top_max else 0) | round(1) }}"></span></div>
+          <p class="mt-1 truncate text-xs muted">Mostly {{ t.top_feature | humanize | lower }}{% if t.background %} · {{ t.background }} in background jobs{% endif %}{% if t.failures %} · <span class="text-[#d1281e] dark:text-[#ff6b61]">{{ t.failures }} failed</span>{% endif %}{% if t.cancelled %} · {{ t.cancelled }} stopped{% endif %} · last {{ t.last_at | timeago }}</p>
+        </li>
+        {% endfor %}
+      </ol>
+      {% else %}
+        <div class="mt-4">{{ sa.inline_empty("No AI use by signed-in people in 24 hours", "Members, staff and owners appear here a few seconds after they use an AI feature.", "users") }}</div>
+      {% endif %}
+    </section>
+
+    <section class="card min-w-0" aria-labelledby="cooldowns-title">
+      <div class="sa-card-head">
+        <div class="min-w-0">
+          <h3 id="cooldowns-title" class="sa-card-title">Accounts with AI paused</h3>
+          <p class="sa-card-sub">Cooldowns after repeated refusals · safety checks keep working</p>
+        </div>
+        {% if u.cooldowns %}<span class="badge badge-amber tabular-nums">{{ u.cooldowns | length }} paused</span>{% endif %}
+      </div>
+      {% if u.cooldowns %}
+      <ul class="mt-3 sa-list -mx-1">
+        {% for c in u.cooldowns %}
+        <li class="flex flex-wrap items-start gap-3 px-1 py-3">
+          <div class="min-w-0 flex-1">
+            <p class="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+              <a href="{{ c.href }}" class="min-w-0 truncate font-medium hover:text-accent">{{ c.name }}</a>
+              {% if c.person %}<span class="badge badge-{{ role_tones.get(c.person.role.value, 'zinc') }}">{{ role_names.get(c.person.role.value, c.person.role.value | humanize) }}</span>{% endif %}
+              <span class="badge badge-{{ 'red' if c.repeat or (c.level or 0) >= 3 else 'amber' }}">{{ icon("clock", "size-3.5") }}{{ c.left }} left</span>
+            </p>
+            <p class="mt-1 text-xs muted">Until {{ c.until_dt | dt("%d %b, %H:%M") }}{% if c.level %} · level {{ c.level }}{% endif %}{% if c.repeat %} · repeat pause{% endif %}{% if c.feature %} · while using {{ c.feature | humanize | lower }}{% endif %}{% if c.strikes is not none %} · {{ "%g" | format(c.strikes) }} strike points{% endif %}</p>
+            {% if c.reason %}<p class="mt-0.5 text-xs muted">Because of {{ c.reason }}.</p>{% endif %}
+          </div>
+          {{ ui.confirm_button("/superadmin/ai/cooldowns/" ~ c.user_id ~ "/lift", "Lift", "Lift the AI pause of " ~ c.name ~ "? Their strike points are cleared too; quota usage stays.", variant="secondary", size="sm", ico="check", extra_fields={"next": "/superadmin/ai#usage"}) }}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+        <div class="mt-4">{{ sa.inline_empty("No account is paused", "Accounts that keep hitting their AI limits or sending spam are paused for 2 minutes up to 24 hours.") }}</div>
+      {% endif %}
+    </section>
+  </div>
+
+  {# ---------------------------------------------------------------- blocks + presence #}
+  <div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
+    <section class="min-w-0 lg:col-span-3" aria-labelledby="blocks-title">
+      <div class="mb-3 flex items-end justify-between gap-3">
+        <h3 id="blocks-title" class="section-title">Recent AI blocks <span class="text-sm font-normal muted">· last {{ u.blocks_days }} days</span></h3>
+        <a href="/superadmin/security?category=ai_abuse" class="shrink-0 text-sm font-medium text-accent hover:underline">All AI abuse events</a>
+      </div>
+      {% if u.blocks %}
+      <div class="table-wrap !overflow-visible">
+        <div class="sa-row-head sa-cols-events" aria-hidden="true"><span>When</span><span>Source</span><span>What happened</span><span>Severity</span></div>
+        <ul class="sa-list">
+          {% for b in u.blocks %}
+          {% set e = b.event %}
+          <li class="sa-row sa-cols-events">
+            <div class="flex items-baseline gap-2 md:block">
+              <p class="text-sm font-medium tabular-nums">{{ e.created_at | dt("%d %b, %H:%M") }}</p>
+              <p class="text-xs muted">{{ e.created_at | timeago }}</p>
+            </div>
+            <div class="flex min-w-0 flex-wrap items-center gap-1.5 md:block md:space-y-1">
+              {{ sa.ip_link(e.ip) }}
+              <span class="badge badge-{{ 'violet' if e.category.value == 'ai_abuse' else 'zinc' }}">{{ category_labels.get(e.category.value, e.category.value) }}</span>
+            </div>
+            <div class="min-w-0">
+              <p class="truncate text-sm" title="{{ e.detail or '' }}">{{ e.detail or "—" }}</p>
+              <p class="mt-0.5 truncate text-xs muted">{% if b.person %}{{ icon("user", "inline size-3 -mt-0.5") }} <a href="/superadmin/users?q={{ 'IP-%06d' | format(b.person.id) }}&amp;state=all" class="hover:text-accent">{{ b.person.display_name }}</a> · {% endif %}<span class="font-mono">{{ e.method }} {{ e.path }}</span></p>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5 md:justify-end">
+              {{ sa.severity(e.severity) }}
+              {% if e.action != 'logged' %}<span class="badge badge-{{ 'red' if e.action == 'banned' else 'amber' }}">{{ e.action | humanize }}</span>{% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% else %}
+        {{ ui.empty("No AI blocks in the last " ~ u.blocks_days ~ " days", "AI pauses of an hour or more, and addresses hammering the AI endpoints, are listed here and reviewed by the security triage. Older ones: All AI abuse events.", "shield") }}
+      {% endif %}
+    </section>
+
+    <section class="card min-w-0 lg:col-span-2" aria-labelledby="presence-title">
+      <h3 id="presence-title" class="sa-card-title">Who is here</h3>
+      <p class="sa-card-sub">Closing a tab stops its AI work at once; leaving pauses background jobs until the person returns</p>
+      <div class="mt-4 grid grid-cols-2 gap-3">
+        {{ sa.mini("People online", pr.users, pr.pages ~ " tab" ~ ("s" if pr.pages != 1 else "") ~ " · " ~ pr.sockets ~ " socket" ~ ("s" if pr.sockets != 1 else ""), "green" if pr.users else None) }}
+        {{ sa.mini("Leaving now", pr.grace_timers, "grace period running", "amber" if pr.grace_timers else None) }}
+        {{ sa.mini("Away", pr.away, "left since the server started") }}
+        {{ sa.mini("Jobs running here", u.jobs_here ~ " / " ~ u.job_slots, "background job slots", "blue" if u.jobs_here else None) }}
+        {{ sa.mini("Jobs paused", u.jobs.paused, "until their requester returns", "amber" if u.jobs.paused else None) }}
+        {{ sa.mini("Jobs cancelled · " ~ u.window_hours ~ " h", u.jobs.cancelled, "requester left or was deleted") }}
+      </div>
+      {% set st = pr.stats %}
+      <ul class="mt-4 grid gap-1.5 text-xs">
+        <li class="flex justify-between gap-3"><span class="muted">Tabs closed</span><span class="tabular-nums">{{ st.get("pages_closed", 0) }}</span></li>
+        <li class="flex justify-between gap-3"><span class="muted">People who left</span><span class="tabular-nums">{{ st.get("exits", 0) }}</span></li>
+        <li class="flex justify-between gap-3"><span class="muted">Sign-outs</span><span class="tabular-nums">{{ st.get("logouts", 0) }}</span></li>
+        <li class="flex justify-between gap-3"><span class="muted">Returns · jobs resumed</span><span class="tabular-nums">{{ st.get("returns", 0) }} · {{ st.get("jobs_resumed", 0) }}</span></li>
+        <li class="flex justify-between gap-3"><span class="muted">Paused jobs resumed as their requester came back</span><span class="tabular-nums">{{ st.get("parks_overtaken", 0) }}</span></li>
+        <li class="flex justify-between gap-3"><span class="muted">'Resuming now' notes kept · delivered</span><span class="tabular-nums">{{ st.get("notes_kept", 0) }} · {{ st.get("notes_delivered", 0) }}</span></li>
+        <li class="flex justify-between gap-3"><span class="muted">Exits not judged (workers without shared Redis)</span><span class="tabular-nums">{{ st.get("kept_unseen", 0) }}</span></li>
+      </ul>
+      {% if pr.shutting_down %}<p class="mt-4 rounded-2xl bg-warn/12 px-3 py-2 text-xs text-[#92400e] dark:text-[#fcd34d]">This process is shutting down - closed sockets do not count as people leaving.</p>{% endif %}
+    </section>
+  </div>
+</section>
+{{ ui.ai_disclaimer() }}
+{% endblock %}

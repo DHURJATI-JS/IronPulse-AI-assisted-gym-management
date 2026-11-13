@@ -1,0 +1,59 @@
+{% extends "auth/_center.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "auth/_macros.html" as am with context %}
+{% block title %}Platform admin sign-in{% endblock %}
+{% block description %}Sign-in for the {{ app.name }} platform team.{% endblock %}
+
+{% block card %}
+<div class="card p-7 sm:p-10">
+  <span class="auth-icon auth-icon-accent">{{ icon("shield", "size-6") }}</span>
+  <h1 class="mt-6 text-[28px] font-semibold leading-tight tracking-tight sm:text-[32px]">Platform admin sign-in</h1>
+  <p class="mt-2 text-[15px] muted">For the {{ app.name }} platform team only. Every attempt is logged, and repeated failed
+    attempts block this network address.</p>
+
+  {% if banned %}
+    <div class="alert alert-danger mt-6" role="alert" data-admin-banned>
+      {{ icon("lock", "size-5 shrink-0") }}
+      <div><p class="font-semibold">Access blocked</p>
+        <p>Too many failed sign-in attempts came from this network address, so it is blocked
+          {% if banned_until %}until {{ banned_until | dt("%d %b %Y, %H:%M") }}{% else %}permanently{% endif %}.
+          The server's administrator can lift the block.</p></div>
+    </div>
+  {% else %}
+    {% if signed_out %}
+      <div class="alert alert-warning mt-6" role="status" data-signed-out>
+        {{ icon("logout", "size-5 shrink-0") }}
+        <div><p class="font-semibold">Signed out on this device</p><p>{{ signed_out }}</p></div>
+      </div>
+    {% endif %}
+    {% if locked %}
+      <div class="alert alert-warning mt-6" role="alert">
+        {{ icon("lock", "size-5 shrink-0") }}
+        <div><p class="font-semibold">Sign-in paused</p><p>{{ error }}</p></div>
+      </div>
+    {% elif error %}
+      <div class="alert alert-danger mt-6" role="alert">{{ icon("alert", "size-5 shrink-0") }}<p>{{ error }}</p></div>
+    {% endif %}
+    {% if warning %}
+      <p class="mt-3 flex items-center gap-2 text-sm font-medium text-[#b25000] dark:text-[#ffb340]" data-admin-warning>
+        {{ icon("alert", "size-4 shrink-0") }} {{ warning }}</p>
+    {% endif %}
+
+    <form method="post" action="/superadmin/login" class="mt-8 space-y-5" data-admin-login-form>
+      {{ ui.csrf() }}
+      <input type="hidden" name="next" value="{{ next or '' }}">
+      {{ ui.field("identifier", "E-mail address", type="email", value=form.identifier, required=True, autocomplete="username",
+                  placeholder="admin@example.com", attrs='maxlength="254" autocapitalize="off" spellcheck="false" autofocus') }}
+      {{ am.password_input("password", "Password", autocomplete="current-password") }}
+      <button type="submit" class="btn btn-primary btn-lg w-full" data-busy-label="Signing in…">Sign in {{ icon("arrow-right", "size-4") }}</button>
+    </form>
+  {% endif %}
+
+  <div class="divider"></div>
+  <p class="text-center text-sm muted">Member, gym owner or staff?
+    <a href="/auth/login" class="font-semibold text-accent hover:underline">Sign in here</a></p>
+</div>
+<p class="mt-6 flex items-center justify-center gap-2 text-center text-xs muted">
+  {{ icon("lock", "size-3.5 shrink-0") }} The platform admin password is managed on the server.
+</p>
+{% endblock %}

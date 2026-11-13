@@ -1,0 +1,33 @@
+{#- Owner shop building blocks (WP-L). Import WITH CONTEXT. -#}
+{% import "_ui.html" as ui with context %}
+
+{% macro tabs(active) %}
+<nav class="mb-8 max-w-full overflow-x-auto pb-1" aria-label="Shop sections">
+  <div class="tabs">
+    {% for key, label, href in [("overview", "Overview", "/owner/shop"), ("products", "Products", "/owner/shop/products"), ("orders", "Orders", "/owner/shop/orders"), ("coupons", "Coupons", "/owner/shop/coupons"), ("reviews", "Reviews", "/owner/shop/reviews")] %}
+      <a href="{{ href }}" class="tab whitespace-nowrap {{ 'tab-active' if active == key }}" {% if active == key %}aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </div>
+</nav>
+{% endmacro %}
+
+{#- "New product" button: direct link for one gym, a small menu for several -#}
+{% macro new_product(gyms, variant="primary") %}
+{% if gyms | length == 1 %}
+  <a href="/owner/gyms/{{ gyms[0].id }}/shop/products/new" class="btn btn-{{ variant }} btn-sm">{{ icon("plus", "size-4") }}New product</a>
+{% elif gyms %}
+  <details class="relative" data-component="dropdown">
+    <summary class="btn btn-{{ variant }} btn-sm list-none">{{ icon("plus", "size-4") }}New product{{ icon("chevron-down", "size-4") }}</summary>
+    <div class="card absolute right-0 z-20 mt-2 w-64 p-2 text-sm">
+      <p class="px-3 py-2 text-xs font-semibold uppercase tracking-wider muted">Add to which gym?</p>
+      {% for g in gyms %}<a href="/owner/gyms/{{ g.id }}/shop/products/new" class="flex items-center gap-2 rounded-xl px-3 py-2 hover:bg-zinc-900/5 dark:hover:bg-white/10">{{ icon("building", "size-4") }}<span class="truncate">{{ g.name }}</span></a>{% endfor %}
+    </div>
+  </details>
+{% endif %}
+{% endmacro %}
+
+{% macro stock_badge(p) -%}
+{% if p.stock <= 0 %}<span class="badge badge-red">Out of stock</span>
+{% elif p.stock <= p.low_stock_threshold %}<span class="badge badge-amber">{{ p.stock }} left · low</span>
+{% else %}<span class="badge badge-green">{{ p.stock }} in stock</span>{% endif %}
+{%- endmacro %}

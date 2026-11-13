@@ -1,0 +1,65 @@
+{#- Big site footer: brand + live AI status, four link columns, safety strip, legal bar. -#}
+<footer class="mt-20 border-t border-black/[0.06] bg-white/70 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.02]" aria-labelledby="footer-title">
+  <h2 id="footer-title" class="sr-only">Site footer</h2>
+  <div class="mx-auto max-w-7xl px-4 pb-10 pt-16 sm:px-6 lg:px-8">
+    <div class="grid gap-12 lg:grid-cols-[1.25fr_2fr]">
+
+      {# ---- brand block #}
+      <div class="max-w-sm">
+        <a href="/" class="inline-flex items-center gap-2.5 text-xl font-semibold tracking-tight">
+          <span class="grid size-10 place-items-center rounded-xl bg-gradient-to-br from-accent via-indigo to-violet text-white shadow-lg shadow-indigo/30">{{ icon("activity", "size-5") }}</span>
+          {{ app.name }}
+        </a>
+        <p class="mt-4 text-[15px] leading-relaxed muted">AI-verified gyms, real trainers and a coach that respects your health - in person, online, or both.</p>
+        <div class="mt-5 inline-flex items-center gap-2 rounded-full bg-zinc-900/[0.05] px-3.5 py-2 text-sm dark:bg-white/[0.06]">
+          <span class="ai-dot" data-ai-dot data-state="{{ ai_status.state }}"></span>
+          <span>{{ ('AI online · ' ~ ai_status.active_label) if ai_status.available else 'AI unavailable - videos and non-AI features still work' }}</span>
+        </div>
+        <div class="mt-6 flex flex-wrap gap-2">
+          <a href="/gyms" class="btn btn-primary btn-sm">{{ icon("map-pin", "size-4") }} Find a gym</a>
+          {% if not user %}<a href="/auth/signup?role=owner" class="btn btn-secondary btn-sm">{{ icon("building", "size-4") }} List your gym</a>{% endif %}
+        </div>
+      </div>
+
+      {# ---- link columns #}
+      <nav class="grid grid-cols-2 gap-x-6 gap-y-10 sm:grid-cols-4" aria-label="Footer">
+        {% set columns = [
+            ("Explore", [("Find a gym", "/gyms"), ("Plans & pricing", "/plans"), ("Shop", "/shop"), ("Jobs" ~ (" (" ~ hiring ~ ")" if hiring else ""), "/jobs"), ("About", "/about")]),
+            ("Members", [("Today", "/me"), ("AI coach", "/me/coach"), ("Live voice coach", "/me/live"), ("Health & safety", "/me/health"), ("Exercise videos", "/me/videos"), ("Calendar & tasks", "/calendar")]),
+            ("Gym owners", [("Owner dashboard", "/owner"), ("Your gyms & branches", "/owner/gyms"), ("Staff & hiring", "/owner/staff"), ("Payroll & finance", "/owner/finance"), ("Shop manager", "/owner/shop")]),
+            ("Help & legal", [("Sign in", "/auth/login"), ("Forgot password", "/auth/forgot"), ("Forgot username", "/auth/forgot-username"), ("Terms & conditions", "/terms"), ("Disclaimer", "/terms#disclaimer"), ("Privacy", "/privacy")]),
+        ] %}
+        {% for title, links in columns %}
+        <div>
+          <p class="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-900 dark:text-white">{{ title }}</p>
+          <ul class="mt-4 grid gap-3 text-[15px]">
+            {% for label, href in links %}
+            <li><a href="{{ href }}" class="muted transition hover:text-ink dark:hover:text-white">{{ label }}</a></li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endfor %}
+      </nav>
+    </div>
+
+    {# ---- safety strip #}
+    <div class="mt-14 grid gap-4 rounded-[28px] bg-zinc-100/80 p-5 sm:grid-cols-[auto_1fr] sm:items-center sm:p-6 dark:bg-white/[0.04]" role="note">
+      <span class="grid size-12 place-items-center rounded-2xl bg-bad/12 text-bad">{{ icon("heart", "size-6") }}</span>
+      <div class="text-sm leading-relaxed">
+        <p class="font-semibold">Feeling unwell? Stop exercising and call your local emergency number.</p>
+        <p class="mt-1 muted">112 India &amp; EU · 911 US &amp; Canada · 999 UK &amp; UAE · 000 Australia · 111 New Zealand · 995 Singapore.
+          IronPulse is not a medical service and <strong class="font-semibold">AI can make mistakes</strong> - always double-check important information.</p>
+      </div>
+    </div>
+
+    {# ---- legal bar #}
+    <div class="mt-10 flex flex-col gap-4 border-t border-black/[0.06] pt-6 text-sm sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.08]">
+      <p class="muted">© {{ now.year }} {{ app.name }} · A student-grade project · The owner, the developer and the AI are not responsible for anything - <a href="/terms#disclaimer" class="underline-offset-2 hover:underline">read the disclaimer</a>.</p>
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2 muted">
+        {% if app.payments_test_mode %}<span class="badge badge-amber">Payments in test mode</span>{% endif %}
+        <span class="inline-flex items-center gap-1.5">{{ icon("shield", "size-4") }} Encrypted IDs · no tracking cookies</span>
+        <a href="#main" class="inline-flex items-center gap-1 hover:text-ink dark:hover:text-white">Back to top {{ icon("arrow-right", "size-3.5 -rotate-90") }}</a>
+      </div>
+    </div>
+  </div>
+</footer>

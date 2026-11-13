@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "public/_macros.html" as pub with context %}
+{#- defensive defaults: the landing page must render even without data -#}
+{% set featured = featured if featured is defined else [] %}
+{% set trainers = trainers if trainers is defined else [] %}
+{% set stats = stats if stats is defined else {"branches": 0, "online": 0, "trainers": 0} %}
+{% set modes = modes if modes is defined else {
+    "offline": {"long": "In-person (offline)", "icon": "building", "blurb": "Full access to a verified branch near you. Bought at the branch desk with an owner OTP."},
+    "online": {"long": "Online", "icon": "video", "blurb": "Live online sessions and remote coaching from anywhere - no branch needed."},
+    "combo": {"long": "Combo (online + offline)", "icon": "layers", "blurb": "The best of both: branch access plus online sessions on the days you can't make it."}} %}
+{% block title %}Train smarter{% endblock %}
+{% block description %}IronPulse connects you with AI-verified gyms, real trainers and an AI coach that respects your health conditions - in person, online or both.{% endblock %}
+{% block main_class %}!pt-0{% endblock %}
+{% block content %}
+
+{# ================================================================= hero #}
+<section class="pub-hero -mx-4 px-4 pb-16 pt-14 sm:-mx-6 sm:px-6 sm:pb-24 sm:pt-20 lg:-mx-8 lg:px-8" aria-labelledby="hero-title">
+  <div class="pub-hero-bg" aria-hidden="true"></div>
+  <div class="mx-auto grid max-w-6xl items-center gap-14 lg:grid-cols-[1.08fr_0.92fr]">
+    <div class="text-center lg:text-left">
+      <div class="animate-fade-up">{{ pub.ai_live_chip() }}</div>
+      <h1 id="hero-title" class="pub-display mt-6 animate-fade-up">Your gym,<br class="hidden sm:block"> <span class="gradient-text">intelligently</span> managed.</h1>
+      <p class="mx-auto mt-6 max-w-xl text-lg leading-relaxed muted animate-fade-up lg:mx-0">
+        AI-verified branches, real trainers, and a coach that adapts every rep to your health conditions - in person, online, or both.
+      </p>
+      <div class="mt-9 flex flex-col items-stretch justify-center gap-3 animate-fade-up sm:flex-row sm:items-center lg:justify-start">
+        <a href="/gyms" class="btn btn-primary btn-lg">{{ icon("map-pin", "size-4") }} Find a gym near you</a>
+        <a href="/plans" class="btn btn-secondary btn-lg">Compare the 12 plans {{ icon("arrow-right", "size-4") }}</a>
+      </div>
+      <dl class="mx-auto mt-12 grid max-w-lg grid-cols-3 gap-3 animate-fade-up lg:mx-0">
+        {% if stats.branches or stats.online or stats.trainers %}
+          {% set facts = [(stats.branches, "Verified branches"), (stats.online, "Gyms online"), (stats.trainers, "Trainers")] %}
+        {% else %}
+          {% set facts = [(12, "Plan types"), ((app.offline_max_distance_km | int) ~ " km", "Offline radius"), (3, "AI fallbacks")] %}
+        {% endif %}
+        {% for value, label in facts %}
+        <div class="rounded-2xl bg-white/60 px-3 py-4 ring-1 ring-black/[0.05] backdrop-blur dark:bg-white/[0.04] dark:ring-white/[0.08]">
+          <dt class="text-[11px] font-medium uppercase tracking-wider muted">{{ label }}</dt>
+          <dd class="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{{ value }}</dd>
+        </div>
+        {% endfor %}
+      </dl>
+    </div>
+
+    {# --- product collage (decorative; no real people) #}
+    <div class="relative mx-auto hidden w-full max-w-md pb-10 lg:block" aria-hidden="true">
+      <div class="pub-orb"></div>
+      <div class="pub-island-demo mx-auto mb-5">
+        <span class="grid size-7 shrink-0 place-items-center rounded-full bg-accent text-white">{{ icon("key", "size-3.5") }}</span>
+        <span class="min-w-0"><span class="block text-[12px] font-semibold">Desk OTP sent to the owner</span><span class="block text-[11px] text-white/60">Valid for 10 minutes · 5 attempts</span></span>
+      </div>
+      <div class="pub-float card relative !rounded-[32px] !p-5">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wider text-accent">Today</p>
+            <p class="mt-1 text-xl font-semibold tracking-tight">Push day · 45 min</p>
+          </div>
+          <svg viewBox="0 0 36 36" class="size-14 -rotate-90">
+            <circle cx="18" cy="18" r="15.5" fill="none" class="stroke-zinc-200 dark:stroke-white/10" stroke-width="3.5"/>
+            <circle cx="18" cy="18" r="15.5" fill="none" class="stroke-accent" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="68 100"/>
+          </svg>
+        </div>
+        <ul class="mt-4 grid gap-2 text-sm">
+          <li class="flex items-center justify-between rounded-2xl bg-zinc-100/80 px-3.5 py-2.5 dark:bg-white/[0.05]"><span class="flex items-center gap-2">{{ icon("check-circle", "size-4 text-ok") }}Incline push-ups</span><span class="muted">3 × 12</span></li>
+          <li class="flex items-center justify-between rounded-2xl bg-zinc-100/80 px-3.5 py-2.5 dark:bg-white/[0.05]"><span class="flex items-center gap-2">{{ icon("check-circle", "size-4 text-ok") }}Dumbbell press</span><span class="muted">4 × 8</span></li>
+          <li class="flex items-center justify-between gap-3 rounded-2xl bg-accent/10 px-3.5 py-2.5 text-accent-strong dark:text-[#8cc8ff]"><span class="flex items-center gap-2">{{ icon("activity", "size-4 shrink-0") }}Cable fly · eased for your shoulder</span><span>3 × 10</span></li>
+        </ul>
+      </div>
+      <div class="pub-float-delayed card absolute -left-10 top-56 w-56 !rounded-[26px] !p-4">
+        <div class="flex items-center gap-3">
+          <span class="grid size-10 place-items-center rounded-2xl bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("scale", "size-5") }}</span>
+          <div><p class="text-xs muted">Weight this month (example)</p><p class="font-semibold tabular-nums">−1.2 kg <span class="text-xs font-medium text-[#1f8c3a] dark:text-[#4ade80]">on track</span></p></div>
+        </div>
+      </div>
+      <div class="pub-float card absolute -right-4 -bottom-6 w-64 !rounded-[26px] !p-4">
+        <div class="flex items-center gap-2">
+          <span class="grid size-8 place-items-center rounded-xl bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("check-badge", "size-4") }}</span>
+          <p class="text-sm font-semibold">Branch verified by AI</p>
+        </div>
+        <ul class="mt-3 grid gap-1.5 text-xs muted">
+          <li class="flex items-center gap-2">{{ icon("check", "size-3.5 text-ok") }}Registration matches address</li>
+          <li class="flex items-center gap-2">{{ icon("check", "size-3.5 text-ok") }}Fire &amp; safety certificates</li>
+          <li class="flex items-center gap-2">{{ icon("check", "size-3.5 text-ok") }}Photos of machines &amp; floor</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+{# ================================================================= how it works #}
+<section class="mx-auto mt-10 max-w-6xl sm:mt-16" aria-label="How it works">
+  {{ pub.section_head("How it works", "From sign-up to your first set in four steps", center=True) }}
+  <ol class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {% for ico, title, body in [
+        ("search", "Find a verified gym", "Search by city or distance. Only branches that passed AI document checks, are open and show real photos are listed."),
+        ("layers", "Pick how you train", "In person, online, or a combo - add a personal trainer, the AI coach, or both. Videos are always included."),
+        ("id-card", "Verify once", "Upload your ID card once. It's encrypted at rest, checked by several OCR engines and never shown publicly."),
+        ("bolt", "Train with guidance", "Your plan adapts to your goals and conditions, trainers chat with you live, and safety checks watch your back."),
+    ] %}
+    <li class="card card-hover relative">
+      <span class="pub-step" aria-hidden="true">{{ loop.index }}</span>
+      <span class="grid size-11 place-items-center rounded-2xl bg-accent/10 text-accent dark:bg-accent/15 dark:text-[#64b5ff]">{{ icon(ico, "size-5") }}</span>
+      <h3 class="mt-4 font-semibold tracking-tight">{{ title }}</h3>
+      <p class="mt-1.5 text-sm leading-relaxed muted">{{ body }}</p>
+    </li>
+    {% endfor %}
+  </ol>
+</section>
+
+{# ================================================================= plan modes #}
+<section class="mx-auto mt-24 max-w-6xl" aria-label="Plan modes">
+  {{ pub.section_head("Plans", "Three ways to train. Two power-ups.", "Every gym can offer up to 12 plan types: pick a mode, then add a trainer, the AI coach, or both. Pre-recorded workout videos come with every plan.", "Compare all 12 plans", "/plans") }}
+  <div class="grid gap-4 lg:grid-cols-3">
+    {% for key, extra in [("offline", "Within " ~ (app.offline_max_distance_km | int) ~ " km of a branch"), ("online", "From anywhere"), ("combo", "Branch + online")] %}
+    {% set m = modes[key] %}
+    <article class="card card-hover flex flex-col">
+      <div class="flex items-center justify-between gap-3">
+        <span class="grid size-12 shrink-0 place-items-center rounded-2xl {{ {'offline': 'bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]', 'online': 'bg-accent/12 text-accent dark:text-[#64b5ff]', 'combo': 'bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]'}[key] }}">{{ icon(m.icon, "size-6") }}</span>
+        <span class="text-right text-xs font-medium muted">{{ extra }}</span>
+      </div>
+      <h3 class="mt-5 text-xl font-semibold tracking-tight">{{ m.long }}</h3>
+      <p class="mt-2 text-sm leading-relaxed muted">{{ m.blurb }}</p>
+      <div class="mt-auto flex flex-wrap gap-2 pt-5">
+        <span class="chip">{{ icon("play", "size-3.5") }}Videos included</span>
+        <span class="chip">{{ icon("user", "size-3.5") }}+ Trainer</span>
+        <span class="chip">{{ icon("sparkles", "size-3.5") }}+ AI coach</span>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+
+{# ================================================================= featured gyms #}
+<section class="mx-auto mt-24 max-w-6xl" aria-label="Featured gyms">
+  {{ pub.section_head("Discover", "Featured gyms", "Verified branches near you and gyms you can join online today.", "Browse all gyms", "/gyms") }}
+  {% if featured %}
+    <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+      {% for card in featured %}{{ pub.gym_card(card) }}{% endfor %}
+    </div>
+  {% else %}
+    {{ ui.empty("Gyms are getting verified", "Branches appear here once AI has checked their registration and safety documents, they're open and they show real photos. Own a gym? List it in minutes.", "check-badge", "List your gym", "/auth/signup") }}
+  {% endif %}
+</section>
+
+{# ================================================================= safety + AI bento #}
+<section class="mx-auto mt-24 max-w-6xl" aria-label="Safety and AI">
+  {{ pub.section_head("Safety & AI", "Smart where it helps. Careful where it matters.", "AI suggests - deterministic rules decide anything safety- or money-critical. And when every AI provider is down, the gym keeps running.") }}
+  <div class="grid gap-4 md:grid-cols-6">
+    <article class="pub-bento md:col-span-4">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="badge badge-blue">{{ icon("sparkles", "size-3.5") }}AI coach</span>
+        {{ ui.ai_chip() }}
+      </div>
+      <h3 class="mt-4 text-2xl font-semibold tracking-tight">Plans that skip what your conditions rule out.</h3>
+      <p class="mt-2 max-w-xl text-sm leading-relaxed muted">Tell us about asthma, a knee injury or high blood pressure once. The coach adjusts reps, weights and methods - and a rule engine double-checks every exercise against known contraindications before it reaches you.</p>
+      <div class="mt-6 grid gap-2 sm:grid-cols-3">
+        {% for label, value, tone in [("Box jumps", "Swapped · knee injury", "badge-amber"), ("Interval sprints", "Eased · asthma", "badge-amber"), ("Goblet squats", "Approved", "badge-green")] %}
+        <div class="rounded-2xl bg-zinc-100/80 p-3.5 dark:bg-white/[0.05]"><p class="text-sm font-medium">{{ label }}</p><span class="badge {{ tone }} mt-2">{{ value }}</span></div>
+        {% endfor %}
+      </div>
+    </article>
+    <article class="pub-bento md:col-span-2">
+      <span class="grid size-11 place-items-center rounded-2xl bg-bad/12 text-bad">{{ icon("shield", "size-5") }}</span>
+      <h3 class="mt-4 text-lg font-semibold tracking-tight">Safety pauses</h3>
+      <p class="mt-1.5 text-sm leading-relaxed muted">Sudden abnormal readings are flagged. In a serious case gym activity pauses until an admin reviews it - and we always point you to a professional.</p>
+    </article>
+    <article class="pub-bento md:col-span-2">
+      <span class="grid size-11 place-items-center rounded-2xl bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("check-badge", "size-5") }}</span>
+      <h3 class="mt-4 text-lg font-semibold tracking-tight">AI-verified branches</h3>
+      <p class="mt-1.5 text-sm leading-relaxed muted">Registration, tax and fire-safety documents are read by several OCR engines and checked against the address before a branch goes live.</p>
+    </article>
+    <article class="pub-bento md:col-span-2">
+      <span class="grid size-11 place-items-center rounded-2xl bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("lock", "size-5") }}</span>
+      <h3 class="mt-4 text-lg font-semibold tracking-tight">Encrypted ID cards</h3>
+      <p class="mt-1.5 text-sm leading-relaxed muted">ID scans are encrypted at rest and only ever shown through authorised pages. Face photos used for checks are never stored.</p>
+    </article>
+    <article class="pub-bento md:col-span-2">
+      <span class="grid size-11 place-items-center rounded-2xl bg-warn/15 text-[#b45309] dark:text-[#fbbf24]">{{ icon("wifi-off", "size-5") }}</span>
+      <h3 class="mt-4 text-lg font-semibold tracking-tight">Works when AI doesn't</h3>
+      <p class="mt-1.5 text-sm leading-relaxed muted">Three AI providers fail over in order. If all are offline you'll see it instantly - videos, chat and safety rules keep working.</p>
+    </article>
+  </div>
+</section>
+
+{# ================================================================= trainers teaser #}
+{% if trainers %}
+<section class="mx-auto mt-24 max-w-6xl" aria-label="Trainers">
+  {{ pub.section_head("Trainers", "Real people behind the plans", "Every trainer has a linked account and a verified ID, and their certifications are checked before they can coach.", "Find their gyms", "/gyms") }}
+  <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    {% for m in trainers %}{{ pub.member_card(m, show_gym=True) }}{% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{# ================================================================= promises (testimonial-style cards, no fake reviews) #}
+<section class="mx-auto mt-24 max-w-6xl" aria-label="Who it is for">
+  {{ pub.section_head("Built for everyone in the gym", "One app, three promises", center=True) }}
+  <div class="grid gap-4 md:grid-cols-3">
+    {% for who, ico, quote, points in [
+        ("For members", "heart", "A plan that knows what you can and can't do - and tells you when to see a doctor instead.", ["Plans adapt to your conditions", "Live chat with your trainer", "Reminders, calendar & bedtime nudges"]),
+        ("For trainers", "user-group", "Your schedule, your clients and their progress in one calm place.", ["Weekly shifts across branches", "Client notes & progress", "Salary statements with proof"]),
+        ("For gym owners", "building", "Verification, memberships, payroll and safety alerts - without the paperwork.", ["AI branch verification", "Desk OTP for offline sign-ups", "Payroll with country rules"]),
+    ] %}
+    <figure class="pub-quote">
+      <span class="grid size-10 place-items-center rounded-2xl bg-white/80 text-accent shadow-sm dark:bg-white/10 dark:text-[#64b5ff]">{{ icon(ico, "size-5") }}</span>
+      <blockquote class="mt-5 text-lg font-medium leading-snug tracking-tight">“{{ quote }}”</blockquote>
+      <figcaption class="mt-3 text-xs font-semibold uppercase tracking-wider muted">{{ who }} · the IronPulse promise</figcaption>
+      <ul class="mt-5 grid gap-2 text-sm">
+        {% for pt in points %}<li class="flex items-center gap-2">{{ icon("check", "size-4 shrink-0 text-ok") }}{{ pt }}</li>{% endfor %}
+      </ul>
+    </figure>
+    {% endfor %}
+  </div>
+</section>
+
+{# ================================================================= CTA #}
+<section class="mx-auto mt-24 max-w-6xl" aria-labelledby="cta-title">
+  <div class="pub-cta">
+    <div class="relative z-10 mx-auto max-w-2xl text-center">
+      <h2 id="cta-title" class="text-3xl font-semibold tracking-tight text-white sm:text-5xl">Ready when you are.</h2>
+      <p class="mx-auto mt-4 max-w-lg text-base leading-relaxed text-white/70">Join as a member to find a gym and get your plan - or list your gym and let IronPulse handle verification, memberships and payroll.</p>
+      <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+        {% if user %}
+          <a href="{{ nav[0].href }}" class="btn btn-lg bg-white text-ink hover:bg-zinc-100">Open your dashboard {{ icon("arrow-right", "size-4") }}</a>
+          <a href="/gyms" class="btn btn-lg bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20">Browse gyms</a>
+        {% else %}
+          <a href="/auth/signup" class="btn btn-lg bg-white text-ink hover:bg-zinc-100">Create your account {{ icon("arrow-right", "size-4") }}</a>
+          <a href="/auth/signup" class="btn btn-lg bg-white/10 text-white ring-1 ring-white/20 hover:bg-white/20">{{ icon("building", "size-4") }} List your gym</a>
+        {% endif %}
+      </div>
+      <p class="mt-6 text-xs text-white/50">A student-grade project · not medical, legal or financial advice · <a href="/terms" class="underline underline-offset-2 hover:text-white/80">read the disclaimer</a></p>
+    </div>
+  </div>
+</section>
+{% endblock %}

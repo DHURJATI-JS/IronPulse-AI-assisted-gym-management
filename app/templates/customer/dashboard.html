@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "customer/health/_macros.html" as hm with context %}
+{% block title %}Today{% endblock %}
+{% block content %}
+<div class="space-y-6 sm:space-y-8">
+
+  {# ---------------------------------------------------------------- greeting #}
+  <section class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between animate-fade-up">
+    <div class="min-w-0">
+      <p class="eyebrow mb-2">{{ today_label }}</p>
+      <h1 class="text-[34px] font-semibold leading-[1.08] tracking-tight sm:text-5xl">{{ greeting }}, <span class="gradient-text">{{ first_name }}</span></h1>
+      <p class="mt-3 max-w-xl text-[15px] muted">{{ tagline }}</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      {{ ui.ai_chip() }}
+      {% if streak > 1 %}<span class="chip">{{ icon("trending-up", "size-3.5") }} {{ streak }}-day streak</span>{% endif %}
+      <a href="/me/wellness" class="btn btn-secondary">{{ icon("smile", "size-4") }} Check in</a>
+      <a href="#quick-log" class="btn btn-primary">{{ icon("plus", "size-4") }} Log today</a>
+    </div>
+  </section>
+
+  {% if errors %}
+  <div class="alert alert-danger" role="alert">
+    {{ icon("alert", "size-5 shrink-0") }}
+    <p class="flex-1">That reading wasn't saved - please check the highlighted values in <a href="#quick-log" class="font-semibold underline">Log today</a>.</p>
+  </div>
+  {% endif %}
+
+  {% if profile and profile.activity_suspended %}{{ hm.suspended_card(profile, minor) }}{% endif %}
+
+  {# ---------------------------------------------------------------- today tiles #}
+  <section class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3" aria-label="Today at a glance">
+
+    {# bedtime #}
+    <article class="relative isolate overflow-hidden rounded-[28px] bg-gradient-to-br from-[#16163a] via-[#1d1747] to-[#0b0b14] p-6 text-white shadow-xl shadow-indigo/20 ring-1 ring-white/10 animate-fade-up"
+             data-component="bedtime" data-bedtime-at="{{ sleep.bedtime_at.isoformat() }}" data-wake-at="{{ sleep.wake_at.isoformat() }}"
+             data-day-start="{{ sleep.day_start.isoformat() }}" data-state="{{ sleep.state }}">
+      <div aria-hidden="true" class="hp-glow pointer-events-none absolute -right-14 -top-16 -z-10 size-48 rounded-full bg-indigo/50 blur-3xl"></div>
+      <div aria-hidden="true" class="pointer-events-none absolute -bottom-20 -left-10 -z-10 size-40 rounded-full bg-violet/25 blur-3xl"></div>
+      <div class="flex items-center justify-between gap-3">
+        <p class="flex items-center gap-2 text-sm font-medium text-white/70">{{ icon("moon-star", "size-4") }} Bedtime</p>
+        <span class="rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-white/85" data-bedtime-state>{{ sleep.state_label }}</span>
+      </div>
+      <p class="mt-5 text-5xl font-semibold tracking-tight">{{ plan.bedtime.strftime('%H:%M') }}</p>
+      <p class="mt-1.5 text-[15px] font-medium text-white/80" data-bedtime-countdown aria-live="polite">{{ sleep.label }}</p>
+      <svg viewBox="0 0 100 4" preserveAspectRatio="none" class="mt-5 h-1.5 w-full" role="img" aria-label="{{ sleep.progress | round | int }}% of your waking day has passed">
+        <rect width="100" height="4" rx="2" class="fill-white/15"/>
+        <rect width="{{ sleep.progress }}" height="4" rx="2" class="fill-[#a5a3ff]" data-bedtime-progress/>
+      </svg>
+      <p class="mt-4 text-xs leading-relaxed text-white/60">{{ plan.need_label }} of sleep suits your age · wake {{ plan.wake_time.strftime('%H:%M') }}{% if not reminders_on %} · reminders off{% endif %}</p>
+      <a href="/me/health/profile#sleep" class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-white/85 hover:text-white">Adjust wake time {{ icon("chevron-right", "size-3.5") }}</a>
+    </article>
+
+    {# body metrics #}
+    <article class="card flex flex-col animate-fade-up">
+      <div class="flex items-center justify-between gap-3">
+        <p class="flex items-center gap-2 text-sm font-medium muted">{{ icon("scale", "size-4") }} Body</p>
+        {% if latest %}<span class="text-xs muted">{{ 'Today' if latest.recorded_on == today else latest.recorded_on | date('%d %b') }}</span>{% endif %}
+      </div>
+      {% if latest %}
+        <div class="mt-4 flex flex-wrap items-end gap-x-2 gap-y-1">
+          <p class="text-5xl font-semibold tracking-tight">{{ fmt(latest.weight_kg) }}</p>
+          <p class="mb-1.5 text-lg font-medium text-zinc-400 dark:text-zinc-500">kg</p>
+          {% if delta %}<span class="badge badge-zinc mb-2 ml-auto" title="Change since {{ delta.since | date('%d %b') }}">{{ delta.label }}</span>{% endif %}
+        </div>
+        <p class="mt-2 text-sm"><span class="font-semibold">BMI {{ '%.1f' | format(latest.bmi) }}</span>
+          {% if category %}<span class="muted"> · {{ category.label }}</span>{% endif %}</p>
+        {{ hm.bmi_gauge(gauge) }}
+        {% if minor %}<p class="mt-3 text-xs muted">For teens, BMI is read against age-and-sex growth charts - your doctor can explain yours.</p>{% endif %}
+        {{ hm.sparkline(spark) }}
+        <a href="/me/health" class="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">Trends &amp; history {{ icon("chevron-right", "size-4") }}</a>
+      {% else %}
+        <div class="flex flex-1 flex-col justify-center py-6">
+          <p class="text-xl font-semibold tracking-tight">No readings yet</p>
+          <p class="mt-1 text-sm muted">Log your height and weight below - it takes ten seconds and unlocks your trend.</p>
+        </div>
+      {% endif %}
+    </article>
+
+    {# stress #}
+    <article class="card flex flex-col gap-5 animate-fade-up md:col-span-2 md:flex-row md:items-center md:justify-between xl:col-span-1 xl:flex-col xl:items-stretch xl:justify-start">
+      <div class="min-w-0">
+        <p class="flex items-center gap-2 text-sm font-medium muted">{{ icon("smile", "size-4") }} Stress</p>
+        {% if last_check %}
+          {% set sl = last_check.stress_level.value %}
+          <div class="mt-4 flex items-end gap-3">
+            <p class="text-4xl font-semibold tracking-tight">{{ sl | humanize }}</p>
+            <p class="mb-1 text-sm muted tabular-nums">{{ last_check.pss_score }}/16</p>
+          </div>
+          <div class="mt-3 flex items-center gap-2 text-sm">{{ ui.status(last_check.stress_level) }}<span class="muted">{{ last_check.created_at | timeago }}</span></div>
+          <p class="mt-3 max-w-md text-sm muted">{{ 'Protect your sleep and keep training light today.' if sl == 'high' else ('A short walk and box breathing can take the edge off.' if sl == 'moderate' else 'Keep doing what works for you.') }}</p>
+        {% else %}
+          <p class="mt-4 text-xl font-semibold tracking-tight">How are you, really?</p>
+          <p class="mt-1 max-w-md text-sm muted">A one-minute check-in measures stress (PSS-4) and screens for warning symptoms. An optional selfie adds a fatigue read-out.</p>
+        {% endif %}
+      </div>
+      {% if last_check %}
+      <div class="flex shrink-0 flex-wrap gap-2 xl:mt-auto">
+        <a href="/me/wellness" class="btn btn-secondary btn-sm">{{ icon("refresh", "size-4") }} New check-in</a>
+        <a href="/me/wellness/{{ last_check.id }}" class="btn btn-ghost btn-sm">See result</a>
+      </div>
+      {% else %}
+      <div class="shrink-0 xl:mt-auto"><a href="/me/wellness" class="btn btn-secondary w-full">{{ icon("smile", "size-4") }} Start check-in</a></div>
+      {% endif %}
+    </article>
+  </section>
+
+  {# ---------------------------------------------------------------- main grid #}
+  <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+    <div class="min-w-0 space-y-6 lg:col-span-2">
+
+      <section id="quick-log" class="card scroll-mt-24 animate-fade-up" aria-labelledby="quick-log-title">
+        <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 id="quick-log-title" class="section-title">Log today</h2>
+            <p class="text-sm muted">{{ 'Already logged today - saving again updates it.' if logged_today else 'Pre-filled with your last values. Adjust and save.' }}</p>
+          </div>
+          <span class="chip">{{ icon("calendar", "size-3.5") }} {{ today | date('%a %d %b') }}</span>
+        </div>
+        {{ hm.metric_form(form, errors, hint, next="/me", minor=minor) }}
+      </section>
+
+      <section class="card animate-fade-up" aria-labelledby="tasks-title">
+        <div class="flex items-center justify-between gap-3">
+          <h2 id="tasks-title" class="section-title">Up next</h2>
+          <a href="/tasks" class="text-sm font-semibold text-accent hover:underline">All tasks</a>
+        </div>
+        {% if tasks %}
+        <ul class="mt-3 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+          {% for t in tasks %}
+          {% set k = t.kind.value %}
+          {% set when = t.due_at or t.remind_at %}
+          <li class="flex items-center gap-3 py-3">
+            <span class="grid size-10 shrink-0 place-items-center rounded-2xl {{ {'workout': 'bg-accent/10 text-accent', 'reminder': 'bg-warn/15 text-[#b45309] dark:text-[#fbbf24]', 'event': 'bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]', 'bedtime': 'bg-indigo/15 text-indigo'}.get(k, 'bg-zinc-500/10 text-zinc-600 dark:text-zinc-300') }}">
+              {{ icon({'workout': 'dumbbell', 'reminder': 'bell', 'event': 'calendar', 'bedtime': 'moon'}.get(k, 'check-circle'), "size-[18px]") }}
+            </span>
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium">{{ t.title }}</p>
+              <p class="text-xs muted">{{ k | humanize }}{% if when %} · <time datetime="{{ when.isoformat() }}">{{ when | dt("%a %d %b, %H:%M") }}</time>{% else %} · Anytime{% endif %}</p>
+            </div>
+            {% if when and when < now %}<span class="badge badge-amber">Overdue</span>{% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <div class="mt-4 flex items-center gap-3 rounded-2xl bg-zinc-100/80 p-4 text-sm dark:bg-white/[0.04]">
+          {{ icon("check-circle", "size-5 shrink-0 text-ok") }}
+          <p>Nothing scheduled. <a href="/tasks" class="font-semibold text-accent hover:underline">Plan a workout</a> or ask the AI assistant to remind you.</p>
+        </div>
+        {% endif %}
+      </section>
+
+      {# shortcuts #}
+      <nav class="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Shortcuts">
+        {% for href, ico, label, sub in [
+            ("/me/coach", "bolt", "Coach", "Your plan"),
+            ("/me/videos", "play", "Videos", "Follow along"),
+            ("/calendar", "calendar", "Calendar", "Tasks & events"),
+            ("/chat", "chat", "Chat", "Trainers & staff"),
+        ] %}
+        <a href="{{ href }}" class="card-flat card-hover group flex flex-col gap-3 !p-4 focus-visible:ring-2 focus-visible:ring-accent/60">
+          <span class="grid size-10 place-items-center rounded-2xl bg-accent/10 text-accent transition group-hover:bg-accent group-hover:text-white">{{ icon(ico, "size-5") }}</span>
+          <span><span class="block text-sm font-semibold">{{ label }}</span><span class="block text-xs muted">{{ sub }}</span></span>
+        </a>
+        {% endfor %}
+      </nav>
+    </div>
+
+    <div class="min-w-0 space-y-6">
+      {# membership #}
+      <section class="card animate-fade-up" aria-labelledby="membership-title">
+        <div class="flex items-center justify-between gap-3">
+          <h2 id="membership-title" class="section-title">Membership</h2>
+          {% if subs %}<a href="/me/subscriptions" class="text-sm font-semibold text-accent hover:underline">Manage</a>{% endif %}
+        </div>
+        {% if subs %}
+          <div class="mt-4 space-y-3">
+          {% for s in subs[:3] %}
+            <div class="rounded-2xl bg-zinc-100/80 p-4 dark:bg-white/[0.05]">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <p class="truncate font-semibold">{{ s.gym.name }}</p>
+                  <p class="truncate text-sm muted">{{ s.plan.name }}</p>
+                </div>
+                {{ ui.status(s.status) }}
+              </div>
+              <div class="mt-3 flex flex-wrap gap-1.5">
+                <span class="badge badge-blue">{{ icon("play", "size-3") }}Videos</span>
+                {% if s.plan.includes_ai %}<span class="badge badge-violet">{{ icon("sparkles", "size-3") }}AI coach</span>{% endif %}
+                {% if s.plan.includes_trainer %}<span class="badge badge-green">{{ icon("user", "size-3") }}Trainer</span>{% endif %}
+                <span class="badge badge-zinc">{{ {'online': 'Online', 'offline': 'In the gym', 'combo': 'Online + gym'}.get(s.plan.mode.value, s.plan.mode.value | humanize) }}</span>
+              </div>
+              <p class="mt-3 text-xs muted">{% if s.ends_on %}Active until {{ s.ends_on | date }}{% else %}No end date{% endif %}{% if s.branch %} · {{ s.branch.name }}{% endif %}</p>
+            </div>
+          {% endfor %}
+          </div>
+        {% else %}
+          <div class="mt-4 rounded-2xl bg-gradient-to-br from-accent/10 via-indigo/10 to-violet/10 p-5">
+            <span class="grid size-11 place-items-center rounded-2xl bg-white text-accent shadow-sm dark:bg-white/10">{{ icon("map-pin", "size-5") }}</span>
+            <p class="mt-4 font-semibold">Find your gym</p>
+            <p class="mt-1 text-sm muted">Join a verified gym to unlock workout videos, AI coaching and real trainers - online, in person or both.</p>
+            <a href="/gyms" class="btn btn-primary mt-4 w-full">{{ icon("search", "size-4") }} Browse gyms</a>
+          </div>
+        {% endif %}
+        {% if gym_slots %}<div class="mt-4">{% with slots=gym_slots, slots_link=True %}{% include "customer/_gym_slots.html" %}{% endwith %}</div>{% endif %}
+      </section>
+
+      {{ hm.alert_list(alerts, next="/me", title="Health alerts", compact=True) }}
+      {{ hm.ac_card(ac, details=False) }}
+    </div>
+  </div>
+</div>
+{% endblock %}

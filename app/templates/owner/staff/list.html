@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_macros.html" as sm with context %}
+{% block title %}Staff{% endblock %}
+{% block content %}
+{% call ui.page_header("Your team", "Trainers, front desk, accountants and everyone else across your gyms. New people become active once they link their own IronPulse account and pass verification.", eyebrow="Staff") %}
+  {{ sm.gym_action(gyms, "Add staff", "staff/new") }}
+{% endcall %}
+
+{{ sm.subnav("team") }}
+
+<section class="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4 animate-fade-up" aria-label="Team summary">
+  {{ ui.stat("Active", stats.active, "Approved and working", "check-circle", "green") }}
+  {{ ui.stat("Awaiting approval", stats.pending, "Invited or being verified", "clock", "amber") }}
+  {{ ui.stat("Trainers", stats.trainers, "Active and pending", "dumbbell", "violet") }}
+  <div class="card-flat">
+    <div class="flex items-center justify-between">
+      <p class="text-sm muted">Monthly payroll</p>
+      <span class="grid size-8 place-items-center rounded-xl badge-blue">{{ icon("banknotes", "size-4") }}</span>
+    </div>
+    {% if payroll %}
+      {% for currency, total in payroll[:2] %}
+        <p class="{{ 'mt-2 text-xl font-semibold tracking-tight tabular-nums sm:text-3xl' if loop.first else 'mt-1 text-sm font-semibold tabular-nums' }} [overflow-wrap:anywhere]">{{ total | money(currency) }}</p>
+      {% endfor %}
+      {% if payroll | length > 2 %}<p class="mt-1 text-xs muted">+ {{ payroll | length - 2 }} more currencies</p>{% endif %}
+    {% else %}
+      <p class="kpi mt-2">—</p>
+    {% endif %}
+    <p class="mt-1 text-xs muted">Active staff, gross</p>
+  </div>
+</section>
+
+<div class="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+  <nav class="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Filter by status">
+    <div class="tabs whitespace-nowrap">
+      {% for t in status_tabs %}
+        <a href="{{ t.url }}" class="tab {{ 'tab-active' if t.active }}"{% if t.active %} aria-current="page"{% endif %}>{{ t.label }}{% if t.count %} <span class="ml-1 text-xs tabular-nums opacity-60">{{ t.count }}</span>{% endif %}</a>
+      {% endfor %}
+    </div>
+  </nav>
+  <form method="get" action="/owner/staff" class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto_auto] sm:items-center" role="search">
+    {% if filters.status %}<input type="hidden" name="status" value="{{ filters.status }}">{% endif %}
+    <label class="relative block">
+      <span class="sr-only">Search staff</span>
+      <span class="pointer-events-none absolute inset-y-0 left-3.5 grid place-items-center text-zinc-400 dark:text-zinc-500">{{ icon("search", "size-4") }}</span>
+      <input type="search" name="q" value="{{ filters.q }}" placeholder="Search name or e-mail" class="input !py-2.5 pl-10" maxlength="80">
+    </label>
+    {% if gyms | length > 1 %}
+    <label><span class="sr-only">Gym</span>
+      <select name="gym" class="input !py-2.5" data-autosubmit>
+        <option value="">All gyms</option>
+        {% for g in gyms %}<option value="{{ g.id }}" {{ 'selected' if filters.gym == g.id }}>{{ g.name }}</option>{% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <label><span class="sr-only">Role</span>
+      <select name="role" class="input !py-2.5" data-autosubmit>
+        <option value="">All roles</option>
+        {% for v, l in S.ROLE_LABELS.items() %}<option value="{{ v }}" {{ 'selected' if filters.role == v }}>{{ l }}</option>{% endfor %}
+      </select>
+    </label>
+    <button class="btn btn-secondary">{{ icon("sliders", "size-4") }} Filter</button>
+  </form>
+</div>
+
+{% if not gyms %}
+  {{ ui.empty("Create a gym to start building your team", "Staff belong to a gym brand. Once your gym exists you can invite trainers, receptionists, accountants and anyone else - online or at verified branches.", "building", "Create a gym", "/owner/gyms/new") }}
+{% elif not employees %}
+  {% if filters.q or filters.gym or filters.role or filters.status %}
+    {{ ui.empty("Nobody matches these filters", "Try a different search, or clear the filters to see your whole team.", "search", "Clear filters", "/owner/staff") }}
+  {% else %}
+    <div class="card flex flex-col items-center px-6 py-14 text-center">
+      <span class="grid size-14 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("users", "size-7") }}</span>
+      <h3 class="mt-4 text-lg font-semibold">No staff yet</h3>
+      <p class="mt-1 max-w-md text-sm muted">Invite your first trainer or team member. They'll link their own account, add a photo and a verified ID - then they're approved automatically.</p>
+      <div class="mt-6 flex flex-wrap justify-center gap-2">{{ sm.gym_action(gyms, "Add staff", "staff/new") }}<a href="/owner/jobs" class="btn btn-secondary">{{ icon("briefcase", "size-4") }} Post a job</a></div>
+    </div>
+  {% endif %}
+{% else %}
+  <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    {% for e in employees %}
+    {% set sh = shift_stats.get(e.id) %}
+    <li class="animate-fade-up">
+      <a href="/owner/staff/{{ e.id }}" class="card card-hover group flex h-full flex-col gap-5 !p-5 focus-visible:outline-offset-4">
+        <div class="flex items-start gap-4">
+          {{ sm.photo(e.photo_key, e.display_name, "size-14", "text-base") }}
+          <div class="min-w-0 flex-1">
+            <p class="truncate font-semibold group-hover:text-accent">{{ e.display_name }}</p>
+            <p class="truncate text-sm muted">{{ e.role_title or S.ROLE_LABELS[e.role.value] }}</p>
+            <div class="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              {{ ui.status(e.status) }}
+              <span class="flex min-w-0 items-center gap-1 text-xs muted">{{ icon("building", "size-3.5 shrink-0") }}<span class="truncate">{{ e.gym.name }}</span></span>
+            </div>
+          </div>
+        </div>
+        <div class="mt-auto flex flex-wrap items-center gap-1.5 text-xs">
+          <span class="chip">{{ icon(S.WORK_MODE_ICONS[e.work_mode.value], "size-3.5") }}{{ S.WORK_MODE_LABELS[e.work_mode.value] }}</span>
+          {% if sh %}<span class="chip">{{ icon("clock", "size-3.5") }}{{ S.fmt_hours(sh[1]) }} h/wk</span>{% endif %}
+          {% if e.is_trainer %}<span class="chip">{{ icon("users", "size-3.5") }}{{ client_counts.get(e.id, 0) }} client{{ 's' if client_counts.get(e.id, 0) != 1 }}</span>{% endif %}
+          <span class="ml-auto text-sm font-semibold tabular-nums">{{ e.monthly_salary | money(e.currency) }}<span class="text-xs font-normal muted">/mo</span></span>
+        </div>
+        {% if e.status.value in ("invited", "pending_verification") %}
+          <p class="-mt-2 flex items-start gap-1.5 rounded-xl bg-warn/10 px-3 py-2 text-xs text-[#92400e] [overflow-wrap:anywhere] dark:text-[#fcd34d]">
+            {{ icon("clock", "size-3.5 mt-px shrink-0") }}
+            {% if e.status.value == "invited" %}Waiting for {{ e.invite_email }} to accept the invite{% else %}{{ e.verification_summary or "Verification in progress" }}{% endif %}
+          </p>
+        {% endif %}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if page.pages > 1 %}
+    {{ ui.pager(page, params=page_params, path="/owner/staff", noun="staff members") }}
+  {% else %}
+    <p class="mt-6 text-center text-xs muted">{{ page.total }} staff member{{ 's' if page.total != 1 }} shown</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

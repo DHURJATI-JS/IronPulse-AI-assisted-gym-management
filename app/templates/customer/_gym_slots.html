@@ -1,0 +1,13 @@
+{#- Gyms per person (app/services/gym_limits.py): "Online gyms N/3 · In-person gym N/1".
+    Needs ``slots`` (gym_limits.GymSlots); ``slots_link`` (optional) adds a "My memberships" link. -#}
+{% if slots %}
+{% set online_full = slots.online_used >= slots.online_max %}
+{% set in_person_full = slots.in_person_used >= slots.in_person_max %}
+<div class="card-flat flex flex-wrap items-center gap-x-3 gap-y-2 text-sm" data-gym-slots aria-label="Your gym memberships: {{ slots.summary }}">
+  <span class="flex items-center gap-1.5 font-medium">{{ icon("layers", "size-4 text-accent") }}Your gyms</span>
+  <span class="badge {{ 'badge-amber' if online_full else 'badge-zinc' }}"{% if slots.online %} title="{{ slots.online | map(attribute='label') | join(', ') }}"{% endif %} data-slots-online>Online gyms {{ slots.online_used }}/{{ slots.online_max }}</span>
+  <span class="badge {{ 'badge-amber' if in_person_full else 'badge-zinc' }}"{% if slots.in_person %} title="{{ slots.in_person | map(attribute='label') | join(', ') }}"{% endif %} data-slots-in-person>In-person gym{{ 's' if slots.in_person_max != 1 }} {{ slots.in_person_used }}/{{ slots.in_person_max }}</span>
+  <span class="text-xs muted">One person can join up to {{ slots.online_max }} gym{{ 's' if slots.online_max != 1 }} online and {{ slots.in_person_max }} in person (a combo plan uses both).</span>
+  {% if slots_link %}<a href="/me/subscriptions" class="text-xs font-medium text-accent hover:underline">My memberships</a>{% endif %}
+</div>
+{% endif %}

@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "customer/health/_macros.html" as hm with context %}
+{% block title %}Health{% endblock %}
+{% block content %}
+{% call ui.page_header("Daily metrics", "One reading a day keeps the trend honest. We pre-fill your last values - adjust and save. Unusual changes are double-checked with you before anything happens.", eyebrow="Health") %}
+  {{ ui.ai_chip() }}
+  <a href="/me/health/profile" class="btn btn-secondary">{{ icon("sliders", "size-4") }} Health profile</a>
+  <a href="/me/wellness" class="btn btn-secondary">{{ icon("smile", "size-4") }} Stress check-in</a>
+{% endcall %}
+
+{% if profile and profile.activity_suspended %}<div class="mb-6">{{ hm.suspended_card(profile, minor) }}</div>{% endif %}
+
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+  {# ================================================================ left column #}
+  <div class="min-w-0 space-y-6 lg:col-span-5">
+
+    {% if scan %}
+    <section class="card ring-accent/30 dark:ring-accent/40 animate-fade-up" aria-labelledby="scan-result-title">
+      <div class="flex items-start gap-3">
+        <span class="grid size-10 shrink-0 place-items-center rounded-2xl {{ 'bg-ok/15 text-ok' if scan.found else 'bg-warn/15 text-warn' }}">{{ icon("camera", "size-5") }}</span>
+        <div class="min-w-0 flex-1">
+          <h2 id="scan-result-title" class="section-title">{{ 'Read from your photo' if scan.found else "We couldn't read the numbers" }}</h2>
+          {% if scan.found %}
+            <p class="mt-1 text-sm muted">Check the values below, then save. Nothing is saved until you do - and the photo itself is never stored.</p>
+          {% else %}
+            <p class="mt-1 text-sm muted">Try a sharper, straight-on photo of the display (no glare), or type the values in.</p>
+          {% endif %}
+        </div>
+      </div>
+      {% if scan.ai_refusal %}
+      <div class="alert alert-warning mt-4" role="status" data-scan-ai-refusal="{{ scan.ai_refusal_code }}">
+        {{ icon("alert", "size-5 shrink-0") }}
+        <p><span class="font-semibold">AI vision check skipped.</span> {{ scan.ai_refusal }} {{ "The values below come from the OCR engines only." if scan.found else "You can type the values in meanwhile." }}</p>
+      </div>
+      {% endif %}
+      {% if scan.found %}
+      <dl class="mt-4 grid gap-3 min-[420px]:grid-cols-2">
+        {% for kind, value, unit, engines in [("Weight", scan.weight_kg, "kg", scan.weight_engines), ("Height", scan.height_cm, "cm", scan.height_engines)] %}
+        <div class="rounded-2xl bg-zinc-100/80 p-4 dark:bg-white/[0.05]">
+          <dt class="text-xs font-medium muted">{{ kind }}</dt>
+          {% if value is not none %}
+            <dd class="mt-1 text-2xl font-semibold tracking-tight">{{ fmt(value) }} <span class="text-base font-medium muted">{{ unit }}</span></dd>
+            <dd class="mt-2">
+              {% if engines | length >= 2 %}<span class="badge badge-green">{{ icon("check", "size-3") }}{{ engines | length }} engines agree</span>
+              {% else %}<span class="badge badge-amber">{{ icon("alert", "size-3") }}1 engine - please check</span>{% endif %}
+            </dd>
+            <dd class="mt-2 text-xs muted">{{ scan.engine_labels(engines) | join(", ") }}</dd>
+          {% else %}
+            <dd class="mt-1 text-sm muted">Not found</dd>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </dl>
+      {% endif %}
+      {% if scan.readings %}
+      <details class="group mt-4">
+        <summary class="flex cursor-pointer list-none items-center gap-1 text-sm font-semibold text-accent">What each engine read {{ icon("chevron-down", "size-4 transition group-open:rotate-180") }}</summary>
+        <ul class="mt-3 divide-y divide-black/[0.05] text-sm dark:divide-white/[0.06]">
+          {% for r in scan.readings %}
+          <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+            <span class="font-medium">{{ r.label }}</span>
+            <span class="tabular-nums muted">{{ (fmt(r.weight_kg) ~ ' kg') if r.weight_kg is not none else '–' }} · {{ (fmt(r.height_cm) ~ ' cm') if r.height_cm is not none else '–' }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </details>
+      {% elif not scan.ocr_available %}
+      <p class="mt-3 text-xs muted">The OCR engines are not available on this server right now.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <section id="log" class="card scroll-mt-24 animate-fade-up" aria-labelledby="log-title">
+      <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 id="log-title" class="section-title">Log today</h2>
+          <p class="text-sm muted">{{ 'Already logged today - saving again updates it.' if logged_today else 'Height and weight, once a day.' }}</p>
+        </div>
+        <span class="chip">{{ icon("calendar", "size-3.5") }} {{ today | date('%a %d %b') }}</span>
+      </div>
+      {{ hm.metric_form(form, errors, hint, next="/me/health", minor=minor, source=source) }}
+    </section>
+
+    <section class="card animate-fade-up" aria-labelledby="scan-title">
+      <div class="flex items-start gap-3">
+        <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-violet/12 text-violet">{{ icon("camera", "size-5") }}</span>
+        <div>
+          <h2 id="scan-title" class="section-title">Scan a scale or report</h2>
+          <p class="mt-1 text-sm muted">Snap the display of your weighing scale or a medical report. Several OCR engines{% if ai_status.available %} and the AI vision model{% endif %} read it and cross-check each other.</p>
+        </div>
+      </div>
+      <form method="post" action="/me/health/scan" enctype="multipart/form-data" class="mt-5 space-y-4" data-component="photo-preview">
+        {{ ui.csrf() }}
+        <div>
+          <label class="label" for="f-photo">Photo</label>
+          <input id="f-photo" name="photo" type="file" accept="image/*" capture="environment" required
+                 class="block w-full text-sm muted {{ 'rounded-2xl ring-2 ring-bad/60' if scan_error }}"
+                 {% if scan_error %}aria-invalid="true" aria-describedby="e-photo"{% else %}aria-describedby="h-photo"{% endif %}>
+          {% if scan_error %}<p class="field-error" id="e-photo">{{ scan_error }}</p>
+          {% else %}<p class="help" id="h-photo">JPG, PNG or WEBP up to {{ app.max_upload_mb }} MB. Processed in memory and never stored.</p>{% endif %}
+        </div>
+        <div class="flex items-center gap-3 rounded-2xl bg-zinc-100/80 p-3 dark:bg-white/[0.05]" data-preview hidden>
+          <img alt="Selected photo preview" class="size-16 rounded-xl object-cover" data-preview-img>
+          <p class="min-w-0 flex-1 truncate text-xs muted" data-preview-name></p>
+          <button type="button" class="btn btn-ghost btn-sm" data-preview-clear>{{ icon("x", "size-4") }} Remove</button>
+        </div>
+        <button type="submit" class="btn btn-secondary w-full">{{ icon("search", "size-4") }} Read the numbers</button>
+      </form>
+    </section>
+
+    {{ hm.ac_card(ac) }}
+    {% include "partials/gear_card.html" %}
+  </div>
+
+  {# ================================================================ right column #}
+  <div class="min-w-0 space-y-6 lg:col-span-7">
+    <section class="grid grid-cols-3 gap-3 sm:gap-4" aria-label="Summary">
+      <div class="card-flat min-w-0 !p-4 sm:!p-5">
+        <p class="text-xs muted sm:text-sm">Weight</p>
+        <p class="mt-1.5 text-xl font-semibold tracking-tight sm:mt-2 sm:text-3xl">{% if latest %}{{ fmt(latest.weight_kg) }}<span class="ml-0.5 text-xs font-medium muted sm:ml-1 sm:text-base">kg</span>{% else %}–{% endif %}</p>
+        <p class="mt-1 truncate text-[11px] muted sm:text-xs">{{ ('Logged ' ~ (latest.recorded_on | date('%d %b'))) if latest else 'No reading yet' }}</p>
+      </div>
+      <div class="card-flat min-w-0 !p-4 sm:!p-5">
+        <p class="text-xs muted sm:text-sm">BMI</p>
+        <p class="mt-1.5 text-xl font-semibold tracking-tight sm:mt-2 sm:text-3xl">{{ ('%.1f' | format(latest.bmi)) if latest else '–' }}</p>
+        <p class="mt-1 truncate text-[11px] muted sm:text-xs">{{ category.label if category else 'Needs a reading' }}</p>
+      </div>
+      <div class="card-flat min-w-0 !p-4 sm:!p-5">
+        <p class="truncate text-xs muted sm:text-sm">30-day change</p>
+        <p class="mt-1.5 whitespace-nowrap text-xl font-semibold tracking-tight sm:mt-2 sm:text-3xl">{{ change.label if change else '–' }}</p>
+        <p class="mt-1 truncate text-[11px] muted sm:text-xs">{{ ('since ' ~ (change.since | date('%d %b'))) if change else 'Needs two readings' }}</p>
+      </div>
+    </section>
+
+    <section class="card animate-fade-up" aria-labelledby="trend-title">
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 id="trend-title" class="section-title">Weight trend</h2>
+          <p class="text-sm muted">{{ ('Last ' ~ chart.points | length ~ ' confirmed readings') if chart else 'Your trend appears after two readings' }}</p>
+        </div>
+        {% if chart %}
+        <div class="text-right">
+          <p class="text-2xl font-semibold tracking-tight">{{ chart.latest }} <span class="text-sm font-medium muted">kg</span></p>
+          <p class="text-xs muted">range {{ chart.min }}–{{ chart.max }} kg</p>
+        </div>
+        {% endif %}
+      </div>
+      {% if chart %}
+        {{ hm.trend_chart(chart) }}
+      {% else %}
+        <div class="mt-6 grid h-40 place-items-center rounded-2xl border border-dashed border-black/10 text-center text-sm muted dark:border-white/10">
+          <p class="max-w-xs px-6">{{ icon("trending-up", "mx-auto mb-2 size-6 text-accent") }}Log on two different days to see how your weight moves over time.</p>
+        </div>
+      {% endif %}
+      {% if latest and latest.ai_note %}
+      <div class="mt-6 flex gap-3 rounded-2xl bg-zinc-100/80 p-4 dark:bg-white/[0.05]">
+        <span class="grid size-8 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-accent to-violet text-white">{{ icon("sparkles", "size-4") }}</span>
+        <div class="min-w-0">
+          <p class="text-xs font-semibold uppercase tracking-wider muted">Note on your last reading</p>
+          <p class="mt-1 text-sm leading-relaxed">{{ latest.ai_note }}</p>
+        </div>
+      </div>
+      {% endif %}
+    </section>
+
+    {{ hm.alert_list(alerts, next="/me/health", more_href="/me/health/alerts" if alerts_more else None) }}
+
+    <section id="history" class="scroll-mt-24" aria-labelledby="entries-title">
+      <div class="mb-3 flex items-center justify-between gap-3">
+        <h2 id="entries-title" class="section-title">History</h2>
+        <span class="text-xs muted">{{ "{:,}".format(history.total) }} reading{{ 's' if history.total != 1 }}{% if history.pages > 1 %} · page {{ history.page }} of {{ history.pages }}{% endif %}</span>
+      </div>
+      {% if history.items %}
+      <div class="table-wrap">
+        <table class="table">
+          <caption class="sr-only">Daily height and weight readings, newest first</caption>
+          <thead><tr><th scope="col">Date</th><th scope="col">Height</th><th scope="col">Weight</th><th scope="col">BMI</th><th scope="col">Status</th></tr></thead>
+          <tbody>
+            {% for e in history.items %}
+            {% set codes = e.anomaly_reasons | map(attribute="code") | list if e.anomaly_reasons else [] %}
+            <tr>
+              <td class="whitespace-nowrap font-medium">{{ e.recorded_on | date('%d %b %Y') }}{% if e.source == 'ocr' %} <span class="badge badge-zinc ml-1">{{ icon("camera", "size-3") }}scan</span>{% endif %}</td>
+              <td class="whitespace-nowrap tabular-nums">{{ fmt(e.height_cm) }} cm{% if 'height_invalid' in codes %} <span class="badge badge-amber ml-1" title="Logged as invalid - your usual height was used for BMI">ignored</span>{% endif %}</td>
+              <td class="whitespace-nowrap tabular-nums">{{ fmt(e.weight_kg) }} kg</td>
+              <td class="tabular-nums">{{ '%.1f' | format(e.bmi) }}</td>
+              <td>
+                <div class="flex flex-wrap gap-1">
+                  {% if e.anomaly_level.value == 'none' %}<span class="badge badge-green whitespace-nowrap"><span class="dot bg-current opacity-70"></span>Normal</span>{% else %}{{ ui.status(e.anomaly_level) }}{% endif %}
+                  {% if not e.confirmed %}<span class="badge badge-amber whitespace-nowrap">Unconfirmed</span>{% endif %}
+                </div>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {{ ui.pager(history, url=history_url, label="History pages") }}
+      {% else %}
+        {{ ui.empty("No readings yet", "Your first reading starts the trend. Log today's height and weight - it takes ten seconds.", "scale") }}
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

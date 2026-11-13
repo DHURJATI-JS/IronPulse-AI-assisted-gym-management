@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/customers/_macros.html" as om with context %}
+{% block title %}Members{% endblock %}
+{% block content %}
+{% call ui.page_header("Members", "Everyone with a membership at your gyms or registered by you - health flags, guardians and safety pauses at a glance.", eyebrow="Members") %}
+  <a href="/owner/customers/new#ai-intake" class="btn btn-secondary">{{ icon("sparkles", "size-4") }} AI intake</a>
+  <a href="/owner/customers/new" class="btn btn-primary">{{ icon("plus", "size-4") }} Register member</a>
+{% endcall %}
+
+{{ om.subnav("members", open_reports) }}
+
+<section class="mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4 animate-fade-up" aria-label="Members summary">
+  {{ ui.stat("Members", stats.total, "Across your gyms", "user-group", "blue") }}
+  {{ ui.stat("Active memberships", stats.active, "Plan valid today", "check-circle", "green") }}
+  {{ ui.stat("Under 18", stats.minors, "Guardian on file required", "shield", "violet") }}
+  {{ ui.stat("Paused for safety", stats.paused, "Need your review" if stats.paused else "Nobody paused", "alert", "red" if stats.paused else "zinc") }}
+</section>
+
+<div class="mb-6 space-y-4">
+  <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <nav class="no-scrollbar -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0" aria-label="Filter by membership">
+      <div class="tabs whitespace-nowrap">
+        {% for t in tabs %}<a href="{{ t.url }}" class="tab {{ 'tab-active' if t.active }}"{% if t.active %} aria-current="page"{% endif %}>{{ t.label }}</a>{% endfor %}
+      </div>
+    </nav>
+    <form method="get" action="/owner/customers" class="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center" role="search">
+      {% for k in ("status", "minors", "paused") %}{% if filters[k] %}<input type="hidden" name="{{ k }}" value="{{ filters[k] }}">{% endif %}{% endfor %}
+      <label class="relative block">
+        <span class="sr-only">Search members</span>
+        <span class="pointer-events-none absolute inset-y-0 left-3.5 grid place-items-center text-zinc-400 dark:text-zinc-500">{{ icon("search", "size-4") }}</span>
+        <input type="search" name="q" value="{{ filters.q }}" placeholder="Name, e-mail, phone or IP-000123" maxlength="80" class="input !py-2.5 pl-10">
+      </label>
+      <div class="grid grid-cols-2 gap-2 sm:flex">
+        {% if gyms | length > 1 %}
+        <label><span class="sr-only">Gym</span>
+          <select name="gym" class="input !py-2.5" data-autosubmit>
+            <option value="">All gyms</option>
+            {% for g in gyms %}<option value="{{ g.id }}" {{ 'selected' if filters.gym == g.id }}>{{ g.name }}</option>{% endfor %}
+          </select>
+        </label>
+        {% endif %}
+        <label><span class="sr-only">Health condition</span>
+          <select name="tag" class="input !py-2.5" data-autosubmit>
+            <option value="">Any health flag</option>
+            {% for value, label, n in tag_options %}<option value="{{ value }}" {{ 'selected' if filters.tag == value }}>{{ label }} ({{ n }})</option>{% endfor %}
+          </select>
+        </label>
+        <label><span class="sr-only">Sort</span>
+          <select name="sort" class="input !py-2.5" data-autosubmit>
+            <option value="" {{ 'selected' if not filters.sort }}>Newest first</option>
+            <option value="oldest" {{ 'selected' if filters.sort == 'oldest' }}>Oldest first</option>
+            <option value="name" {{ 'selected' if filters.sort == 'name' }}>Name A–Z</option>
+          </select>
+        </label>
+      </div>
+      <button class="btn btn-secondary">{{ icon("sliders", "size-4") }} Apply</button>
+    </form>
+  </div>
+  <div class="flex flex-wrap items-center gap-2 text-sm">
+    <span class="muted">Quick filters:</span>
+    <a href="{{ toggle_minors }}" class="chip transition hover:bg-zinc-900/10 dark:hover:bg-white/15 {{ '!bg-violet/15 !text-[#9333ea] dark:!text-[#d8a4ff]' if filters.minors }}" aria-pressed="{{ 'true' if filters.minors else 'false' }}">{{ icon("shield", "size-3.5") }} Under 18</a>
+    <a href="{{ toggle_paused }}" class="chip transition hover:bg-zinc-900/10 dark:hover:bg-white/15 {{ '!bg-bad/15 !text-[#d1281e] dark:!text-[#ff6b61]' if filters.paused }}" aria-pressed="{{ 'true' if filters.paused else 'false' }}">{{ icon("alert", "size-3.5") }} Paused for safety</a>
+    {% if has_filters %}<a href="/owner/customers" class="ml-auto text-sm font-medium text-accent hover:underline">Clear all</a>{% endif %}
+  </div>
+</div>
+
+{% if not rows %}
+  {% if has_filters %}
+    {{ ui.empty("No members match", "Try a different search or clear the filters to see everyone.", "search", "Clear filters", "/owner/customers") }}
+  {% elif not gyms %}
+    {{ ui.empty("Create your gym first", "Members join one of your gyms. Once your gym exists you can register members by hand or with the AI intake.", "building", "Create a gym", "/owner/gyms/new") }}
+  {% else %}
+    <div class="card flex flex-col items-center px-6 py-14 text-center animate-fade-up">
+      <span class="grid size-14 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("user-group", "size-7") }}</span>
+      <h2 class="mt-4 text-lg font-semibold">No members yet</h2>
+      <p class="mt-1 max-w-md text-sm muted">Members appear here when they buy a plan at one of your gyms - or register them yourself. Type a few sentences and the AI intake fills the form for you.</p>
+      <div class="mt-6 flex flex-wrap justify-center gap-2">
+        <a href="/owner/customers/new" class="btn btn-primary">{{ icon("plus", "size-4") }} Register member</a>
+        <a href="/owner/customers/new#ai-intake" class="btn btn-secondary">{{ icon("sparkles", "size-4") }} Try the AI intake</a>
+      </div>
+    </div>
+  {% endif %}
+{% else %}
+<ul class="card divide-y divide-black/[0.05] !p-2 animate-fade-up dark:divide-white/[0.06]" aria-label="Members">
+  {% for r in rows %}
+  {% set u = r.user %}
+  {% set m = r.membership %}
+  <li>
+    <a href="/owner/customers/{{ u.id }}" class="group flex items-center gap-3 rounded-[20px] p-3 transition hover:bg-zinc-900/[0.03] sm:gap-4 dark:hover:bg-white/[0.04]">
+      <span class="relative shrink-0">
+        {{ ui.avatar(u.photo_key, u.display_name, "size-12", "text-sm") }}
+        {% if r.paused %}<span class="absolute -bottom-0.5 -right-0.5 grid size-5 place-items-center rounded-full bg-bad text-white ring-2 ring-white dark:ring-surface-dark" title="Paused for safety">{{ icon("alert", "size-3") }}</span>{% endif %}
+      </span>
+      <span class="min-w-0 flex-1">
+        <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span class="truncate font-semibold group-hover:text-accent">{{ u.display_name }}</span>
+          {% if r.minor %}{{ ui.badge("Under 18", "violet") }}{% endif %}
+          {% if r.paused %}{{ ui.badge("Paused", "red") }}{% endif %}
+          {% if not u.password_hash %}{{ ui.badge("Invite pending", "amber") }}{% endif %}
+        </span>
+        <span class="mt-0.5 block truncate text-xs muted">
+          <span class="font-mono">{{ r.member_id }}</span>{% if r.age is not none %} · {{ r.age }} yrs{% endif %}{% if u.email %} · {{ u.email }}{% elif u.phone %} · {{ u.phone }}{% endif %}
+        </span>
+        {% if r.health %}
+        <span class="mt-1.5 flex flex-wrap gap-1">
+          {% for h in r.health %}<span class="chip !px-2 !py-0.5 !text-[11px]">{{ h }}</span>{% endfor %}
+          {% if r.health_more %}<span class="chip !px-2 !py-0.5 !text-[11px]">+{{ r.health_more }}</span>{% endif %}
+        </span>
+        {% endif %}
+        <span class="mt-1.5 flex items-center gap-2 sm:hidden">{{ om.membership_badge(m.state) }}{% if m.plan %}<span class="truncate text-xs muted">{{ m.plan }}</span>{% endif %}</span>
+      </span>
+      <span class="hidden w-56 shrink-0 text-right sm:block">
+        <span class="flex justify-end">{{ om.membership_badge(m.state) }}</span>
+        {% if m.plan %}<span class="mt-1 block truncate text-xs muted">{{ m.plan }} · {{ m.gym }}</span>{% else %}<span class="mt-1 block text-xs muted">Registered {{ u.created_at | timeago }}</span>{% endif %}
+        {% if m.days_left is not none %}<span class="block text-[11px] tabular-nums {{ 'text-[#b45309] dark:text-[#fbbf24]' if m.days_left <= 7 else 'muted' }}">{{ 'Ends today' if m.days_left == 0 else ('Ends in ' ~ m.days_left ~ ' day' ~ ('s' if m.days_left != 1 else '')) }}</span>{% endif %}
+      </span>
+      <span class="shrink-0 text-zinc-300 transition group-hover:translate-x-0.5 group-hover:text-accent dark:text-zinc-600">{{ icon("chevron-right", "size-5") }}</span>
+    </a>
+  </li>
+  {% endfor %}
+</ul>
+{{ om.pager(page, pages, prev_url, next_url, total, "members") }}
+{% endif %}
+{% endblock %}

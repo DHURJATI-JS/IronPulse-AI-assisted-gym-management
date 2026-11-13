@@ -1,0 +1,118 @@
+{#- Trainer-facing safety (app/services/trainer_safety.py). Import WITH CONTEXT:
+    {% import "chat/_safety.html" as safety with context %}
+    panel(brief)            the collapsible safety panel (chat, staff client page, owner member page) - <details>, no JS;
+                            compact=True on pages that list the entries themselves (tags, what to avoid, exercises)
+    send_warning(check, …)  the send-time warning of a flagged staff / owner message (no-JS confirm step)
+    badge()                 the small safety badge of the conversation list
+    CSP-safe: no inline script, style or event handler; everything readable at phone width. -#}
+{% import "_ui.html" as ui with context %}
+
+{% macro badge() -%}
+<span class="safety-badge shrink-0" title="Safety notes on file" data-safety-badge>{{ icon("shield", "size-3") }}<span class="sr-only">Safety notes on file</span></span>
+{%- endmacro %}
+
+{% macro _list(title, items, ico) %}
+{% if items %}
+<div class="safety-block">
+  <p class="safety-block-title">{{ icon(ico, "size-3.5") }} {{ title }}</p>
+  <ul class="mt-1.5 flex flex-wrap gap-1.5">
+    {% for it in items %}
+      <li class="safety-chip">{{ it.name }}{% if it.label %}<span class="muted"> · {{ it.label }}</span>{% endif %}{% if it.notes %}<span class="muted"> · {{ it.notes }}</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro panel(s, id="safety-panel", open=False, compact=False) %}
+{% if s %}
+<details class="safety-panel safety-panel-{{ s.tone }}{{ ' safety-panel-compact' if compact }}" id="{{ id }}"{% if open %} open{% endif %} data-safety-panel data-level="{{ s.level }}">
+  <summary class="safety-summary">
+    <span class="safety-summary-icon">{{ icon("shield", "size-4") }}</span>
+    <span class="min-w-0 flex-1">
+      <span class="block truncate text-sm font-semibold">{{ s.headline }}</span>
+      <span class="block truncate text-xs muted">
+        {% if s.level == 'full' %}{% if s.last_updated %}Health info updated {{ s.last_updated | timeago }}{% else %}Nothing recorded yet{% endif %} · tap for details
+        {% elif s.level == 'withheld' %}Ask before training
+        {% else %}Check with their trainer{% endif %}
+      </span>
+    </span>
+    <span class="safety-chevron">{{ icon("chevron-down", "size-4") }}</span>
+  </summary>
+  <div class="safety-body">
+    {% if s.level == 'withheld' %}
+      <p class="text-sm">The member chose not to share health details - ask before training.</p>
+      <p class="mt-1 text-xs muted">They can change this in their account settings. The gym's admin team still sees their safety information.</p>
+    {% elif s.level == 'summary' %}
+      <p class="text-sm">This member has safety notes - check with their trainer.</p>
+      <p class="mt-1 text-xs muted">Only the gym's admin team and the member's assigned trainer see the details.</p>
+    {% else %}
+      {% if s.paused %}
+        <div class="alert alert-danger !py-2" role="alert">{{ icon("alert", "size-4 shrink-0") }}<p><span class="font-semibold">Gym activities are paused for safety</span>{% if s.paused_since %} (since {{ s.paused_since | timeago }}){% endif %}. Don't train {{ s.name }} until a gym admin reactivates them.</p></div>
+      {% endif %}
+      {% if s.tags or s.minor %}
+        <ul class="flex flex-wrap gap-1.5" aria-label="Safety tags">
+          {% for tag, label in s.tags %}<li class="safety-tag">{{ label }}</li>{% endfor %}
+        </ul>
+      {% elif not s.has_notes %}
+        <p class="text-sm">No conditions, allergies, medication or injuries recorded. Ask {{ s.name }} before the first session.</p>
+      {% endif %}
+      {% if s.avoid %}
+        <div class="safety-block">
+          <p class="safety-block-title">{{ icon("x-circle", "size-3.5") }} Avoid</p>
+          <ul class="mt-1.5 space-y-1 text-sm">{% for line in s.avoid %}<li>{{ line }}</li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+      {% if s.exercises %}
+        <div class="safety-block">
+          <p class="safety-block-title">{{ icon("dumbbell", "size-3.5") }} Library exercises to skip</p>
+          <ul class="mt-1.5 flex flex-wrap gap-1.5">
+            {% for name in s.exercises %}<li class="safety-chip">{{ name }}</li>{% endfor %}
+            {% if s.exercises_more %}<li class="safety-chip muted">+{{ s.exercises_more }} more</li>{% endif %}
+          </ul>
+        </div>
+      {% endif %}
+      {% if not compact %}
+      {{ _list("Conditions & injuries", s.conditions, "heart") }}
+      {{ _list("Allergies", s.allergies, "alert") }}
+      {{ _list("Medication", s.medications, "check-badge") }}
+      {% if s.lists_more or s.more %}<p class="mt-2 text-xs muted">More entries are recorded - see the member's full health profile.</p>{% endif %}
+      {% endif %}
+      {% if s.notes and not compact %}
+        <div class="safety-block">
+          <p class="safety-block-title">{{ icon("pencil", "size-3.5") }} Notes for trainers</p>
+          <p class="mt-1 whitespace-pre-line text-sm">{{ s.notes }}</p>
+        </div>
+      {% endif %}
+      {% if s.tips and not compact %}
+        <div class="safety-block">
+          <p class="safety-block-title">{{ icon("info", "size-3.5") }} Good to know</p>
+          <ul class="mt-1.5 list-disc space-y-1 pl-5 text-xs muted">{% for tip in s.tips %}<li>{{ tip }}</li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+      <p class="mt-3 text-[11px] muted">{% if s.last_updated %}Last updated {{ s.last_updated | dt("%d %b %Y, %H:%M") }} · {% endif %}Private to the gym's admin team and {{ s.name }}'s trainers.</p>
+    {% endif %}
+  </div>
+</details>
+{% endif %}
+{% endmacro %}
+
+{#- The no-JS confirm step: the draft stays in the composer; "Send anyway" re-posts it with confirm_safety=1. -#}
+{% macro send_warning(check, thread_id, draft) %}
+{% if check %}
+<div class="safety-warning" role="alert" id="safety-warning" data-safety-warning>
+  <p class="flex items-center gap-2 font-semibold">{{ icon("alert", "size-4 shrink-0") }} {{ check.title }}</p>
+  <p class="mt-1 text-sm">{{ check.message }}</p>
+  {% if check.lines %}<ul class="mt-1.5 list-disc space-y-0.5 pl-5 text-xs">{% for line in check.lines %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
+  <div class="mt-2.5 flex flex-wrap gap-2">
+    <a href="#chat-input" class="btn btn-secondary btn-sm">{{ icon("pencil", "size-3.5") }} Edit message</a>
+    <form method="post" action="/chat/{{ thread_id }}/messages" class="inline">
+      {{ ui.csrf() }}
+      <input type="hidden" name="body" value="{{ draft }}">
+      <input type="hidden" name="confirm_safety" value="1">
+      <button type="submit" class="btn btn-danger btn-sm">{{ icon("send", "size-3.5") }} Send anyway</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endmacro %}

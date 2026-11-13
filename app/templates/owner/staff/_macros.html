@@ -1,0 +1,139 @@
+{#- WP-C1 shared macros (staff, schedule, hiring). Import WITH CONTEXT:
+      {% import "owner/staff/_macros.html" as sm with context %}
+    The page context provides ``S`` (app.services.staffing) for labels.
+-#}
+{% import "_ui.html" as ui with context %}
+
+{% macro subnav(active) %}
+<nav class="tabs mb-8" aria-label="Team sections">
+  <a href="/owner/staff" class="tab {{ 'tab-active' if active == 'team' }}"{% if active == 'team' %} aria-current="page"{% endif %}>
+    <span class="inline-flex items-center gap-1.5">{{ icon("users", "size-4") }} Team</span>
+  </a>
+  <a href="/owner/jobs" class="tab {{ 'tab-active' if active == 'hiring' }}"{% if active == 'hiring' %} aria-current="page"{% endif %}>
+    <span class="inline-flex items-center gap-1.5">{{ icon("briefcase", "size-4") }} Hiring</span>
+  </a>
+</nav>
+{% endmacro %}
+
+{#- Rounded-square staff photo (falls back to initials) -#}
+{% macro photo(key, name, size="size-12", text="text-sm") -%}
+<span class="staff-photo {{ size }} {{ text }}" data-initials="{{ name | initials }}">{% if key %}<img src="{{ media_url(key) }}" alt="{{ name }}" loading="lazy">{% else %}{{ name | initials }}{% endif %}</span>
+{%- endmacro %}
+
+{#- Gym chooser dropdown used by "Add staff" / "New posting" buttons -#}
+{% macro gym_action(gyms, label, path_suffix, ico="plus") %}
+{% if gyms | length == 1 %}
+  <a href="/owner/gyms/{{ gyms[0].id }}/{{ path_suffix }}" class="btn btn-primary">{{ icon(ico, "size-4") }} {{ label }}</a>
+{% elif gyms %}
+  <details class="relative" data-component="dropdown">
+    <summary class="btn btn-primary cursor-pointer list-none [&::-webkit-details-marker]:hidden">{{ icon(ico, "size-4") }} {{ label }} {{ icon("chevron-down", "size-4 opacity-70") }}</summary>
+    <div class="card absolute left-0 z-30 mt-2 w-72 !p-2 text-sm sm:left-auto sm:right-0">
+      <p class="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider muted">Choose a gym</p>
+      {% for g in gyms %}
+        <a href="/owner/gyms/{{ g.id }}/{{ path_suffix }}" class="flex items-center gap-2.5 rounded-xl px-3 py-2.5 hover:bg-zinc-900/5 dark:hover:bg-white/10">
+          <span class="grid size-7 place-items-center rounded-lg bg-accent/10 text-accent">{{ icon("building", "size-3.5") }}</span>
+          <span class="truncate font-medium">{{ g.name }}</span>
+        </a>
+      {% endfor %}
+    </div>
+  </details>
+{% else %}
+  <a href="/owner/gyms/new" class="btn btn-primary">{{ icon("plus", "size-4") }} Create your first gym</a>
+{% endif %}
+{% endmacro %}
+
+{#- Activation checklist -#}
+{% macro requirements(reqs, audience="owner") %}
+{% set done = reqs | selectattr("met") | list | length %}
+{% set pct = (100 * done / (reqs | length)) | round(0) if reqs else 100 %}
+<div>
+  <div class="mb-3 flex items-center justify-between text-xs font-medium muted">
+    <span>{{ done }} of {{ reqs | length }} complete</span>
+    <span class="tabular-nums">{{ pct | int }}%</span>
+  </div>
+  <div class="h-1.5 overflow-hidden rounded-full bg-zinc-900/[0.07] dark:bg-white/10" aria-hidden="true">
+    <svg viewBox="0 0 100 6" preserveAspectRatio="none" class="block h-full w-full"><rect width="{{ pct }}" height="6" class="fill-ok"></rect></svg>
+  </div>
+  <ul class="mt-3 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+    {% for r in reqs %}
+    <li class="flex flex-wrap items-start gap-x-3 gap-y-2 py-3 sm:flex-nowrap">
+      {% if r.met %}
+        <span class="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("check", "size-3.5", "Done") }}</span>
+      {% else %}
+        <span class="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-warn/15 text-[#b45309] dark:text-[#fbbf24]">{{ icon("clock", "size-3.5", "Outstanding") }}</span>
+      {% endif %}
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-medium">{{ r.label if audience == "owner" else r.staff_label }}</p>
+        <p class="mt-0.5 text-xs muted [overflow-wrap:anywhere]">{{ r.detail if audience == "owner" else r.staff_detail }}</p>
+      </div>
+      {% if audience == "staff" and r.staff_link and not r.met %}
+        <div class="basis-full pl-9 sm:basis-auto sm:pl-0"><a href="{{ r.staff_link }}" class="btn btn-secondary btn-sm shrink-0">{{ r.staff_action }} {{ icon("arrow-right", "size-3.5") }}</a></div>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endmacro %}
+
+{#- Week strip: 7 rows (Mon..Sun) with 24 h tracks; days = S.week_segments(...) -#}
+{% macro week_strip(days, today=None) %}
+<ul class="sr-only">
+  {% for segs in days %}<li>{{ S.WEEKDAYS[loop.index0] }}: {% for s in segs %}{{ s.title }}{{ "; " if not loop.last }}{% else %}no shift{% endfor %}</li>{% endfor %}
+</ul>
+<div class="space-y-2" aria-hidden="true">
+  <div class="grid grid-cols-[2.75rem_minmax(0,1fr)] gap-3 text-[10px] font-semibold uppercase tracking-wider muted">
+    <span></span>
+    <div class="flex justify-between tabular-nums"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+  </div>
+  {% for segs in days %}
+  <div class="grid grid-cols-[2.75rem_minmax(0,1fr)] items-center gap-3">
+    <span class="text-xs font-semibold {{ 'text-accent' if loop.index0 == today else 'muted' }}">{{ S.WEEKDAYS_SHORT[loop.index0] }}</span>
+    <div class="h-3 overflow-hidden rounded-full bg-zinc-900/[0.06] {{ 'ring-1 ring-accent/40' if loop.index0 == today }} dark:bg-white/[0.08]">
+      <svg viewBox="0 0 1440 12" preserveAspectRatio="none" class="block h-full w-full">
+        {% for h in (360, 720, 1080) %}<line x1="{{ h }}" x2="{{ h }}" y1="0" y2="12" class="stroke-black/10 dark:stroke-white/15" stroke-width="1" vector-effect="non-scaling-stroke"></line>{% endfor %}
+        {% for s in segs %}<rect x="{{ s.start }}" width="{{ s.end - s.start }}" height="12" class="{{ 'fill-zinc-400 dark:fill-zinc-500' if s.busy else ('fill-accent' if s.mode == 'offline' else 'fill-violet') }}"><title>{{ s.title }}</title></rect>{% endfor %}
+      </svg>
+    </div>
+  </div>
+  {% endfor %}
+  <div class="flex flex-wrap items-center gap-x-4 gap-y-1 pt-2 text-xs muted">
+    <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-accent"></span>At branch</span>
+    <span class="inline-flex items-center gap-1.5"><span class="size-2.5 rounded-full bg-violet"></span>Online</span>
+    {% if caller %}{{ caller() }}{% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{#- Mode chip for a shift / client -#}
+{% macro mode_chip(mode) -%}
+{% if mode == "offline" %}<span class="badge badge-blue">{{ icon("building", "size-3.5") }}At branch</span>
+{% else %}<span class="badge badge-violet">{{ icon("globe", "size-3.5") }}Online</span>{% endif %}
+{%- endmacro %}
+
+{#- Section heading inside a card -#}
+{% macro card_title(title, subtitle=None, ico=None) %}
+<div class="mb-5 flex items-start gap-3">
+  {% if ico %}<span class="grid size-9 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">{{ icon(ico, "size-[18px]") }}</span>{% endif %}
+  <div class="min-w-0">
+    <h2 class="section-title">{{ title }}</h2>
+    {% if subtitle %}<p class="mt-0.5 text-sm muted">{{ subtitle }}</p>{% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{#- Label/value row for definition lists -#}
+{% macro fact(label, value) %}
+<div class="flex items-baseline justify-between gap-4 py-2.5">
+  <dt class="text-sm muted">{{ label }}</dt>
+  <dd class="min-w-0 text-right text-sm font-medium [overflow-wrap:anywhere]">{{ value }}</dd>
+</div>
+{% endmacro %}
+
+{#- Salary range of a job posting -#}
+{% macro salary_range(job) -%}
+{% set period = S.SALARY_PERIOD_LABELS.get(job.salary_period, "") %}
+{% if job.salary_min is not none and job.salary_max is not none %}{{ job.salary_min | money(job.currency) }} – {{ job.salary_max | money(job.currency) }} {{ period }}
+{% elif job.salary_min is not none %}From {{ job.salary_min | money(job.currency) }} {{ period }}
+{% elif job.salary_max is not none %}Up to {{ job.salary_max | money(job.currency) }} {{ period }}
+{% else %}Salary on request{% endif %}
+{%- endmacro %}

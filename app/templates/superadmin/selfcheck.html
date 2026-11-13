@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% block title %}Self-check{% endblock %}
+{% block content %}
+{% call sa.header("Self-check", "Configuration, integrations, AI and storage checked against production best practice. Checked " ~ (checked_at | dt("%H:%M:%S")) ~ " in " ~ elapsed_ms ~ " ms" ~ (" with live probes." if probe else "."), section, sections, counts) %}
+  <a href="/superadmin/selfcheck" class="btn btn-secondary btn-sm">{{ icon("refresh", "size-4") }} Re-run</a>
+  <a href="/superadmin/selfcheck?probe=1" class="btn btn-primary btn-sm">{{ icon("activity", "size-4") }} Re-run with live probes</a>
+{% endcall %}
+
+{# ------------------------------------------------------------------ verdict #}
+<section aria-label="Summary" class="mb-6 grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))] animate-fade-up">
+  {% if summary.fail %}
+    {% set tone, ico, title, body = "danger", "x-circle", summary.fail ~ " check" ~ ("s" if summary.fail != 1 else "") ~ " failing", "Fix the red items before going live - each one has a suggested fix." %}
+  {% elif summary.warn %}
+    {% set tone, ico, title, body = "warning", "alert", "Healthy, with " ~ summary.warn ~ " warning" ~ ("s" if summary.warn != 1 else ""), "Warnings are fine while developing; review them before launch." %}
+  {% else %}
+    {% set tone, ico, title, body = "success", "check-circle", "Everything passes", "The platform is configured the way production expects." %}
+  {% endif %}
+  <div class="alert alert-{{ tone }} !items-center !rounded-[24px] !p-5">
+    {{ icon(ico, "size-8 shrink-0") }}
+    <div><p class="text-lg font-semibold">{{ title }}</p><p class="mt-0.5 text-sm opacity-90">{{ body }}</p></div>
+  </div>
+  {{ ui.stat("Passing", summary.ok, "of " ~ summary.total ~ " checks", "check", "green") }}
+  {{ ui.stat("Warnings", summary.warn, "worth a look", "alert", "amber" if summary.warn else "zinc") }}
+  {{ ui.stat("Failing", summary.fail, "need fixing", "x-circle", "red" if summary.fail else "zinc") }}
+</section>
+
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+  {% for group, rows in groups %}
+  <section class="card !p-0 min-w-0" aria-labelledby="g-{{ loop.index }}">
+    <div class="flex items-center justify-between gap-3 px-5 pt-5 pb-2 sm:px-6">
+      <h2 id="g-{{ loop.index }}" class="sa-card-title">{{ group }}</h2>
+      {% set bad = rows | selectattr("status", "equalto", "fail") | list | length %}
+      {% set warn = rows | selectattr("status", "equalto", "warn") | list | length %}
+      <span class="badge badge-{{ 'red' if bad else ('amber' if warn else 'green') }}">{{ (bad ~ ' failing') if bad else ((warn ~ ' warning' ~ ('s' if warn != 1 else '')) if warn else 'All good') }}</span>
+    </div>
+    <ul class="sa-list">
+      {% for r in rows %}
+      <li class="sa-check">
+        {{ sa.check_icon(r.status) }}
+        <div class="min-w-0 flex-1">
+          <p class="font-medium">{{ r.check }}</p>
+          <p class="mt-0.5 text-sm break-words muted">{{ r.detail }}</p>
+          {% if r.fix and r.status != 'ok' %}
+            <p class="mt-2 flex items-start gap-1.5 rounded-xl bg-zinc-100/80 px-3 py-2 text-xs leading-relaxed dark:bg-white/[0.05]">{{ icon("bolt", "size-3.5 mt-0.5 shrink-0 text-accent") }}<span><span class="font-semibold">Fix:</span> {{ r.fix }}</span></p>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+</div>
+
+{# ------------------------------------------------------------------ jobs #}
+<section class="card mt-6" aria-labelledby="jobs-title">
+  <div class="sa-card-head">
+    <div>
+      <h2 id="jobs-title" class="sa-card-title">Background jobs</h2>
+      <p class="sa-card-sub">{{ jobs.queued }} queued · {{ jobs.running }} running · {{ jobs.paused }} paused (requester away) · {{ jobs.done }} done · {{ jobs.cancelled }} cancelled · {{ jobs.failed }} failed after every retry</p>
+    </div>
+  </div>
+  {% if failed_jobs %}
+  <ul class="mt-4 grid gap-2">
+    {% for j in failed_jobs %}
+    <li class="rounded-2xl bg-bad/[0.06] px-4 py-3 ring-1 ring-bad/10 dark:bg-bad/[0.08]">
+      <div class="flex flex-wrap items-center gap-2 text-sm">
+        <span class="sa-mono">{{ j.kind }}</span>
+        <span class="text-xs muted">#{{ j.id }} · {{ j.attempts }}/{{ j.max_attempts }} attempts · {{ (j.finished_at or j.created_at) | timeago }}</span>
+      </div>
+      {% if j.last_error %}<p class="mt-1.5 line-clamp-2 font-mono text-[11px] break-words text-[#991b1b] dark:text-[#fca5a5]">{{ j.last_error.splitlines()[0] }}</p>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+    <div class="mt-4">{{ sa.inline_empty("No failed jobs", "Every background job finished or is still within its retry budget.") }}</div>
+  {% endif %}
+</section>
+{% endblock %}

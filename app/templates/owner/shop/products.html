@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% import "owner/shop/_macros.html" as os with context %}
+{% block title %}Products · Shop{% endblock %}
+{% block content %}
+{% call ui.page_header("Products", subtitle="Everything you sell across your gyms. Products that were ever ordered can be hidden but never deleted.", eyebrow="Shop") %}
+  {{ os.new_product(gyms) }}
+{% endcall %}
+{{ os.tabs("products") }}
+
+<form method="get" action="/owner/shop/products" class="card-flat mb-6 grid gap-3 md:grid-cols-[1fr_auto_auto_auto_auto] md:items-center" role="search" aria-label="Filter products">
+  <div class="relative">
+    <label for="p-q" class="sr-only">Search</label>
+    <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400">{{ icon("search", "size-4") }}</span>
+    <input id="p-q" type="search" name="q" value="{{ f.q }}" placeholder="Name, brand or SKU" class="input !pl-11" maxlength="80">
+  </div>
+  {% if gyms | length > 1 %}
+    <label class="sr-only" for="p-gym">Gym</label>
+    <select id="p-gym" name="gym" class="input md:w-44" data-autosubmit><option value="">All gyms</option>{% for g in gyms %}<option value="{{ g.id }}" {{ 'selected' if f.gym == g.id }}>{{ g.name }}</option>{% endfor %}</select>
+  {% endif %}
+  <label class="sr-only" for="p-cat">Category</label>
+  <select id="p-cat" name="category" class="input md:w-40" data-autosubmit><option value="">All categories</option>{% for v, l in categories %}<option value="{{ v }}" {{ 'selected' if f.category == v }}>{{ l }}</option>{% endfor %}</select>
+  <label class="sr-only" for="p-status">Status</label>
+  <select id="p-status" name="status" class="input md:w-40" data-autosubmit>
+    {% for v, l in [("", "Any status"), ("active", "Live"), ("hidden", "Hidden"), ("low", "Low stock"), ("out", "Out of stock")] %}<option value="{{ v }}" {{ 'selected' if f.status == v }}>{{ l }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="btn btn-secondary">{{ icon("search", "size-4") }}Filter</button>
+</form>
+
+{% if rows %}
+  <p class="mb-3 text-sm muted">{{ total }} product{{ 's' if total != 1 }}</p>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Product</th><th>Gym</th><th class="!text-right">Price</th><th>Stock</th><th>Status</th><th class="!text-right"><span class="sr-only">Actions</span></th></tr></thead>
+      <tbody>
+        {% for p, cover in rows %}
+          <tr>
+            <td>
+              <a href="/owner/shop/products/{{ p.id }}" class="flex min-w-[220px] items-center gap-3">
+                {{ shop.thumb(cover, p.name, p.category.value) }}
+                <span class="min-w-0"><span class="block truncate font-semibold hover:text-accent">{{ p.name }}</span><span class="block truncate text-xs muted">{{ p.brand or p.category.value | humanize }}{% if p.sku %} · {{ p.sku }}{% endif %}</span></span>
+              </a>
+            </td>
+            <td class="whitespace-nowrap text-sm muted">{{ p.gym.name }}</td>
+            <td class="whitespace-nowrap text-right tabular-nums"><span class="font-semibold">{{ p.price | money(p.currency) }}</span>{% if p.compare_at_price %}<span class="block text-xs text-zinc-400 line-through">{{ p.compare_at_price | money(p.currency) }}</span>{% endif %}</td>
+            <td class="whitespace-nowrap">{{ os.stock_badge(p) }}</td>
+            <td class="whitespace-nowrap">{% if p.is_active %}<span class="badge badge-green">Live</span>{% else %}<span class="badge badge-zinc">Hidden</span>{% endif %}{% if p.age_restricted %} <span class="badge badge-violet">18+</span>{% endif %}</td>
+            <td class="whitespace-nowrap text-right">
+              <a href="/owner/shop/products/{{ p.id }}" class="btn btn-ghost btn-sm">{{ icon("pencil", "size-4") }}Edit</a>
+              <a href="/shop/p/{{ p.id }}/{{ p.slug }}" class="btn btn-ghost btn-sm" aria-label="View {{ p.name }} in the shop">{{ icon("eye", "size-4") }}</a>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {{ ui.pager(p, params=f, path="/owner/shop/products") }}
+{% elif f.q or f.gym or f.category or f.status %}
+  {{ ui.empty("No products match", "Try other filters.", "search", "Clear filters", "/owner/shop/products") }}
+{% elif gyms %}
+  <div class="card flex flex-col items-center px-6 py-14 text-center">
+    <span class="grid size-14 place-items-center rounded-2xl bg-accent/10 text-accent">{{ shop.svg("bag", "size-7") }}</span>
+    <h2 class="mt-4 text-lg font-semibold">No products yet</h2>
+    <p class="mt-1 max-w-md text-sm muted">Add your first product with photos, price, stock and safety tags.</p>
+    <div class="mt-6 flex flex-wrap justify-center gap-2">
+      {{ os.new_product(gyms) }}
+    </div>
+  </div>
+{% else %}
+  {{ ui.empty("Create a gym first", "Products belong to a gym.", "building", "Create a gym", "/owner/gyms/new") }}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,25 @@
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_macros.html" as sm with context %}
+<section class="card max-w-3xl">
+  {{ sm.card_title("Activity", "Invitations, verification checks, schedule and profile changes - newest first.", "activity") }}
+  {% if timeline_latest_url %}<p class="mb-5 text-sm"><a href="{{ timeline_latest_url }}" class="inline-flex items-center gap-1 font-medium text-accent hover:underline">{{ icon("arrow-left", "size-4") }} Back to the latest activity</a></p>{% endif %}
+  {% if timeline %}
+    <ol class="relative ml-3 border-l border-black/[0.08] dark:border-white/[0.1]">
+      {% for ev in timeline %}
+      <li class="relative pb-7 pl-8 last:pb-0">
+        <span class="absolute -left-[13px] top-0 grid size-[26px] place-items-center rounded-full ring-4 ring-white badge-{{ ev.tone }} !p-0 dark:ring-surface-dark">{{ icon(ev.icon, "size-3.5") }}</span>
+        <p class="text-sm font-semibold">{{ ev.title }}</p>
+        {% if ev.detail %}<p class="mt-0.5 whitespace-pre-line text-sm muted">{{ ev.detail }}</p>{% endif %}
+        <p class="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{{ ev.when | dt }}{% if ev.actor %} · {{ ev.actor }}{% endif %}</p>
+      </li>
+      {% endfor %}
+    </ol>
+    {% if timeline_older_url %}
+      <div class="mt-6 border-t border-black/[0.05] pt-4 text-center dark:border-white/[0.06]">
+        <a href="{{ timeline_older_url }}" class="btn btn-secondary btn-sm" rel="next" data-timeline-more>{{ icon("clock", "size-4") }} Show older activity</a>
+      </div>
+    {% endif %}
+  {% else %}
+    <p class="text-sm muted">Nothing has happened yet.</p>
+  {% endif %}
+</section>

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="mx-auto flex max-w-xl flex-col items-center py-16 text-center animate-fade-up">
+  <span class="badge {{ 'badge-red' if status >= 500 else 'badge-amber' }} mb-5">{{ status }}</span>
+  <h1 class="text-4xl font-semibold tracking-tight">{{ title }}</h1>
+  <p class="mt-3 text-[15px] muted">{{ message }}</p>
+  <div class="mt-8 flex gap-3">
+    <a href="/" class="btn btn-primary">{{ icon("home", "size-4") }} Home</a>
+    {% if status == 403 and 'CSRF' in message %}
+      <a href="{{ request.url.path }}" class="btn btn-secondary">{{ icon("refresh", "size-4") }} Reload</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

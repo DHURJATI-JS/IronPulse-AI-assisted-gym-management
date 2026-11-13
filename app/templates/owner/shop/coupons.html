@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% import "owner/shop/_macros.html" as os with context %}
+{% block title %}Coupons · Shop{% endblock %}
+{% block content %}
+{% call ui.page_header("Coupons", subtitle="Percent or fixed-amount discounts with an optional minimum order, expiry date and usage limit. Codes are unique per gym.", eyebrow="Shop") %}{% endcall %}
+{{ os.tabs("coupons") }}
+
+{% if not gyms %}
+  {{ ui.empty("Create a gym first", "Coupons belong to a gym's shop.", "building", "Create a gym", "/owner/gyms/new") }}
+{% else %}
+<div class="grid gap-6 lg:grid-cols-[380px_1fr]">
+  <section class="card h-fit" aria-labelledby="new-title">
+    <h2 id="new-title" class="section-title">New coupon</h2>
+    {{ ui.form_errors(errors) }}
+    <form method="post" action="/owner/shop/coupons" class="mt-4 grid gap-4" data-component="shop-coupon-kind">
+      {{ ui.csrf() }}
+      {% set gym_opts = [] %}{% for g in gyms %}{% set _ = gym_opts.append((g.id, g.name ~ " (" ~ g.currency ~ ")")) %}{% endfor %}
+      {{ ui.select("gym_id", "Gym", gym_opts, value=form.get("gym_id") or gyms[0].id, required=True, error=errors.gym_id) }}
+      {{ ui.field("code", "Code", value=form.get("code") or "", required=True, error=errors.code, placeholder="STRONG10", attrs='maxlength="32" autocomplete="off"', help="A-Z, 0-9 and dashes - stored in capitals") }}
+      {% set kind = form.get("kind") or "percent" %}
+      <fieldset>
+        <legend class="label">Discount</legend>
+        <div class="tabs w-full">
+          <label class="tab flex-1 cursor-pointer text-center has-[:checked]:bg-white has-[:checked]:text-ink has-[:checked]:shadow-sm dark:has-[:checked]:bg-white/15 dark:has-[:checked]:text-white"><input type="radio" name="kind" value="percent" class="sr-only" {{ 'checked' if kind != 'amount' }}>Percent</label>
+          <label class="tab flex-1 cursor-pointer text-center has-[:checked]:bg-white has-[:checked]:text-ink has-[:checked]:shadow-sm dark:has-[:checked]:bg-white/15 dark:has-[:checked]:text-white"><input type="radio" name="kind" value="amount" class="sr-only" {{ 'checked' if kind == 'amount' }}>Fixed amount</label>
+        </div>
+      </fieldset>
+      <div data-kind="percent" {{ 'hidden' if kind == 'amount' }}>{{ ui.field("percent_off", "Percent off", type="number", value=form.get("percent_off") or "10", error=errors.percent_off, attrs='min="1" max="90"', help="1 - 90%") }}</div>
+      <div data-kind="amount" {{ 'hidden' if kind != 'amount' }}>{{ ui.field("amount_off", "Amount off", value=form.get("amount_off") or "", error=errors.amount_off, placeholder="200", attrs='inputmode="decimal"') }}</div>
+      {{ ui.field("min_order_total", "Minimum order (optional)", value=form.get("min_order_total") or "", error=errors.min_order_total, placeholder="999", attrs='inputmode="decimal"', help="Compared with the subtotal before tax") }}
+      <div class="grid grid-cols-2 gap-3">
+        {{ ui.field("valid_until", "Expires (optional)", type="date", value=form.get("valid_until") or "", error=errors.valid_until) }}
+        {{ ui.field("max_uses", "Max uses (optional)", type="number", value=form.get("max_uses") or "", error=errors.max_uses, attrs='min="1"') }}
+      </div>
+      {{ ui.checkbox("is_active", "Active now", not form or form.get("is_active")) }}
+      <button type="submit" class="btn btn-primary">{{ icon("plus", "size-4") }}Create coupon</button>
+    </form>
+  </section>
+
+  <section aria-labelledby="list-title">
+    <h2 id="list-title" class="sr-only">Your coupons</h2>
+    {% if coupons %}
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr><th>Code</th><th>Discount</th><th>Rules</th><th>Used</th><th>Status</th><th class="!text-right"><span class="sr-only">Actions</span></th></tr></thead>
+          <tbody>
+            {% for c, gym_name, currency in coupons %}
+              {% set expired = c.valid_until and c.valid_until < now %}
+              {% set exhausted = c.max_uses is not none and c.used_count >= c.max_uses %}
+              <tr>
+                <td><span class="inline-flex items-center gap-1.5 font-mono font-semibold">{{ shop.svg("tag", "size-4 text-accent") }}{{ c.code }}</span><span class="block text-xs muted">{{ gym_name }}</span></td>
+                <td class="whitespace-nowrap font-semibold">{{ (c.percent_off ~ "% off") if c.percent_off else ((c.amount_off | money(currency)) ~ " off") }}</td>
+                <td class="text-xs muted">{% if c.min_order_total %}Min {{ c.min_order_total | money(currency) }}<br>{% endif %}{% if c.valid_until %}Until {{ c.valid_until | dt("%d %b %Y") }}{% else %}No expiry{% endif %}</td>
+                <td class="whitespace-nowrap tabular-nums">{{ c.used_count }}{% if c.max_uses %} / {{ c.max_uses }}{% endif %}</td>
+                <td class="whitespace-nowrap">{% if not c.is_active %}<span class="badge badge-zinc">Paused</span>{% elif expired %}<span class="badge badge-red">Expired</span>{% elif exhausted %}<span class="badge badge-amber">Used up</span>{% else %}<span class="badge badge-green">Active</span>{% endif %}</td>
+                <td class="text-right"><form method="post" action="/owner/shop/coupons/{{ c.id }}/toggle">{{ ui.csrf() }}<button type="submit" class="btn btn-ghost btn-sm">{{ "Pause" if c.is_active else "Activate" }}</button></form></td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {{ ui.pager(p, params={}, path="/owner/shop/coupons", noun="coupons") }}
+    {% else %}
+      {{ ui.empty("No coupons yet", "Create a code like STRONG10 and share it with your members. Discounts are validated again at checkout.", "sparkles") }}
+    {% endif %}
+  </section>
+</div>
+{% endif %}
+{% endblock %}

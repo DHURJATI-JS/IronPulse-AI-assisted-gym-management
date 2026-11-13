@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "calendar/_macros.html" as cal with context %}
+{% block title %}{% if day %}Tasks · {{ day.strftime("%d %b %Y") }}{% else %}Tasks{% endif %}{% endblock %}
+{% block content %}
+{% if day %}
+  {% call ui.page_header(day.strftime("%A %d %B %Y"), "Everything on this day - open tasks first, then done. Times are in " ~ tz ~ ".", eyebrow="Tasks") %}
+    <a href="{{ calendar_link }}" class="btn btn-secondary">{{ icon("calendar", "size-4") }} Back to calendar</a>
+    <a href="/tasks" class="btn btn-ghost">{{ icon("check-circle", "size-4") }} All open tasks</a>
+  {% endcall %}
+{% else %}
+  {% call ui.page_header("Tasks & reminders", "Plan your day, set reminders (in-app + e-mail) and tick things off. Times are in " ~ tz ~ ".", eyebrow="Tasks") %}
+    <a href="/calendar" class="btn btn-secondary">{{ icon("calendar", "size-4") }} Calendar</a>
+  {% endcall %}
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+  <div class="min-w-0 space-y-6">
+    {% if day %}
+      {% if page.items %}
+        <section class="card animate-fade-up" aria-labelledby="g-day">
+          <div class="flex items-center justify-between">
+            <h2 id="g-day" class="section-title">On this day</h2>
+            <span class="chip" data-day-total>{{ "{:,}".format(page.total) }}</span>
+          </div>
+          <ul class="mt-2 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+            {% for t in page.items %}{{ cal.task_row(t, when, back) }}{% endfor %}
+          </ul>
+        </section>
+        {{ ui.pager(page, noun="tasks on this day") }}
+      {% else %}
+        {{ ui.empty("Nothing planned for this day", "Add a task for this day on the right, or ask the AI assistant.", "calendar", "Back to calendar", calendar_link) }}
+      {% endif %}
+    {% else %}
+      <div class="grid grid-cols-3 gap-3 animate-fade-up">
+        {{ ui.stat("Open", "{:,}".format(open_count), ("Up to " ~ "{:,}".format(open_limit) ~ " at once") if open_count * 5 >= open_limit * 4 else None, ico="layers", tone="blue") }}
+        {{ ui.stat("Due today", "{:,}".format(today_count), ico="clock", tone="amber") }}
+        {{ ui.stat("Overdue", "{:,}".format(overdue_count), ico="alert", tone="red" if overdue_count else "zinc") }}
+      </div>
+
+      {% if groups %}
+        {% for key, label, items in groups %}
+          <section class="card animate-fade-up" aria-labelledby="g-{{ key }}">
+            <div class="flex items-center justify-between">
+              <h2 id="g-{{ key }}" class="section-title {{ 'text-bad' if key == 'overdue' }}">{{ label }}</h2>
+              <span class="chip" data-group-total>{{ "{:,}".format(stats.of(key)) }}</span>
+            </div>
+            <ul class="mt-2 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+              {% for t in items %}{{ cal.task_row(t, when, back) }}{% endfor %}
+            </ul>
+          </section>
+        {% endfor %}
+        {{ ui.pager(page, noun="open tasks") }}
+      {% else %}
+        {{ ui.empty("You're all caught up", "No open tasks or reminders. Add one on the right, or ask the AI assistant: “remind me to drink water at 5pm”.", "check-circle") }}
+      {% endif %}
+
+      {% if completed %}
+        <details class="card-flat group animate-fade-up">
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-3">
+            <span class="section-title">Recently completed</span>
+            <span class="flex items-center gap-2 text-sm muted">{{ completed | length }} {{ icon("chevron-down", "size-4 transition group-open:rotate-180") }}</span>
+          </summary>
+          <ul class="mt-2 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+            {% for t in completed %}{{ cal.task_row(t, when, back) }}{% endfor %}
+          </ul>
+        </details>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <aside class="min-w-0">
+    <section class="card lg:sticky lg:top-24 animate-fade-up" id="new-task">
+      <div class="mb-5 flex items-center gap-3">
+        <span class="grid size-10 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("plus", "size-5") }}</span>
+        <div>
+          <h2 class="section-title">New task</h2>
+          <p class="text-xs muted">{% if day %}For {{ day.strftime("%a %d %b") }} - add a time for the calendar, a reminder for a nudge.{% else %}Add a date for the calendar, a reminder for a nudge.{% endif %}</p>
+        </div>
+      </div>
+      {% if limit_error %}<div class="mb-6" data-task-limit>{{ ui.alert(limit_error, "warning", "You've reached the task limit") }}</div>{% endif %}
+      {{ ui.form_errors(errors) }}
+      {{ cal.task_form(values, errors, back, kinds, day=day.isoformat() if day else None) }}
+    </section>
+  </aside>
+</div>
+{% endblock %}

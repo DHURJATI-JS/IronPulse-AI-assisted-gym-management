@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}Payment {{ {'success': 'confirmed', 'failed': 'failed'}.get(outcome, 'status') }}{% endblock %}
+{% block content %}
+{% set tones = {
+  'success': ('bg-ok text-white', 'check', 'Payment confirmed'),
+  'failed': ('bg-bad text-white', 'x', 'Payment failed'),
+  'pending': ('bg-warn text-white', 'clock', 'Payment not completed yet'),
+  'mismatch': ('bg-warn text-white', 'alert', "We couldn't confirm your payment"),
+  'review': ('bg-warn text-white', 'alert', 'Payment received - under review'),
+} %}
+{% set t = tones.get(outcome, tones['pending']) %}
+<div class="mx-auto max-w-xl animate-fade-up">
+  <section class="card flex flex-col items-center px-6 py-12 text-center" aria-live="polite">
+    <span class="{{ 'success-ring ' if outcome == 'success' }}grid size-16 place-items-center rounded-full {{ t[0] }}">{{ icon(t[1], "size-8") }}</span>
+    <h1 class="mt-5 text-2xl font-semibold">{{ t[2] }}</h1>
+    <p class="mt-2 max-w-md text-[15px] muted">
+      {% if outcome == 'success' %}{{ sub.plan.name }} at {{ sub.gym.name }} is active{% if sub.ends_on %} until {{ sub.ends_on | date }}{% endif %}. We've sent you a confirmation.
+      {% elif outcome == 'failed' %}No money was taken. You can try again whenever you're ready.
+      {% elif outcome == 'pending' %}We haven't received a confirmation from the payment provider yet. If you completed the payment, your membership activates automatically within a few minutes.
+      {% elif outcome == 'mismatch' %}The payment didn't match your order, so the membership isn't active yet. The gym has been notified and will contact you.
+      {% elif 'gym_limit' in (sub.fraud_flags or []) and sub.status.value == 'failed' %}We received your payment, but you already hold the most gym memberships one person may have at once, so this membership was not activated. {{ sub.gym.name }} has been asked to refund you.
+      {% else %}We received your payment. The gym will review it shortly and get back to you.{% endif %}
+    </p>
+    <div class="mt-7 flex flex-wrap justify-center gap-3">
+      {% if outcome == 'success' %}
+        <a href="/me/subscriptions" class="btn btn-primary">My memberships</a>
+        <a href="/me" class="btn btn-secondary">Start training</a>
+      {% elif outcome == 'pending' %}
+        <a href="/checkout/{{ sub.id }}" class="btn btn-primary">{{ icon("refresh", "size-4") }}Back to checkout</a>
+        <a href="/me/subscriptions" class="btn btn-secondary">My memberships</a>
+      {% elif outcome == 'failed' %}
+        <a href="/subscribe/{{ sub.gym.slug }}?plan={{ sub.plan.code }}" class="btn btn-primary">Try again</a>
+        <a href="/me/subscriptions" class="btn btn-secondary">My memberships</a>
+      {% else %}
+        <a href="/me/subscriptions" class="btn btn-primary">My memberships</a>
+        <a href="/chat" class="btn btn-secondary">{{ icon("chat", "size-4") }}Message the gym</a>
+      {% endif %}
+    </div>
+  </section>
+  <dl class="card-flat mt-5 space-y-3 text-sm">
+    <div class="flex justify-between gap-4"><dt class="muted">Amount</dt><dd class="font-semibold tabular-nums">{{ tx.amount | money(tx.currency) }}</dd></div>
+    <div class="flex justify-between gap-4"><dt class="muted">Order ID</dt><dd class="font-mono text-xs">{{ tx.provider_order_id }}</dd></div>
+    <div class="flex justify-between gap-4"><dt class="muted">Payment</dt><dd>{{ ui.status(tx.status) }}</dd></div>
+    {% if tx.provider == 'test' %}<div class="flex justify-between gap-4"><dt class="muted">Mode</dt><dd><span class="badge badge-amber">Test payment</span></dd></div>{% endif %}
+  </dl>
+</div>
+{% endblock %}

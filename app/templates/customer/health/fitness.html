@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}Training preferences{% endblock %}
+
+{% macro choices(name, title, subtitle, options, cap, other_label, other_max, ico) %}
+<section class="card" aria-labelledby="{{ name }}-title">
+  <div class="mb-4 flex items-center gap-3">
+    <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon(ico, "size-5") }}</span>
+    <div class="min-w-0">
+      <h2 id="{{ name }}-title" class="section-title">{{ title }}</h2>
+      <p class="text-sm muted">{{ subtitle }} <span class="whitespace-nowrap">· up to {{ cap }}</span></p>
+    </div>
+  </div>
+  <fieldset {% if errors.get(name) %}aria-describedby="e-{{ name }}"{% endif %}>
+    <legend class="sr-only">{{ title }}</legend>
+    <div class="flex flex-wrap gap-2">
+      {% for value, label in options %}
+      <label class="relative">
+        <input type="checkbox" name="{{ name }}" value="{{ value }}" class="peer sr-only" {{ 'checked' if value in form.get(name, []) }}>
+        <span class="hp-option">{{ icon("check", "hp-check size-3.5") }}{{ label }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    {% if errors.get(name) %}<p class="field-error" id="e-{{ name }}">{{ errors.get(name) }}</p>{% endif %}
+  </fieldset>
+  <div class="mt-4">
+    {{ ui.field(name ~ "_other", other_label, value=form.get(name ~ "_other", ""), error=errors.get(name ~ "_other"),
+                help="Separate several with commas - up to " ~ other_max ~ " characters each.", attrs='maxlength="600" autocomplete="off"') }}
+  </div>
+</section>
+{% endmacro %}
+
+{% block content %}
+{% call ui.page_header("Training preferences", "Tell us once how you like to train. Your AI coach, the live coach and the assistant plan around it - and never suggest what you avoid.", eyebrow="Health profile", back="/me/health/profile") %}
+  <a href="{{ memory_page }}" class="btn btn-secondary">{{ icon("sparkles", "size-4") }} What the AI knows</a>
+{% endcall %}
+
+<form method="post" action="/me/health/profile/fitness" class="hp-form mx-auto max-w-4xl space-y-6" novalidate>
+  {{ ui.csrf() }}
+  {{ ui.form_errors(errors.values() | list if errors else None) }}
+
+  {{ choices("likes", "Exercise you enjoy", "Pick the kinds of training you like.", exercise_types, caps.likes, "Other exercise you enjoy", item_max.likes, "heart") }}
+  {{ choices("avoids", "Exercise you avoid", "We leave these out of generated plans.", exercise_types, caps.avoids, "Other exercise you avoid", item_max.avoids, "x-circle") }}
+  {{ choices("goals", "Goals", "What you're working towards.", goal_options, caps.goals, "Other goals (e.g. run a 10k)", item_max.goals, "flag") }}
+  {{ choices("equipment", "Equipment you can use", "At home or at your gym.", equipment_options, caps.equipment, "Other equipment", item_max.equipment, "dumbbell") }}
+
+  <section class="card" aria-labelledby="schedule-title">
+    <div class="mb-5 flex items-center gap-3">
+      <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-indigo/12 text-indigo">{{ icon("calendar", "size-5") }}</span>
+      <div><h2 id="schedule-title" class="section-title">Schedule &amp; experience</h2><p class="text-sm muted">Plans fit the time you really have.</p></div>
+    </div>
+    <div class="fieldset max-sm:grid-cols-1">
+      {{ ui.field("sessions_per_week", "Sessions per week", type="number", value=form.sessions_per_week, error=errors.get("sessions_per_week"),
+                  help=sessions_range[0] ~ "-" ~ sessions_range[1] ~ ", or leave empty.", attrs='min="' ~ sessions_range[0] ~ '" max="' ~ sessions_range[1] ~ '" inputmode="numeric"') }}
+      {{ ui.field("session_minutes", "Minutes per session", type="number", value=form.session_minutes, error=errors.get("session_minutes"),
+                  help=minutes_range[0] ~ "-" ~ minutes_range[1] ~ " minutes, or leave empty.", attrs='min="' ~ minutes_range[0] ~ '" max="' ~ minutes_range[1] ~ '" inputmode="numeric"') }}
+      {{ ui.select("preferred_time", "Preferred time of day", times, value=form.preferred_time, error=errors.get("preferred_time"), empty="No preference") }}
+      {{ ui.select("fitness_level", "Experience level", levels, value=form.fitness_level, error=errors.get("fitness_level")) }}
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="fnotes-title">
+    <h2 id="fnotes-title" class="section-title mb-4">Anything else about how you train</h2>
+    {{ ui.textarea("notes", "Notes for your coach and the AI", value=form.notes, rows=3, error=errors.get("notes"),
+                   help="Optional, up to " ~ notes_max ~ " characters. Health conditions belong on your health profile.",
+                   attrs='maxlength="' ~ notes_max ~ '"') }}
+  </section>
+
+  <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+    <a href="/me/health/profile" class="btn btn-ghost">Cancel</a>
+    <button type="submit" class="btn btn-primary">{{ icon("check", "size-4") }} Save preferences</button>
+  </div>
+</form>
+{% endblock %}

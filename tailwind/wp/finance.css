@@ -1,0 +1,174 @@
+/* finance work-package styles (use @layer components { ... }; prefer utility classes in templates)
+ * WP-C2: finance overview chart, ledger amounts, payroll breakdown rows, settlement steps.
+ * Dark mode follows the app's `.dark` class; every custom colour below has a dark counterpart.
+ */
+@layer components {
+  /* ---------- 12-month chart: validated two-slot palette (blue / orange), separate light + dark steps */
+  .fin-chart {
+    --fin-in: #2a78d6;
+    --fin-out: #eb6834;
+    --fin-grid: rgb(0 0 0 / 0.07);
+    --fin-base: rgb(0 0 0 / 0.2);
+    --fin-hover: rgb(10 132 255 / 0.07);
+    position: relative;
+  }
+  :where(.dark) .fin-chart {
+    --fin-in: #3987e5;
+    --fin-out: #d95926;
+    --fin-grid: rgb(255 255 255 / 0.08);
+    --fin-base: rgb(255 255 255 / 0.22);
+    --fin-hover: rgb(255 255 255 / 0.06);
+  }
+  .fin-bar-in { fill: var(--fin-in); transition: opacity 0.2s ease; }
+  .fin-bar-out { fill: var(--fin-out); transition: opacity 0.2s ease; }
+  .fin-grid { stroke: var(--fin-grid); }
+  .fin-baseline { stroke: var(--fin-base); }
+  .fin-hit { fill: transparent; outline: none; cursor: default; }
+  .fin-hit:hover,
+  .fin-hit:focus-visible,
+  .fin-hit[data-active="1"] { fill: var(--fin-hover); }
+  .fin-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+  .fin-swatch-in { background: var(--fin-in); }
+  .fin-swatch-out { background: var(--fin-out); }
+  .fin-key { display: inline-block; width: 12px; height: 2px; border-radius: 2px; flex-shrink: 0; }
+  .fin-key-in { background: var(--fin-in); }
+  .fin-key-out { background: var(--fin-out); }
+  .fin-tooltip {
+    position: absolute;
+    z-index: 20;
+    pointer-events: none;
+    min-width: 11rem;
+    transform: translate(-50%, calc(-100% - 10px));
+    border-radius: 16px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.35;
+    color: #1d1d1f;
+    background: rgb(255 255 255 / 0.96);
+    box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.35), 0 0 0 1px rgb(0 0 0 / 0.06);
+    backdrop-filter: blur(16px);
+    transition: opacity 0.15s ease;
+  }
+  :where(.dark) .fin-tooltip {
+    color: #f4f4f5;
+    background: rgb(39 39 42 / 0.96);
+    box-shadow: 0 12px 32px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 255 255 / 0.1);
+  }
+  .fin-tooltip[hidden] { display: block !important; opacity: 0; }
+
+  /* ---------- ledger amounts (text tokens; income green, outgoing neutral with a minus sign) */
+  .fin-amount-in { color: #1f8c3a; font-variant-numeric: tabular-nums; }
+  :where(.dark) .fin-amount-in { color: #4ade80; }
+  .fin-amount-out { color: #1d1d1f; font-variant-numeric: tabular-nums; }
+  :where(.dark) .fin-amount-out { color: #f4f4f5; }
+  .fin-amount-muted { color: #71717a; font-variant-numeric: tabular-nums; }
+  :where(.dark) .fin-amount-muted { color: #a1a1aa; }
+  .fin-negative { color: #d1281e; }
+  :where(.dark) .fin-negative { color: #ff6b61; }
+  .fin-positive { color: #1f8c3a; }
+  :where(.dark) .fin-positive { color: #4ade80; }
+  .fin-direction {
+    display: inline-grid;
+    place-items: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-shrink: 0;
+    border-radius: 0.875rem;
+  }
+  .fin-direction-in { background: rgb(48 209 88 / 0.14); color: #1f8c3a; }
+  :where(.dark) .fin-direction-in { color: #4ade80; }
+  .fin-direction-out { background: rgb(113 113 122 / 0.14); color: #52525b; }
+  :where(.dark) .fin-direction-out { color: #d4d4d8; }
+
+  /* ---------- statement breakdown */
+  .fin-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.7rem 0;
+    font-size: 0.875rem;
+    border-top: 1px solid rgb(0 0 0 / 0.05);
+  }
+  :where(.dark) .fin-row { border-top-color: rgb(255 255 255 / 0.06); }
+  .fin-row:first-child { border-top: 0; }
+  .fin-row > :last-child { font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+  .fin-row-total { font-size: 1rem; font-weight: 600; }
+  .fin-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 28px;
+    padding: 1.5rem;
+    color: #fff;
+    background: radial-gradient(600px 240px at 0% 0%, rgb(255 255 255 / 0.18), transparent 60%),
+      linear-gradient(135deg, #0a84ff 0%, #5e5ce6 55%, #8e44e8 100%);
+    box-shadow: 0 18px 40px -22px rgb(94 92 230 / 0.75);
+  }
+  :where(.dark) .fin-hero {
+    background: radial-gradient(600px 240px at 0% 0%, rgb(255 255 255 / 0.12), transparent 60%),
+      linear-gradient(135deg, #0a5fc2 0%, #4644b8 55%, #6f2fc0 100%);
+  }
+  .fin-hero-paid {
+    background: radial-gradient(600px 240px at 0% 0%, rgb(255 255 255 / 0.2), transparent 60%),
+      linear-gradient(135deg, #1f9d4c 0%, #138a5e 60%, #0f766e 100%);
+    box-shadow: 0 18px 40px -22px rgb(19 138 94 / 0.75);
+  }
+  :where(.dark) .fin-hero-paid {
+    background: radial-gradient(600px 240px at 0% 0%, rgb(255 255 255 / 0.12), transparent 60%),
+      linear-gradient(135deg, #17783a 0%, #0f6a48 60%, #0b5a54 100%);
+  }
+  .fin-hero-overdue {
+    background: radial-gradient(600px 240px at 0% 0%, rgb(255 255 255 / 0.2), transparent 60%),
+      linear-gradient(135deg, #e5484d 0%, #d6336c 60%, #b8336a 100%);
+    box-shadow: 0 18px 40px -22px rgb(214 51 108 / 0.7);
+  }
+  :where(.dark) .fin-hero-overdue {
+    background: radial-gradient(600px 240px at 0% 0%, rgb(255 255 255 / 0.12), transparent 60%),
+      linear-gradient(135deg, #b4363a 0%, #a52a57 60%, #8e2a56 100%);
+  }
+
+  /* ---------- verification checks & settlement steps */
+  .fin-check-pass { color: #1f8c3a; }
+  :where(.dark) .fin-check-pass { color: #4ade80; }
+  .fin-check-fail { color: #d1281e; }
+  :where(.dark) .fin-check-fail { color: #ff6b61; }
+  .fin-step {
+    display: grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    background: rgb(10 132 255 / 0.12);
+    color: #0071e3;
+  }
+  :where(.dark) .fin-step { color: #64b5ff; }
+  .fin-step-done { background: rgb(48 209 88 / 0.15); color: #1f8c3a; }
+  :where(.dark) .fin-step-done { color: #4ade80; }
+  .fin-step-locked { background: rgb(113 113 122 / 0.14); color: #71717a; }
+  :where(.dark) .fin-step-locked { color: #a1a1aa; }
+  .fin-timeline > li { position: relative; padding-left: 1.75rem; }
+  .fin-timeline > li::before {
+    content: "";
+    position: absolute;
+    left: 0.4rem;
+    top: 0.45rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background: currentColor;
+    opacity: 0.55;
+  }
+  .fin-timeline > li + li::after {
+    content: "";
+    position: absolute;
+    left: calc(0.65rem - 0.5px);
+    top: -0.85rem;
+    height: 1.2rem;
+    width: 1px;
+    background: rgb(0 0 0 / 0.1);
+  }
+  :where(.dark) .fin-timeline > li + li::after { background: rgb(255 255 255 / 0.12); }
+}

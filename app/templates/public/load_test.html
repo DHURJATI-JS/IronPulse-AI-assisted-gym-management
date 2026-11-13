@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% import "superadmin/_load_test_macros.html" as lt with context %}
+{% import "superadmin/_load_test_charts.html" as charts with context %}
+{#- Public load-test results (app/routers/public_loadtest.py; docs/load-test-page.md, "Public page"): a curated summary
+    of the newest readable run - the data volume (first, in bold), a disclaimer, verdict + SLO checklist, headline
+    numbers, the two per-step charts (the super-admin page's SVG macros) with their table and how it was tested. The context holds only those curated values:
+    no endpoints, server log lines, findings, abuse / IP details, downloads, error messages or file paths - they stay
+    on /superadmin/load-test. Strict CSP: no scripts, no style attributes; the run picker is a <details> menu. -#}
+{% block title %}Load test results{% endblock %}
+{% block description %}{{ app.name }} load test results: how many simulated users and requests per second the app served within its service-level objectives in a production-like stress test - measured on one laptop with simulated AI, not a performance guarantee.{% endblock %}
+
+{%- macro verdict_chip(kind) -%}
+{% if kind == "pass" %}<span class="badge badge-green">{{ icon("check", "size-3.5") }}Pass</span>
+{% elif kind == "inconclusive" %}<span class="badge badge-amber">{{ icon("alert", "size-3.5") }}Inconclusive</span>
+{% else %}<span class="badge badge-red">{{ icon("x", "size-3.5") }}Fail</span>{% endif %}
+{%- endmacro -%}
+
+{% block content %}
+{% set v = view %}
+<header class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between animate-fade-up">
+  <div class="min-w-0">
+    <p class="eyebrow mb-1.5 flex items-center gap-1.5">{{ icon("chart", "size-3.5") }} Performance</p>
+    <h1 class="text-3xl font-semibold tracking-tight sm:text-[40px] sm:leading-tight">Load test results</h1>
+    <p class="mt-2 max-w-2xl text-[15px] muted">How {{ app.name }} held up in its latest production-like stress test: simulated visitors, members, gym owners, staff, abusers and junk senders, stepped up until latency climbs.</p>
+  </div>
+  {% set picker = v is not none and runs | length > 1 %}
+  {% if picker or admin_url %}
+  <div class="flex flex-wrap items-center gap-2">
+    {% if picker %}
+    <details class="relative">
+      <summary class="btn btn-secondary btn-sm cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+        {{ icon("clock", "size-4") }}<span class="max-w-[12rem] truncate">{% if runs[0].current %}Latest run{% else %}{% for r in runs if r.current %}{{ r.started_at | dt("%d %b %Y, %H:%M") }}{% endfor %}{% endif %}</span>{{ icon("chevron-down", "size-4") }}
+        <span class="sr-only"> - choose another run</span>
+      </summary>
+      <div class="absolute left-0 z-30 mt-2 w-[min(24rem,calc(100vw-2rem))] rounded-[22px] bg-white p-1.5 shadow-xl ring-1 ring-black/[0.06] sm:right-0 sm:left-auto dark:bg-elevated-dark dark:ring-white/10">
+        <p class="px-3 pt-2 pb-1.5 text-xs muted">The {{ runs | length }} latest runs, newest first</p>
+        <ul class="grid gap-0.5" data-lt-runs>
+          {% for r in runs %}
+          <li>
+            <a href="{{ r.href }}" class="flex items-center gap-3 rounded-2xl px-3 py-2 transition hover:bg-zinc-100 dark:hover:bg-white/[0.06] {{ 'bg-zinc-100 dark:bg-white/[0.06]' if r.current }}"{% if r.current %} aria-current="page"{% endif %}>
+              <span class="min-w-0 flex-1 truncate text-sm font-medium">{{ r.started_at | dt("%d %b %Y, %H:%M %Z") if r.started_at else "Start time unknown" }}</span>
+              {% if r.users_peak %}<span class="shrink-0 text-xs tabular-nums muted">{{ fmt.num(r.users_peak) }} users</span>{% endif %}
+              {{ verdict_chip(r.verdict) }}
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </details>
+    {% endif %}
+    {% if admin_url %}<a href="{{ admin_url }}" class="btn btn-secondary btn-sm" data-lt-admin-link>{{ icon("shield", "size-4") }}Full report<span class="sr-only"> on the super-admin page</span></a>{% endif %}
+  </div>
+  {% endif %}
+</header>
+
+{% if state == "results" %}
+{# ------------------------------------------------------------------ data volume: first, in bold #}
+{{ lt.data_volume(v.data_volume) }}
+
+{# ------------------------------------------------------------------ disclaimer #}
+<div class="alert alert-warning mb-6 animate-fade-up" role="note" data-lt-disclaimer>
+  {{ icon("alert", "size-5 shrink-0") }}
+  <p class="min-w-0 leading-relaxed"><strong class="font-semibold">Measured on one laptop with simulated AI; not a performance guarantee.</strong> See the Disclaimer &amp; no liability section of the README and the <a href="/terms#disclaimer" class="font-semibold underline underline-offset-2">Terms</a>.</p>
+</div>
+
+{# ------------------------------------------------------------------ run line (times in the viewer's zone, named) #}
+{% set same_day = (v.started_at | dt("%Y-%m-%d")) == (v.ended_at | dt("%Y-%m-%d")) %}
+<p class="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm muted animate-fade-up" data-lt-run-line>
+  <span>{{ v.started_at | dt("%d %b %Y, %H:%M") }}{{ "–" if same_day else " – " }}{{ v.ended_at | dt("%H:%M %Z" if same_day else "%d %b %Y, %H:%M %Z") }}</span>
+  <span>{{ v.duration }}</span>
+  {% if v.users_peak %}<span>up to {{ fmt.num(v.users_peak) }} simulated users</span>{% endif %}
+  {% if runs and not runs[0].current %}<a href="{{ page_path }}" class="font-medium text-accent hover:underline">An earlier run · show the latest</a>{% endif %}
+</p>
+
+{# ------------------------------------------------------------------ verdict + SLOs #}
+{% set tone = {"pass": "success", "inconclusive": "warning"}.get(v.verdict, "danger") %}
+<section aria-labelledby="lt-verdict" class="mb-6 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)] animate-fade-up" data-lt-verdict="{{ v.verdict }}">
+  <div class="alert alert-{{ tone }} !items-start !rounded-[24px] !p-5">
+    {{ icon({"pass": "check-circle", "inconclusive": "alert"}.get(v.verdict, "x-circle"), "size-8 shrink-0") }}
+    <div class="min-w-0 [overflow-wrap:anywhere]">
+      <p class="text-xs font-semibold tracking-[0.14em] uppercase opacity-80" aria-hidden="true">Verdict</p>
+      <h2 id="lt-verdict" class="text-3xl font-semibold tracking-tight"><span class="sr-only">Verdict: </span>{{ v.verdict | upper }}</h2>
+      <p class="mt-1 text-[15px] leading-relaxed">{{ v.headline }}</p>
+      {% if v.note %}<p class="mt-3 text-sm leading-relaxed opacity-85">{{ v.note }}</p>{% endif %}
+    </div>
+  </div>
+  <div class="card !p-0 min-w-0">
+    {% set met = v.slos | selectattr("passed") | list | length %}
+    <div class="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 pb-2 sm:px-6">
+      <h3 class="sa-card-title">Service-level objectives</h3>
+      {% if v.slos %}<span class="badge badge-{{ 'green' if met == v.slos | length else 'red' }}">{{ met }} of {{ v.slos | length }} met</span>{% endif %}
+    </div>
+    <ul class="sa-list">
+      {% for slo in v.slos %}
+      <li class="sa-check">
+        {{ sa.check_icon("pass" if slo.passed else "fail") }}
+        <div class="min-w-0 flex-1 [overflow-wrap:anywhere]">
+          <p class="font-medium">{{ slo.name }}</p>
+          <p class="mt-0.5 text-sm muted">Target {{ slo.target }} · actual <span class="font-semibold text-ink tabular-nums dark:text-white">{{ slo.actual }}</span></p>
+        </div>
+      </li>
+      {% else %}
+      <li class="px-5 py-4 text-sm muted sm:px-6">No service-level objectives were recorded for this run.</li>
+      {% endfor %}
+    </ul>
+  </div>
+</section>
+
+{# ------------------------------------------------------------------ headline numbers #}
+<section aria-label="Key figures" class="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6" data-lt-kpis>
+  {% for k in v.tiles %}
+  <div class="sa-kpi [overflow-wrap:anywhere]" data-lt-tile="{{ k.key }}">{{ ui.stat(k.label, k.value, k.hint, k.icon, k.tone) }}</div>
+  {% endfor %}
+</section>
+
+{# ------------------------------------------------------------------ load steps #}
+{% set st = v.steps %}
+<section class="card mt-6 min-w-0" aria-labelledby="lt-steps-title">
+  <div class="sa-card-head">
+    <div class="min-w-0">
+      <h2 id="lt-steps-title" class="sa-card-title">Load steps</h2>
+      <p class="sa-card-sub">{{ v.plan }}{% if v.knee_users is not none %} · knee at {{ fmt.num(v.knee_users) }} users{% endif %}</p>
+    </div>
+  </div>
+  {% if st.rows %}
+  <div class="mt-5 grid grid-cols-1 gap-8 md:grid-cols-2">
+    {{ charts.step_chart(st.p95, "lt-p95", st.p95_title) }}
+    {{ charts.step_chart(st.rps, "lt-rps", "Throughput per step") }}
+  </div>
+  <div class="mt-6 overflow-x-auto">
+    <table class="table [&_td]:whitespace-nowrap" data-lt-steps>
+      <caption class="sr-only">Load steps: users, throughput, error rate, latency percentiles{% if st.slo_column %} (all requests, and the p95 of the requests the SLO judges){% endif %} and result</caption>
+      <thead>
+        <tr>
+          <th scope="col">Users</th><th scope="col" class="text-right">Req/s</th>
+          <th scope="col" class="text-right">Errors</th><th scope="col" class="text-right">p50</th>
+          <th scope="col" class="text-right">p95</th><th scope="col" class="text-right">p99</th>
+          {% if st.slo_column %}<th scope="col" class="text-right"><abbr title="p95 of the requests the latency SLO judges" class="no-underline">SLO p95</abbr></th>{% endif %}
+          <th scope="col">Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in st.rows %}
+        <tr{% if r.knee %} class="bg-accent/[0.05] dark:bg-accent/[0.08]"{% endif %}>
+          <td class="whitespace-nowrap font-semibold tabular-nums">{{ fmt.num(r.users) }}{% if r.knee %} <span class="badge badge-blue ml-1">Knee</span>{% endif %}</td>
+          <td class="text-right tabular-nums">{{ fmt.rps(r.rps) }}</td>
+          <td class="whitespace-nowrap text-right">{{ lt.failure_rate(r.error_rate, r.flag) }}</td>
+          <td class="whitespace-nowrap text-right tabular-nums">{{ fmt.ms(r.p50) }}</td>
+          <td class="whitespace-nowrap text-right {{ 'font-medium ' if not st.slo_column }}tabular-nums">{{ fmt.ms(r.p95) }}</td>
+          <td class="whitespace-nowrap text-right tabular-nums">{{ fmt.ms(r.p99) }}</td>
+          {% if st.slo_column %}<td class="whitespace-nowrap text-right font-medium tabular-nums">{{ fmt.ms(r.slo_p95) }}</td>{% endif %}
+          <td>{{ lt.result_chip(r.passed) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="mt-4">{{ lt.missing("No load steps recorded", "This run has no per-step results.", "chart") }}</div>
+  {% endif %}
+</section>
+
+{# ------------------------------------------------------------------ how it was tested #}
+<section class="card mt-6 min-w-0 [overflow-wrap:anywhere]" aria-labelledby="lt-tested-title" data-lt-tested>
+  <h2 id="lt-tested-title" class="sa-card-title">How it was tested</h2>
+  <p class="sa-card-sub">The production-like Locust stress test: real pages, sign-ins, forms and live connections, driven by simulated people</p>
+  <div class="mt-5 grid grid-cols-1 gap-8 lg:grid-cols-2">
+    <dl class="sa-kv !grid-cols-1">
+      {{ lt.kv("Date", (v.started_at | dt("%d %b %Y, %H:%M")) ~ ("–" if same_day else " – ") ~ (v.ended_at | dt("%H:%M %Z" if same_day else "%d %b %Y, %H:%M %Z"))) }}
+      {% for label, value in v.tested %}{{ lt.kv(label, value) }}{% endfor %}
+    </dl>
+    <div class="min-w-0">
+      <h3 class="mb-3 text-sm font-semibold">Simulated users</h3>
+      {% if v.mix %}
+      <ul class="grid gap-4" data-lt-mix>
+        {% for c in v.mix %}
+        <li class="min-w-0">
+          <div class="flex items-baseline justify-between gap-3 text-sm"><span class="min-w-0 font-medium">{{ c.label }}</span><span class="shrink-0 tabular-nums muted">{{ fmt.pct(c.share) }}</span></div>
+          <div class="mt-1.5">{{ charts.meter(c.share, "Share of the simulated users: " ~ c.label) }}</div>
+          {% if c.what %}<p class="mt-1 text-xs muted">{{ c.what }}</p>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="text-sm muted">Not recorded.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{% elif state == "unavailable" %}
+{# ------------------------------------------------------------------ runs exist, none can be shown: neutral, no details #}
+<section class="card flex flex-col items-center px-6 py-12 text-center animate-fade-up" aria-labelledby="lt-unavailable-title" data-lt-unavailable>
+  <span class="grid size-14 place-items-center rounded-2xl bg-zinc-200/70 text-zinc-500 dark:bg-white/[0.08] dark:text-zinc-400">{{ icon("info", "size-7") }}</span>
+  <h2 id="lt-unavailable-title" class="mt-4 text-lg font-semibold">Results unavailable</h2>
+  <p class="mt-2 max-w-xl text-sm leading-relaxed muted">The latest load test results cannot be shown right now. Please check back later.</p>
+</section>
+
+{% else %}
+{# ------------------------------------------------------------------ no run yet #}
+<section class="card flex flex-col items-center px-6 py-12 text-center animate-fade-up" aria-labelledby="lt-empty-title" data-lt-empty>
+  <span class="grid size-14 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("chart", "size-7") }}</span>
+  <h2 id="lt-empty-title" class="mt-4 text-lg font-semibold">No load test results yet</h2>
+  <p class="mt-2 max-w-xl text-sm leading-relaxed muted">The results of the production-like stress test - how many users and requests per second {{ app.name }} serves within its service-level objectives - appear here after the next test run.</p>
+</section>
+{% endif %}
+{% endblock %}

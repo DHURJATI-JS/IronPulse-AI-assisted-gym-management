@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% import "owner/shop/_macros.html" as os with context %}
+{% block title %}Orders · Shop{% endblock %}
+{% block content %}
+{% call ui.page_header("Orders", subtitle="Prepare, hand over or ship orders, and handle cancellations and refunds.", eyebrow="Shop") %}{% endcall %}
+{{ os.tabs("orders") }}
+
+<nav class="shop-chip-row mb-5" aria-label="Order status">
+  {% for key, label in status_filters.items() %}
+    {% set n = (counts.values() | sum) if key == "" else ((counts.get("paid", 0) + counts.get("processing", 0) + counts.get("ready_for_pickup", 0) + counts.get("shipped", 0)) if key == "to_fulfil" else counts.get(key, 0)) %}
+    <a href="{{ status_links[key] }}" class="shop-chip" {% if f.status == key %}aria-current="true"{% endif %}>{{ label }}<span class="shop-chip-count">{{ n }}</span></a>
+  {% endfor %}
+</nav>
+
+<form method="get" action="/owner/shop/orders" class="card-flat mb-6 grid gap-3 md:grid-cols-[1fr_auto_auto_auto_auto] md:items-end" role="search" aria-label="Filter orders">
+  <input type="hidden" name="status" value="{{ f.status }}">
+  <div>
+    <label for="o-q" class="label">Search</label>
+    <input id="o-q" type="search" name="q" value="{{ f.q }}" placeholder="Order number or customer" class="input" maxlength="60">
+  </div>
+  {% if gyms | length > 1 %}
+    <div><label for="o-gym" class="label">Gym</label><select id="o-gym" name="gym" class="input md:w-44"><option value="">All gyms</option>{% for g in gyms %}<option value="{{ g.id }}" {{ 'selected' if f.gym == g.id }}>{{ g.name }}</option>{% endfor %}</select></div>
+  {% endif %}
+  <div><label for="o-from" class="label">From</label><input id="o-from" type="date" name="from" value="{{ f['from'] }}" class="input"></div>
+  <div><label for="o-to" class="label">To</label><input id="o-to" type="date" name="to" value="{{ f.to }}" class="input"></div>
+  <button type="submit" class="btn btn-secondary">{{ icon("search", "size-4") }}Filter</button>
+</form>
+
+{% if rows %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Order</th><th>Customer</th><th>Gym</th><th class="!text-right">Items</th><th class="!text-right">Total</th><th>Status</th><th>How</th></tr></thead>
+      <tbody>
+        {% for o, units in rows %}
+          <tr>
+            <td class="whitespace-nowrap"><a href="/owner/shop/orders/{{ o.id }}" class="font-mono text-sm font-semibold text-accent hover:underline">{{ o.order_number }}</a><span class="block text-xs muted">{{ o.created_at | dt("%d %b, %H:%M") }}</span></td>
+            <td class="max-w-[220px]"><span class="block truncate">{{ o.customer_label.split(' <')[0] }}</span></td>
+            <td class="whitespace-nowrap text-sm muted">{{ o.gym.name }}</td>
+            <td class="text-right tabular-nums">{{ units }}</td>
+            <td class="whitespace-nowrap text-right font-semibold tabular-nums">{{ o.total | money(o.currency) }}{% if o.refunded_total | float > 0 %}<span class="block text-xs font-normal text-[#1f8c3a] dark:text-[#4ade80]">−{{ o.refunded_total | money(o.currency) }}</span>{% endif %}</td>
+            <td class="whitespace-nowrap">{{ shop.order_status(o.status) }}</td>
+            <td class="whitespace-nowrap text-sm">{% if o.fulfillment == "pickup" %}{{ icon("map-pin", "inline size-3.5 text-accent") }} Pickup{% else %}{{ shop.svg("truck", "inline size-3.5 text-violet") }} Delivery{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="mt-3 text-sm muted">{{ total }} order{{ 's' if total != 1 }}</p>
+  {{ ui.pager(p, params=f, path="/owner/shop/orders") }}
+{% else %}
+  {{ ui.empty("No orders here yet", "Paid orders appear here instantly - you'll also get a notification for each one.", "receipt") }}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,159 @@
+/* public work-package styles (WP-A1): landing page, gym directory, gym/branch pages, plans, jobs, legal.
+ * Component classes only (prefix "pub-"); everything else is utility classes in app/templates/public/. */
+
+@keyframes pub-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes pub-glow {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.06); }
+}
+@keyframes pub-lightbox-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+
+@layer components {
+  /* ---------- typography */
+  .pub-display { @apply text-[44px] font-semibold leading-[1.04] tracking-tight sm:text-6xl lg:text-7xl; }
+  .pub-h2 { @apply text-3xl font-semibold tracking-tight sm:text-[40px] sm:leading-[1.1]; }
+
+  /* ---------- hero */
+  .pub-hero { @apply relative isolate overflow-hidden; }
+  .pub-hero-bg {
+    @apply pointer-events-none absolute inset-0 -z-10;
+    background:
+      radial-gradient(900px 480px at 12% -8%, rgb(10 132 255 / 0.20), transparent 62%),
+      radial-gradient(760px 460px at 92% 4%, rgb(191 90 242 / 0.18), transparent 60%),
+      radial-gradient(640px 380px at 50% 110%, rgb(94 92 230 / 0.10), transparent 70%);
+  }
+  .pub-hero-bg::after {
+    content: "";
+    @apply absolute inset-0;
+    background-image:
+      linear-gradient(to right, rgb(0 0 0 / 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(0 0 0 / 0.045) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 35%, transparent 80%);
+  }
+  .dark .pub-hero-bg::after {
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.05) 1px, transparent 1px);
+  }
+  .pub-page-glow { @apply pointer-events-none absolute inset-x-0 top-0 -z-10 h-[420px]; background: radial-gradient(700px 300px at 20% 0%, rgb(10 132 255 / 0.12), transparent 70%), radial-gradient(600px 300px at 85% 0%, rgb(191 90 242 / 0.10), transparent 70%); }
+  .pub-orb {
+    @apply pointer-events-none absolute -inset-10 -z-10 rounded-full blur-3xl;
+    background: conic-gradient(from 180deg, rgb(10 132 255 / 0.35), rgb(94 92 230 / 0.30), rgb(191 90 242 / 0.30), rgb(10 132 255 / 0.35));
+    animation: pub-glow 9s ease-in-out infinite;
+  }
+  .dark .pub-orb { opacity: 0.45; }
+  .pub-float { animation: pub-float 7s ease-in-out infinite; }
+  .pub-float-delayed { animation: pub-float 7s ease-in-out 1.6s infinite; }
+  .pub-island-demo {
+    @apply flex w-fit max-w-full items-center gap-2.5 rounded-full bg-black py-2 pl-2 pr-4 text-white shadow-2xl shadow-black/30 ring-1 ring-white/10;
+  }
+  .pub-ai-chip { @apply bg-white/70 py-1.5 shadow-sm ring-1 ring-black/[0.05] backdrop-blur dark:bg-white/[0.08] dark:ring-white/[0.08]; }
+
+  /* ---------- landing sections */
+  .pub-step {
+    @apply absolute right-5 top-5 grid size-7 place-items-center rounded-full bg-zinc-900/[0.05] text-xs font-semibold text-zinc-500 tabular-nums dark:bg-white/10 dark:text-zinc-300;
+  }
+  .pub-bento {
+    @apply relative overflow-hidden rounded-[28px] bg-white p-6 ring-1 ring-black/[0.05] transition duration-500 ease-spring hover:-translate-y-0.5 sm:p-7 dark:bg-surface-dark dark:ring-white/[0.08];
+    box-shadow: 0 0 0 1px var(--pub-ring, rgb(0 0 0 / 0.05)), 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -18px rgb(0 0 0 / 0.18);
+  }
+  .pub-quote {
+    @apply flex flex-col rounded-[28px] p-6 ring-1 ring-black/[0.05] sm:p-7 dark:ring-white/[0.08];
+    background: linear-gradient(160deg, rgb(10 132 255 / 0.08), rgb(191 90 242 / 0.06) 60%, transparent), #fff;
+  }
+  .dark .pub-quote { background: linear-gradient(160deg, rgb(10 132 255 / 0.16), rgb(191 90 242 / 0.10) 60%, transparent), #1c1c1e; }
+  .pub-cta {
+    @apply relative isolate overflow-hidden rounded-[36px] bg-[#0b0b10] px-6 py-16 shadow-2xl shadow-indigo/20 ring-1 ring-white/10 sm:px-12 sm:py-20;
+  }
+  .pub-cta::before {
+    content: "";
+    @apply absolute inset-0 -z-10;
+    background: radial-gradient(600px 300px at 15% 0%, rgb(10 132 255 / 0.45), transparent 70%),
+      radial-gradient(520px 320px at 90% 100%, rgb(191 90 242 / 0.40), transparent 70%);
+  }
+
+  /* ---------- cards with cover photos (gyms, branches) */
+  .pub-gym-card {
+    @apply flex flex-col overflow-hidden rounded-[28px] bg-white ring-1 ring-black/[0.05] transition duration-500 ease-spring
+      hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/10 focus-visible:-translate-y-1 dark:bg-surface-dark dark:ring-white/[0.08] dark:hover:shadow-black/40;
+    box-shadow: 0 0 0 1px var(--pub-ring, rgb(0 0 0 / 0.05)), 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -18px rgb(0 0 0 / 0.18);
+  }
+  .dark .pub-gym-card, .dark .pub-bento { --pub-ring: rgb(255 255 255 / 0.08); }
+  .pub-cover { @apply relative overflow-hidden bg-zinc-100 dark:bg-white/[0.04]; }
+  .pub-cover-img { @apply size-full object-cover transition duration-700 ease-spring group-hover:scale-[1.04]; }
+  .pub-cover-fallback {
+    @apply grid size-full min-h-32 place-items-center;
+    background: linear-gradient(135deg, rgb(10 132 255 / 0.18), rgb(94 92 230 / 0.14) 50%, rgb(191 90 242 / 0.18));
+  }
+  .pub-photo-badge {
+    @apply inline-flex items-center gap-1 rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-ink shadow-sm backdrop-blur-md dark:bg-black/65 dark:text-white;
+  }
+  .pub-portrait {
+    @apply inline-grid shrink-0 place-items-center overflow-hidden rounded-[20px] bg-gradient-to-br from-accent to-violet text-lg font-semibold text-white ring-1 ring-black/5 dark:ring-white/10;
+  }
+  .pub-portrait img { @apply size-full object-cover; }
+
+  /* ---------- plans */
+  .pub-plan {
+    @apply relative flex flex-col rounded-[24px] bg-white p-5 ring-1 ring-black/[0.06] transition duration-300 ease-spring hover:-translate-y-0.5 hover:shadow-xl hover:shadow-black/5 dark:bg-surface-dark dark:ring-white/[0.08];
+  }
+  .pub-plan-featured { @apply ring-2 ring-accent/60 dark:ring-accent/70; }
+  .pub-plan-ribbon { @apply absolute right-4 top-4 rounded-full bg-accent px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white; }
+  .pub-matrix th, .pub-matrix td { @apply text-center; }
+  .pub-matrix th:first-child, .pub-matrix td:first-child { @apply text-left; }
+  .pub-yes { @apply mx-auto grid size-6 place-items-center rounded-full bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]; }
+  .pub-no { @apply mx-auto grid size-6 place-items-center rounded-full bg-zinc-500/10 text-zinc-400 dark:text-zinc-500; }
+
+  /* ---------- branch gallery + lightbox */
+  .pub-gallery { @apply grid grid-cols-2 gap-2 overflow-hidden rounded-[28px] sm:h-[26rem] sm:grid-cols-4 sm:grid-rows-2 lg:h-[30rem]; }
+  .pub-gallery-item { @apply relative block overflow-hidden bg-zinc-100 focus-visible:outline-offset-[-3px] dark:bg-white/[0.05]; }
+  .pub-gallery-item img { @apply aspect-[4/3] size-full object-cover transition duration-700 ease-spring hover:scale-[1.04] sm:aspect-auto; }
+  .pub-gallery-item:first-child { @apply col-span-2 sm:row-span-2; }
+  .pub-gallery-more { @apply absolute inset-0 grid place-items-center bg-black/45 text-sm font-semibold text-white backdrop-blur-[2px]; }
+
+  .pub-lightbox {
+    @apply fixed inset-0 z-[95] flex flex-col bg-black/95 text-white backdrop-blur-xl;
+    animation: pub-lightbox-in 0.35s var(--ease-spring) both;
+    touch-action: pan-y;
+  }
+  .pub-lightbox-stage { @apply relative flex min-h-0 flex-1 items-center justify-center px-3 sm:px-20; }
+  .pub-lightbox-img { @apply max-h-full max-w-full select-none rounded-2xl object-contain shadow-2xl transition-opacity duration-300; }
+  .pub-lightbox-btn {
+    @apply grid size-11 place-items-center rounded-full bg-white/10 text-white backdrop-blur transition hover:bg-white/20 focus-visible:outline-white disabled:opacity-30;
+  }
+  .pub-lightbox-nav { @apply absolute top-1/2 hidden -translate-y-1/2 sm:grid; }
+  .pub-lightbox-bar { @apply flex items-center justify-between gap-3 px-4 py-3 sm:px-6; }
+  .pub-lightbox-caption { @apply min-w-0 truncate text-sm text-white/80; }
+
+  /* ---------- map */
+  .pub-map { @apply relative z-0 h-72 w-full overflow-hidden rounded-[22px] bg-zinc-100 sm:h-80 dark:bg-white/[0.04]; }
+  .pub-map .leaflet-container { @apply size-full rounded-[22px] font-sans; }
+  .pub-map-pin { @apply grid place-items-center; }
+  .pub-map-pin span {
+    @apply block size-5 rounded-full border-[3px] border-white bg-accent shadow-lg shadow-accent/50;
+  }
+  .dark .pub-map .leaflet-tile-pane { filter: brightness(0.75) contrast(1.1) saturate(0.85); }
+  .dark .pub-map .leaflet-control-attribution { @apply bg-black/60 text-zinc-300; }
+  .dark .pub-map .leaflet-control-attribution a { @apply text-[#64b5ff]; }
+  .dark .pub-map .leaflet-bar a { @apply border-white/10 bg-zinc-800 text-white; }
+
+  /* ---------- hours */
+  .pub-hours-row { @apply flex items-center justify-between rounded-xl px-3 py-2 text-sm; }
+  .pub-hours-today { @apply bg-accent/10 font-semibold text-accent-strong dark:bg-accent/15 dark:text-[#8cc8ff]; }
+
+  /* ---------- legal / long-form */
+  .pub-callout {
+    @apply rounded-[24px] p-5 ring-1 sm:p-6;
+    @apply bg-warn/10 text-[#7c2d12] ring-warn/30 dark:bg-warn/10 dark:text-[#fde68a] dark:ring-warn/25;
+  }
+  .pub-callout strong { @apply text-[#7c2d12] dark:text-[#fde68a]; }
+  .pub-legal section { scroll-margin-top: 6rem; }
+  .pub-faq summary::-webkit-details-marker { display: none; }
+}

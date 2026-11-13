@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "checkout/_plan.html" as pl with context %}
+{% block title %}Join {{ gym.name }}{% endblock %}
+{% block content %}
+<div data-component="plan-picker" data-base-url="/subscribe/{{ gym.slug }}">
+  {% call ui.page_header("Join " ~ gym.name, subtitle=(gym.tagline or "Pick the membership that fits how you train. Every plan includes the pre-recorded video library."), eyebrow="Membership", back="/gyms/" ~ gym.slug) %}
+    {% if app.payments_test_mode %}<span class="badge badge-amber">{{ icon("flag", "size-3.5") }}Test payments</span>{% endif %}
+    <a href="/me/subscriptions" class="btn btn-secondary btn-sm">{{ icon("receipt", "size-4") }}My memberships</a>
+  {% endcall %}
+
+  {% if block %}
+    <section class="card mx-auto flex max-w-2xl flex-col items-center px-6 py-12 text-center animate-fade-up" aria-live="polite">
+      <span class="grid size-16 place-items-center rounded-[22px] {{ 'bg-warn/15 text-[#b45309] dark:text-[#fbbf24]' if block.code == 'id' else 'bg-bad/12 text-[#d1281e] dark:text-[#ff6b61]' }}">
+        {{ icon("id-card" if block.code == 'id' else "shield", "size-8") }}
+      </span>
+      <h2 class="mt-5 text-2xl font-semibold">{{ block.title }}</h2>
+      <p class="mt-2 max-w-md text-[15px] muted">{{ block.message }}</p>
+      {% if block.action_href %}
+        <a href="{{ block.action_href }}" class="btn btn-primary mt-7">{{ block.action_label }} {{ icon("arrow-right", "size-4") }}</a>
+      {% endif %}
+      <p class="mt-6 text-xs muted">Browsing is always free - <a href="/gyms/{{ gym.slug }}" class="font-medium text-accent hover:underline">see {{ gym.name }}'s branches and trainers</a>.</p>
+    </section>
+
+  {% elif not groups %}
+    {{ ui.empty("No memberships on sale right now", gym.name ~ " isn't selling memberships at the moment. Check back soon or explore other gyms nearby.", "sparkles", "Browse gyms", "/gyms") }}
+
+  {% else %}
+    {% if active_subs %}
+      <div class="alert alert-success mb-6">
+        {{ icon("check-circle", "size-5 shrink-0") }}
+        <p>You're already a member here:
+          {% for s in active_subs %}<strong>{{ s.plan.name }}</strong> until {{ s.ends_on | date }}{{ ", " if not loop.last }}{% endfor %}.
+          Buying the same plan again extends it from the day it ends.</p>
+      </div>
+    {% endif %}
+    {% if pending_subs %}
+      <div class="alert alert-info mb-6">
+        {{ icon("clock", "size-5 shrink-0") }}
+        <div class="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p>You have an unfinished purchase: <strong>{{ pending_subs[0].plan.name }}</strong> ({{ 'waiting for the desk check' if pending_subs[0].status.value == 'pending_otp' else 'ready to pay' }}).</p>
+          <a href="/checkout/{{ pending_subs[0].id }}" class="btn btn-sm btn-dark shrink-0">Continue {{ icon("arrow-right", "size-3.5") }}</a>
+        </div>
+      </div>
+    {% endif %}
+    {% if errors.limit or limit_notice %}
+      <div class="alert alert-warning mb-6" role="{{ 'alert' if errors.limit else 'status' }}" data-gym-limit>
+        {{ icon("lock", "size-5 shrink-0") }}
+        <div class="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p>{{ errors.limit or limit_notice }}</p>
+          <a href="/me/subscriptions" class="btn btn-sm btn-dark shrink-0">My memberships {{ icon("arrow-right", "size-3.5") }}</a>
+        </div>
+      </div>
+    {% endif %}
+    {% if slots %}<div class="mb-6">{% include "customer/_gym_slots.html" %}</div>{% endif %}
+
+    <form method="post" action="/subscribe/{{ gym.slug }}" class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]" data-plan-form>
+      {{ ui.csrf() }}
+      <input type="hidden" name="lat" value="{{ loc.lat if loc.source == 'gps' else '' }}">
+      <input type="hidden" name="lon" value="{{ loc.lon if loc.source == 'gps' else '' }}">
+      <input type="hidden" name="timezone" value="">
+
+      <div class="min-w-0 space-y-8">
+        {% if errors.form %}{{ ui.alert(errors.form, "danger") }}{% endif %}
+
+        {% if has_branch_plans %}
+        <section class="card-flat flex flex-wrap items-center gap-4 animate-fade-up" aria-labelledby="loc-title">
+          <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("map-pin", "size-6") }}</span>
+          <div class="min-w-0 flex-1 basis-48">
+            <h2 id="loc-title" class="font-semibold">Your location</h2>
+            <p class="text-sm muted">
+              {% if loc.source == 'gps' %}Using the location you just shared.
+              {% elif loc.source == 'saved' %}Using the location saved on your account.
+              {% elif loc.source == 'city' %}Using your city ({{ loc.city }}). Share your location for exact distances.
+              {% else %}Share your location so we can check which branches are within {{ app.offline_max_distance_km | int }} km of you.{% endif %}
+              {% if eligibility and eligibility.eligible and eligibility.distance_km is not none %} Nearest branch: <strong class="text-ink dark:text-white">{{ '%.1f' | format(eligibility.distance_km) }} km</strong>.{% endif %}
+            </p>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm w-full shrink-0 sm:w-auto" data-component="geolocate">Use my location</button>
+        </section>
+
+        {% if eligibility and not eligibility.eligible %}
+          <div class="alert alert-warning" role="status" data-offline-block>
+            {{ icon("map", "size-5 shrink-0") }}
+            <div>
+              <p class="font-semibold">{{ 'Gym and combo plans are unavailable for you' if eligibility.method != 'unknown' else 'Location needed for gym and combo plans' }}</p>
+              <p>{{ eligibility.message }}</p>
+            </div>
+          </div>
+        {% endif %}
+        {% endif %}
+
+        {% for group in groups %}
+        <fieldset class="animate-fade-up">
+          <legend class="flex w-full items-center gap-2">
+            <span class="section-title">{{ group.label }}</span>
+            {% if group.locked %}<span class="badge badge-zinc">{{ icon("lock", "size-3") }}Not near you</span>{% endif %}
+          </legend>
+          <p class="mt-1 text-sm muted">{{ group.blurb }}</p>
+          <div class="mt-4 grid gap-4 sm:grid-cols-2">
+            {% for item in group['items'] %}
+              {% set p = item.plan %}
+              <label class="plan-option" data-plan-option data-mode="{{ p.mode.value }}" data-name="{{ p.name }}"
+                     data-price="{{ p.price | money(p.currency) }}" data-duration="{{ p.duration_days }}" data-mode-label="{{ pl.mode_label(p) }}">
+                <input type="radio" name="plan" value="{{ p.code }}" class="sr-only" {{ 'checked' if p.code == selected_code and not item.disabled }} {{ 'disabled' if item.disabled }}
+                       aria-describedby="plan-{{ p.id }}-desc">
+                <span class="flex items-start justify-between gap-3">
+                  <span class="min-w-0">
+                    <span class="block font-semibold leading-snug">{{ p.name }}</span>
+                    <span class="mt-1 block text-xs muted">{{ p.duration_days }} days</span>
+                  </span>
+                  <span class="plan-radio" aria-hidden="true"></span>
+                </span>
+                <span class="mt-4 flex items-baseline gap-1">
+                  <span class="text-2xl font-semibold tracking-tight tabular-nums">{{ p.price | money(p.currency) }}</span>
+                </span>
+                <span id="plan-{{ p.id }}-desc" class="mt-2 block text-sm muted">{{ p.description or '' }}</span>
+                <span class="mt-4 block">{{ pl.features(p, "text-zinc-600 dark:text-zinc-300") }}</span>
+                {% if item.disabled %}
+                  <span class="mt-4 flex items-center gap-1.5 text-xs font-medium text-[#b45309] dark:text-[#fbbf24]">{{ icon("lock", "size-3.5") }}{{ item.reason }}</span>
+                {% endif %}
+              </label>
+            {% endfor %}
+          </div>
+        </fieldset>
+        {% endfor %}
+        {% if errors.plan %}<p class="field-error -mt-4" role="alert">{{ errors.plan }}</p>{% endif %}
+
+        {% if has_branch_plans and branches and eligibility and eligibility.eligible %}
+        <fieldset data-branch-section class="animate-fade-up">
+          <legend class="section-title">Choose your branch</legend>
+          <p class="mt-1 text-sm muted">Gym and combo memberships belong to one branch. You'll confirm the purchase at its desk with a one-time code.</p>
+          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+            {% for b, d in branches %}
+              {% set far = d is not none and d > app.offline_max_distance_km %}
+              <label class="plan-option !p-4">
+                <input type="radio" name="branch_id" value="{{ b.id }}" class="sr-only" {{ 'checked' if (selected_branch_id == b.id) or (not selected_branch_id and loop.first and not far) }} {{ 'disabled' if far }}>
+                <span class="flex items-start gap-3">
+                  <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-zinc-900/[0.05] text-zinc-600 dark:bg-white/10 dark:text-zinc-300">{{ icon("building", "size-5") }}</span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate font-semibold">{{ b.name }}</span>
+                    <span class="block truncate text-xs muted">{{ b.address_line1 }}, {{ b.city }}</span>
+                  </span>
+                  <span class="badge {{ 'badge-zinc' if far or d is none else 'badge-green' }} shrink-0">{{ ('%.1f km' | format(d)) if d is not none else b.city }}</span>
+                </span>
+              </label>
+            {% endfor %}
+          </div>
+          {% if errors.branch_id %}<p class="field-error" role="alert">{{ errors.branch_id }}</p>{% endif %}
+        </fieldset>
+        {% endif %}
+      </div>
+
+      <aside class="lg:sticky lg:top-24 lg:self-start">
+        <div class="card space-y-5" aria-live="polite" data-summary-card>
+          <div>
+            <p class="eyebrow">Your membership</p>
+            <p class="mt-2 text-xl font-semibold leading-snug" data-summary-name>{{ selected_plan.name if selected_plan else 'Choose a plan' }}</p>
+            <p class="mt-0.5 text-sm muted" data-summary-mode>{{ (pl.mode_label(selected_plan) ~ ' · ' ~ selected_plan.duration_days ~ ' days') if selected_plan else 'Select one of the plans' }}</p>
+          </div>
+          <div class="flex items-end justify-between gap-3">
+            <p class="kpi" data-summary-price>{{ selected_plan.price | money(selected_plan.currency) if selected_plan else '—' }}</p>
+            <p class="pb-1 text-sm muted">{{ gym.name }}</p>
+          </div>
+          <div class="divider !my-0"></div>
+          <ul class="space-y-2.5 text-sm muted">
+            <li class="flex items-start gap-2">{{ icon("play", "mt-0.5 size-4 shrink-0 text-accent") }}Pre-recorded videos are included in every plan.</li>
+            <li class="flex items-start gap-2" data-desk-note>{{ icon("key", "mt-0.5 size-4 shrink-0 text-accent") }}Gym and combo plans are confirmed at the branch desk with a one-time code.</li>
+            <li class="flex items-start gap-2">{{ icon("shield", "mt-0.5 size-4 shrink-0 text-accent") }}You always pay the gym's listed price - nothing extra at checkout.</li>
+          </ul>
+          <button type="submit" class="btn btn-primary btn-lg w-full" data-summary-submit>Continue {{ icon("arrow-right", "size-4") }}</button>
+          <p class="text-center text-xs muted">Memberships aren't refundable once active. By continuing you accept the <a href="/terms" class="underline-offset-2 hover:underline">terms</a>.</p>
+        </div>
+      </aside>
+
+      {# phones: the summary card sits below a long list, so keep the next step within thumb reach #}
+      <div class="mobile-buy-bar lg:hidden" data-mobile-bar hidden>
+        <div class="min-w-0 flex-1">
+          <p class="truncate text-sm font-semibold" data-summary-name>{{ selected_plan.name if selected_plan else 'Choose a plan' }}</p>
+          <p class="text-xs muted tabular-nums" data-summary-price>{{ selected_plan.price | money(selected_plan.currency) if selected_plan else '' }}</p>
+        </div>
+        <button type="submit" class="btn btn-primary shrink-0" data-summary-submit>Continue {{ icon("arrow-right", "size-4") }}</button>
+      </div>
+    </form>
+  {% endif %}
+  <div class="mt-10 max-w-3xl">
+    {% with ask_endpoint="/api/plans/ask", ask_extra={"gym_slug": gym.slug}, ask_title="Still deciding? Ask AI",
+            ask_suggestions=["Which plan fits my goal and health?", "Online or combo for me?"] %}
+      {% include "partials/ask_ai.html" %}
+    {% endwith %}
+  </div>
+</div>
+{% endblock %}

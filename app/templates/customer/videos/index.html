@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "customer/videos/_card.html" as vc with context %}
+{% block title %}Video library{% endblock %}
+{% block content %}
+{% call ui.page_header("Guided sessions", "Pre-recorded workouts included with every membership. They keep playing even when AI is offline.", eyebrow="Video library") %}
+  {% if total %}
+    <span class="chip">{{ icon("video", "size-3.5") }} {{ total }} video{{ "s" if total != 1 }}</span>
+    <span class="chip">{{ icon("clock", "size-3.5") }} {{ minutes }} min</span>
+  {% endif %}
+{% endcall %}
+
+<nav class="no-scrollbar -mx-1 mb-8 overflow-x-auto px-1" aria-label="Filter by goal">
+  <div class="tabs">
+    <a href="/me/videos" class="tab whitespace-nowrap {{ 'tab-active' if not goal }}"{% if not goal %} aria-current="page"{% endif %}>All</a>
+    {% for g, label, _ in goal_tabs %}
+      <a href="/me/videos?goal={{ g }}" class="tab whitespace-nowrap {{ 'tab-active' if goal == g }}"{% if goal == g %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </div>
+</nav>
+
+{% if locked %}
+  <section class="card relative mb-10 overflow-hidden animate-fade-up">
+    <div class="pointer-events-none absolute -left-20 -top-24 size-64 rounded-full bg-accent/20 blur-3xl"></div>
+    <div class="pointer-events-none absolute -bottom-24 -right-16 size-64 rounded-full bg-violet/20 blur-3xl"></div>
+    <div class="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex items-start gap-4">
+        <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-ink text-white dark:bg-white dark:text-black">{{ icon("lock", "size-5") }}</span>
+        <div>
+          <h2 class="text-xl font-semibold tracking-tight">Unlock the full video library</h2>
+          <p class="mt-1 max-w-xl text-sm muted">Every membership - online, offline or combo - includes all guided sessions. Pick a gym near you or train online.</p>
+        </div>
+      </div>
+      <div class="flex shrink-0 flex-wrap gap-2">
+        <a href="/gyms" class="btn btn-primary">{{ icon("map-pin", "size-4") }} Find a gym</a>
+        <a href="/plans" class="btn btn-secondary">See plans</a>
+      </div>
+    </div>
+  </section>
+{% endif %}
+
+{% if not total %}
+  {{ ui.empty("No videos here yet", "The guided-session library is being prepared. Check back soon - sessions are added for every goal." if not goal else "There are no sessions for this goal yet. Try another category.", "video", "Show all videos" if goal else None, "/me/videos" if goal else None) }}
+{% else %}
+  <div class="space-y-12">
+    {% for g, label, blurb, cards in groups %}
+      {% if cards %}
+        <section aria-labelledby="group-{{ g }}" class="animate-fade-up">
+          <div class="mb-4 flex items-end justify-between gap-4">
+            <div>
+              <h2 id="group-{{ g }}" class="text-xl font-semibold tracking-tight">{{ label }}</h2>
+              <p class="mt-0.5 text-sm muted">{{ blurb }}</p>
+            </div>
+            <span class="chip shrink-0">{{ cards | length }}</span>
+          </div>
+          <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {% for c in cards %}{{ vc.card(c, locked) }}{% endfor %}
+          </div>
+        </section>
+      {% endif %}
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

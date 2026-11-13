@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}Your gyms{% endblock %}
+{% block main_class %}owner-page{% endblock %}
+{% block content %}
+{% call ui.page_header("Your gyms", "Each gym is a brand. Run it online, from verified physical branches, or both.", eyebrow="Owner console") %}
+  <a href="/owner/gyms/new" class="btn btn-primary">{{ icon("plus", "size-4") }} New gym</a>
+{% endcall %}
+
+{% if owner_missing %}
+<div class="mb-6">
+  {{ ui.alert("Complete your owner profile (" ~ (owner_missing | join(", ") | lower) ~ ") to submit branches for verification and to enable online classes.", "warning", "One more step before you can launch") }}
+</div>
+{% endif %}
+
+{% if gyms %}
+<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+  {% for row in gyms %}
+  {% set g = row.gym %}
+  <article class="card card-hover flex flex-col animate-fade-up">
+    <div class="flex items-start gap-4">
+      {% if g.logo_key %}
+        <img src="{{ media_url(g.logo_key) }}" alt="{{ g.name }} logo" class="size-14 shrink-0 rounded-2xl object-cover ring-1 ring-black/5 dark:ring-white/10" loading="lazy">
+      {% else %}
+        <span class="grid size-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-accent via-indigo to-violet text-lg font-semibold text-white shadow-md shadow-indigo/20">{{ g.name | initials }}</span>
+      {% endif %}
+      <div class="min-w-0 flex-1">
+        <h2 class="truncate text-lg font-semibold"><a href="/owner/gyms/{{ g.id }}" class="hover:text-accent">{{ g.name }}</a></h2>
+        <p class="truncate text-sm muted">{{ g.tagline or row.country }}</p>
+      </div>
+    </div>
+
+    <div class="mt-4 flex flex-wrap gap-1.5">
+      {% if g.online_enabled %}
+        {{ ui.badge('Online · open' if g.online_open else 'Online · closed', 'blue' if g.online_open else 'amber', 'globe') }}
+      {% else %}
+        {{ ui.badge('Online off', 'zinc', 'globe') }}
+      {% endif %}
+      {{ ui.badge('Physical on' if g.offline_enabled else 'Physical off', 'green' if g.offline_enabled else 'zinc', 'map-pin') }}
+      <span class="chip">{{ g.country_code }} · {{ g.currency }}</span>
+    </div>
+
+    <dl class="mt-5 grid grid-cols-4 gap-1 rounded-2xl bg-zinc-50 p-3 text-center dark:bg-white/[0.03]">
+      <div><dt class="text-[11px] uppercase tracking-wide muted">Branches</dt><dd class="mt-0.5 text-lg font-semibold tabular-nums">{{ row.branches }}</dd></div>
+      <div><dt class="text-[11px] uppercase tracking-wide muted">Verified</dt><dd class="mt-0.5 text-lg font-semibold tabular-nums">{{ row.verified }}</dd></div>
+      <div><dt class="text-[11px] uppercase tracking-wide muted">Live</dt><dd class="mt-0.5 text-lg font-semibold tabular-nums {{ 'text-[#1f8c3a] dark:text-[#4ade80]' if row.live }}">{{ row.live }}</dd></div>
+      <div><dt class="text-[11px] uppercase tracking-wide muted">Members</dt><dd class="mt-0.5 text-lg font-semibold tabular-nums">{{ row.members }}</dd></div>
+    </dl>
+    {% if row.pending %}
+      <p class="mt-3 flex items-center gap-1.5 text-xs text-[#b45309] dark:text-[#fbbf24]">{{ icon("clock", "size-3.5") }} {{ row.pending }} branch{{ 'es' if row.pending != 1 }} in verification or review</p>
+    {% endif %}
+
+    <div class="mt-auto flex flex-wrap gap-2 pt-5">
+      <a href="/owner/gyms/{{ g.id }}" class="btn btn-dark btn-sm">{{ icon("settings", "size-4") }} Manage</a>
+      <a href="/owner/gyms/{{ g.id }}/branches/new" class="btn btn-secondary btn-sm">{{ icon("plus", "size-4") }} Branch</a>
+      <a href="/owner/gyms/{{ g.id }}/plans" class="btn btn-ghost btn-sm">{{ icon("sparkles", "size-4") }} Plans</a>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+{% else %}
+  {{ ui.empty("No gyms yet", "Create your gym brand first - then add physical branches for AI verification, or switch on online classes.", "building", "Create your first gym", "/owner/gyms/new") }}
+  <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+    {% for ico, title, body in [
+        ("building", "1 · Create the brand", "Name, country, currency and how members can reach you."),
+        ("check-badge", "2 · Verify branches", "Upload your country's registration and safety documents - OCR + AI check them."),
+        ("photo", "3 · Go live", "Add 3+ photos of machines and the whole gym, publish plans, and start selling."),
+    ] %}
+    <div class="card-muted">
+      <span class="grid size-10 place-items-center rounded-xl bg-white text-accent shadow-sm dark:bg-white/10">{{ icon(ico, "size-5") }}</span>
+      <p class="mt-3 font-semibold">{{ title }}</p>
+      <p class="mt-1 text-sm muted">{{ body }}</p>
+    </div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

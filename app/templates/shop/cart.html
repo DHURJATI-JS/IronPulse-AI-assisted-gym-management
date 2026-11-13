@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% block title %}Your bag{% endblock %}
+{% block content %}
+{% set here = request.url.path ~ ('?' ~ request.url.query if request.url.query else '') %}
+<div class="relative isolate">
+  <div class="shop-glow" aria-hidden="true"></div>
+  {{ shop.toolbar("cart", cart_count) }}
+
+  <header class="mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between animate-fade-up">
+    <div>
+      <p class="eyebrow mb-1.5">Bag</p>
+      <h1 class="text-3xl font-semibold tracking-tight sm:text-[40px]">{% if units %}Review your bag{% else %}Your bag is empty{% endif %}</h1>
+      {% if units %}<p class="mt-2 text-[15px] muted">{{ units }} item{{ 's' if units != 1 }} from {{ groups | length }} store{{ 's' if groups | length != 1 }}. Each store is checked out separately.</p>{% endif %}
+    </div>
+    {% if units %}<a href="/shop" class="btn btn-ghost btn-sm">{{ icon("arrow-left", "size-4") }}Keep shopping</a>{% endif %}
+  </header>
+
+  {% if not can_shop %}
+    {{ ui.empty("Shopping is for member accounts", "Owner and admin accounts manage products from the owner shop instead of buying them.", "info", "Open the owner shop" if user.role.value == "owner" else "Browse the shop", "/owner/shop" if user.role.value == "owner" else "/shop") }}
+  {% elif not groups %}
+    <div class="card flex flex-col items-center px-6 py-16 text-center animate-fade-up">
+      <span class="grid size-16 place-items-center rounded-[22px] bg-accent/10 text-accent">{{ shop.svg("bag", "size-8") }}</span>
+      <h2 class="mt-5 text-xl font-semibold tracking-tight">Nothing in your bag yet</h2>
+      <p class="mt-2 max-w-md text-sm leading-relaxed muted">Find protein, creatine, shakers, bags and watches from your gym. Saved items live in your wishlist.</p>
+      <div class="mt-6 flex flex-wrap justify-center gap-2">
+        <a href="/shop" class="btn btn-primary">{{ shop.svg("store", "size-4") }}Start shopping</a>
+        <a href="/shop/wishlist" class="btn btn-secondary">{{ icon("heart", "size-4") }}Wishlist</a>
+      </div>
+    </div>
+  {% else %}
+    <div class="grid gap-10">
+      {% for g in groups %}
+        {% set cur = g.gym.currency %}
+        <section class="grid gap-6 lg:grid-cols-[1fr_380px] animate-fade-up" aria-labelledby="store-{{ g.gym.id }}">
+          <div class="card !p-0 overflow-hidden">
+            <header class="flex items-center justify-between gap-3 border-b border-black/[0.05] px-5 py-4 sm:px-6 dark:border-white/[0.08]">
+              <div class="flex min-w-0 items-center gap-3">
+                <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-accent via-indigo to-violet text-sm font-semibold text-white">{{ g.gym.name | initials }}</span>
+                <div class="min-w-0">
+                  <h2 id="store-{{ g.gym.id }}" class="truncate font-semibold tracking-tight"><a href="/shop/gym/{{ g.gym.slug }}" class="hover:text-accent">{{ g.gym.name }}</a></h2>
+                  <p class="text-xs muted">{{ g.lines | length }} product{{ 's' if g.lines | length != 1 }} · sold &amp; fulfilled by this gym</p>
+                </div>
+              </div>
+            </header>
+            <ul class="divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+              {% for ln in g.lines %}
+                {% set p = ln.product %}
+                <li class="flex gap-4 px-5 py-5 sm:px-6">
+                  <a href="/shop/p/{{ p.id }}/{{ p.slug }}" class="shrink-0">{{ shop.thumb(ln.cover_key, p.name, p.category.value, "shop-thumb-sm !size-20 sm:!size-24") }}</a>
+                  <div class="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:justify-between">
+                    <div class="min-w-0">
+                      {% if p.brand %}<p class="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500 dark:text-zinc-400">{{ p.brand }}</p>{% endif %}
+                      <a href="/shop/p/{{ p.id }}/{{ p.slug }}" class="line-clamp-2 font-semibold leading-snug hover:text-accent">{{ p.name }}</a>
+                      <p class="mt-1 text-sm muted tabular-nums">{{ p.price | money(cur) }} each{% if p.tax_rate | float > 0 %} · + {{ '%g' | format(p.tax_rate | float) }}% tax{% endif %}</p>
+                      {% if ln.problem %}
+                        <p class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-bad/10 px-2.5 py-1 text-xs font-semibold text-[#d1281e] dark:text-[#ff6b61]">{{ icon("alert", "size-3.5") }}{{ ln.problem }}</p>
+                      {% elif p.stock <= 5 %}
+                        <p class="mt-2">{{ shop.stock_badge("low", p.stock) }}</p>
+                      {% endif %}
+                    </div>
+                    <div class="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
+                      <p class="font-semibold tabular-nums">{{ ln.subtotal | money(cur) }}</p>
+                      <div class="flex items-center gap-1">
+                        {% if ln.problem != "No longer available - please remove it." and p.stock > 0 %}
+                          <form method="post" action="/shop/cart/update" class="flex items-center gap-2">
+                            {{ ui.csrf() }}
+                            <input type="hidden" name="product_id" value="{{ p.id }}">
+                            <input type="hidden" name="next" value="{{ here }}">
+                            <div class="shop-qty" data-component="shop-qty" data-autosubmit-qty>
+                              <button type="button" data-step="-1" aria-label="Decrease quantity of {{ p.name }}">{{ shop.svg("minus", "size-4") }}</button>
+                              <input type="number" name="quantity" value="{{ ln.quantity }}" min="1" max="{{ [ln.max_qty, ln.quantity] | max }}" inputmode="numeric" aria-label="Quantity of {{ p.name }}">
+                              <button type="button" data-step="1" aria-label="Increase quantity of {{ p.name }}">{{ icon("plus", "size-4") }}</button>
+                            </div>
+                            <noscript><button type="submit" class="btn btn-secondary btn-sm">Update</button></noscript>
+                          </form>
+                        {% endif %}
+                        <form method="post" action="/shop/cart/remove">
+                          {{ ui.csrf() }}
+                          <input type="hidden" name="product_id" value="{{ p.id }}">
+                          <input type="hidden" name="next" value="{{ here }}">
+                          <button type="submit" class="btn btn-ghost btn-icon !size-9" aria-label="Remove {{ p.name }} from your bag" title="Remove">{{ icon("trash", "size-4") }}</button>
+                        </form>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+          </div>
+
+          <aside class="shop-summary h-fit" aria-label="Summary for {{ g.gym.name }}">
+            <div class="card">
+              <h3 class="section-title">Summary</h3>
+              <form method="get" action="/shop/cart" class="mt-4">
+                {% for other in groups if other.gym.id != g.gym.id and other.coupon_code %}<input type="hidden" name="coupon_{{ other.gym.id }}" value="{{ other.coupon_code }}">{% endfor %}
+                <label for="coupon-{{ g.gym.id }}" class="label">Coupon code</label>
+                <div class="flex gap-2">
+                  <input id="coupon-{{ g.gym.id }}" name="coupon_{{ g.gym.id }}" value="{{ g.coupon_code }}" maxlength="32" autocomplete="off" placeholder="e.g. STRONG10" class="input uppercase placeholder:normal-case {{ 'input-error' if g.coupon_error }}" {% if g.coupon_error %}aria-invalid="true" aria-describedby="coupon-err-{{ g.gym.id }}"{% endif %}>
+                  <button type="submit" class="btn btn-secondary shrink-0">Apply</button>
+                </div>
+                {% if g.coupon_error %}<p class="field-error" id="coupon-err-{{ g.gym.id }}">{{ g.coupon_error }}</p>
+                {% elif g.coupon %}<p class="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("check-circle", "size-3.5") }}{{ g.coupon.code }} applied · {{ g.coupon.percent_off ~ '% off' if g.coupon.percent_off else (g.coupon.amount_off | money(cur)) ~ ' off' }}</p>{% endif %}
+              </form>
+              <div class="divider !my-5"></div>
+              {{ shop.totals(g.quote, cur, g.coupon.code if g.coupon else None, show_shipping=False) }}
+              {% set fee, free_from = g.delivery_rule %}
+              <p class="mt-3 flex items-start gap-2 text-xs muted">{{ shop.svg("truck", "size-4 shrink-0") }}<span>Pickup at the gym is free. Delivery {{ fee | money(cur) }}, free on orders from {{ free_from | money(cur) }} - chosen at checkout.</span></p>
+              {% if g.can_checkout %}
+                <a href="/shop/checkout?gym={{ g.gym.id }}{{ '&coupon=' ~ g.coupon.code if g.coupon }}" class="btn btn-primary btn-lg mt-6 w-full">{{ icon("lock", "size-4") }}Check out</a>
+              {% else %}
+                <button type="button" class="btn btn-primary btn-lg mt-6 w-full" disabled>{{ icon("lock", "size-4") }}Check out</button>
+                <p class="mt-2 text-center text-xs font-medium text-[#d1281e] dark:text-[#ff6b61]">Fix the highlighted items to continue.</p>
+              {% endif %}
+            </div>
+          </aside>
+        </section>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/branches/_macros.html" as om %}
+{% block title %}Owner overview{% endblock %}
+{% block main_class %}owner-page{% endblock %}
+{% block content %}
+{% set primary_currency = (gyms[0].gym.currency if gyms else 'INR') %}
+{% set sev_dot = {'success': 'bg-ok', 'warning': 'bg-warn', 'danger': 'bg-bad', 'info': 'bg-accent'} %}
+{% set waffle_tone = {
+  'verified': 'bg-ok', 'processing': 'bg-accent', 'queued': 'bg-accent/50', 'needs_review': 'bg-warn',
+  'ai_unavailable': 'bg-warn/60', 'rejected': 'bg-bad', 'draft': 'bg-zinc-300 dark:bg-zinc-600'} %}
+
+{% call ui.page_header(greeting ~ ", " ~ first_name, "Everything across your gyms at a glance - members, money, verification and what needs you today.", eyebrow="Owner console") %}
+  {{ ui.ai_chip() }}
+  <a href="/owner/gyms/new" class="btn btn-primary">{{ icon("plus", "size-4") }} New gym</a>
+{% endcall %}
+
+{# ------------------------------------------------------------------ onboarding checklist #}
+{% if checklist_done < checklist | length %}
+<section class="card mb-8 animate-fade-up" aria-labelledby="checklist-title">
+  <div class="flex flex-col gap-6 lg:flex-row lg:gap-10">
+    <div class="lg:w-64 lg:shrink-0">
+      <p class="eyebrow">Launch checklist</p>
+      <h2 id="checklist-title" class="mt-1.5 text-xl font-semibold">Get your gym live</h2>
+      <p class="mt-1 text-sm muted">{{ checklist_done }} of {{ checklist | length }} steps complete</p>
+      <div class="mt-4 flex gap-1" aria-hidden="true">
+        {% for step in checklist %}<span class="h-1.5 flex-1 rounded-full {{ 'bg-ok' if step.done else 'bg-zinc-200 dark:bg-white/10' }}"></span>{% endfor %}
+      </div>
+      {% if owner_missing %}
+      <p class="mt-4 rounded-2xl bg-warn/10 px-3 py-2 text-xs text-[#92400e] dark:text-[#fcd34d]">
+        Branch verification and online mode unlock once your photo and ID are verified.
+      </p>
+      {% endif %}
+    </div>
+    <ol class="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2">
+      {% for step in checklist %}
+      <li class="flex items-center gap-3 rounded-2xl px-3 py-2.5 transition {{ 'bg-zinc-50 dark:bg-white/[0.03]' if not step.done else '' }}">
+        {% if step.done %}
+          <span class="grid size-7 shrink-0 place-items-center rounded-full bg-ok text-white">{{ icon("check", "size-4") }}</span>
+        {% else %}
+          <span class="grid size-7 shrink-0 place-items-center rounded-full text-xs font-semibold text-zinc-500 ring-1 ring-zinc-300 dark:text-zinc-400 dark:ring-white/20">{{ loop.index }}</span>
+        {% endif %}
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-medium {{ 'muted line-through decoration-zinc-400/60' if step.done }}">{{ step.title }}</p>
+          {% if not step.done %}<p class="truncate text-xs muted">{{ step.hint }}</p>{% endif %}
+        </div>
+        {% if not step.done %}<a href="{{ step.href }}" class="btn btn-secondary btn-sm shrink-0">{{ step.cta }}</a>{% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+</section>
+{% endif %}
+
+{# ------------------------------------------------------------------ KPIs #}
+<section aria-label="Key figures" class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+  <a href="/owner/finance" class="owner-kpi col-span-2 lg:col-span-1">
+    {% if revenue_labels %}
+      {{ ui.stat("Revenue · " ~ month_label, revenue_labels[0], (revenue_labels[1:] | join(' · ')) if revenue_labels | length > 1 else "Successful incoming payments", "banknotes", "green") }}
+    {% else %}
+      {{ ui.stat("Revenue · " ~ month_label, 0 | money(primary_currency), "No payments yet this month", "banknotes", "green") }}
+    {% endif %}
+  </a>
+  <a href="/owner/customers" class="owner-kpi">
+    {{ ui.stat("Active members", kpi.members, "across " ~ kpi.gyms ~ (" gym" if kpi.gyms == 1 else " gyms"), "user-group", "blue") }}
+  </a>
+  <a href="/owner/gyms" class="owner-kpi">
+    {{ ui.stat("Verified branches", verified_branches ~ " / " ~ total_branches, kpi.live ~ " live on the website", "check-badge", "violet") }}
+  </a>
+  <a href="/owner/desk" class="owner-kpi">
+    {{ ui.stat("Desk OTPs pending", kpi.otps, "Customers waiting at the desk" if kpi.otps else "Nobody waiting", "key", "amber" if kpi.otps else "zinc") }}
+  </a>
+  <a href="/owner/reports" class="owner-kpi">
+    {{ ui.stat("Open reports", kpi.reports, "Need your response" if kpi.reports else "All answered", "flag", "red" if kpi.reports else "zinc") }}
+  </a>
+  <a href="/owner/payroll" class="owner-kpi">
+    {{ ui.stat("Unpaid salaries", kpi.unpaid, kpi.staff ~ " active staff", "receipt", "amber" if kpi.unpaid else "zinc") }}
+  </a>
+  <a href="/owner/customers" class="owner-kpi">
+    {{ ui.stat("Paused members", kpi.paused, "Safety holds awaiting you" if kpi.paused else "No safety holds", "heart", "red" if kpi.paused else "zinc") }}
+  </a>
+  <div class="owner-kpi col-span-2 lg:col-span-1">
+    {% set ai_tone = {'online': 'green', 'degraded': 'amber'}.get(ai_status.state, 'red') %}
+    {{ ui.stat("AI status", ai_status.state | humanize, ai_status.active_label or "Videos and non-AI features still work", "cpu", ai_tone) }}
+  </div>
+</section>
+
+<div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
+  {# ------------------------------------------------------------------ verification overview #}
+  <section class="card lg:col-span-2" aria-labelledby="verif-title">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 id="verif-title" class="section-title">Branch verification</h2>
+        <p class="mt-0.5 text-sm muted">Every physical branch is checked by OCR + AI against its country's documents.</p>
+      </div>
+      {% if first_gym %}<a href="/owner/gyms/{{ first_gym.id }}/branches/new" class="btn btn-secondary btn-sm shrink-0">{{ icon("plus", "size-4") }} Branch</a>{% endif %}
+    </div>
+    {% if total_branches %}
+      <div class="mt-5 flex flex-wrap gap-1.5" role="img" aria-label="{{ verified_branches }} of {{ total_branches }} branches verified">
+        {% for s in waffle %}<span class="size-4 rounded-[5px] {{ waffle_tone[s] }}" title="{{ om.vlabel(s) }}"></span>{% endfor %}
+        {% if waffle_more %}<span class="text-xs muted">+{{ waffle_more }} more</span>{% endif %}
+      </div>
+      <ul class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+        {% for s, n in by_status %}
+          <li class="flex items-center gap-2"><span class="size-2.5 rounded-full {{ waffle_tone[s.value] }}"></span><span class="muted">{{ om.vlabel(s) }}</span><span class="font-semibold tabular-nums">{{ n }}</span></li>
+        {% endfor %}
+      </ul>
+      {% if attention %}
+      <div class="divider"></div>
+      <h3 class="text-sm font-semibold">Needs your attention</h3>
+      <ul class="mt-3 grid grid-cols-1 gap-2">
+        {% for row in attention %}
+          {% set b = row.branch %}
+          <li>
+            <a href="/owner/branches/{{ b.id }}" class="group flex items-center gap-3 rounded-2xl p-2.5 transition hover:bg-zinc-50 dark:hover:bg-white/[0.04]">
+              <span class="grid size-10 shrink-0 place-items-center rounded-xl bg-zinc-100 text-zinc-500 dark:bg-white/[0.06] dark:text-zinc-300">{{ icon("building", "size-5") }}</span>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium">{{ b.name }} <span class="muted font-normal">· {{ row.gym_name }}</span></p>
+                <p class="truncate text-xs muted">
+                  {% if not b.is_open %}Closed{% if b.closed_reason %} - {{ b.closed_reason }}{% endif %}
+                  {% elif b.verification_status.value == 'verified' %}Upload {{ min_photos - row.photos }} more photo{{ 's' if min_photos - row.photos != 1 }} to go live
+                  {% elif b.verification_status.value == 'draft' %}Finish details & documents, then submit
+                  {% elif b.verification_status.value == 'rejected' %}Fix the issues and resubmit
+                  {% elif b.verification_status.value == 'needs_review' %}A reviewer is looking at it
+                  {% elif b.verification_status.value == 'ai_unavailable' %}AI offline - retrying automatically
+                  {% else %}Verification in progress{% endif %}
+                </p>
+              </div>
+              {{ om.vstatus(b.verification_status) }}
+              {{ icon("chevron-right", "size-4 shrink-0 text-zinc-400 transition group-hover:translate-x-0.5") }}
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    {% else %}
+      <div class="mt-6 flex flex-col items-center rounded-[24px] bg-zinc-50 px-6 py-10 text-center dark:bg-white/[0.03]">
+        <span class="grid size-12 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("map-pin", "size-6") }}</span>
+        <p class="mt-3 font-semibold">No physical branches yet</p>
+        <p class="mt-1 max-w-sm text-sm muted">Add a branch with its address and map pin, upload your country's documents and our AI verifies it - usually within a minute.</p>
+        <a href="{{ ('/owner/gyms/' ~ first_gym.id ~ '/branches/new') if first_gym else '/owner/gyms/new' }}" class="btn btn-primary mt-5">{{ icon("plus", "size-4") }} {{ 'Add a branch' if first_gym else 'Create your gym' }}</a>
+      </div>
+    {% endif %}
+  </section>
+
+  {# ------------------------------------------------------------------ activity #}
+  <section class="card" aria-labelledby="activity-title">
+    <div class="flex items-center justify-between">
+      <h2 id="activity-title" class="section-title">Recent activity</h2>
+      <a href="/account/notifications" class="text-sm font-medium text-accent hover:underline">All</a>
+    </div>
+    {% if activity %}
+      <ol class="owner-timeline mt-5">
+        {% for n in activity %}
+        <li class="owner-timeline-item">
+          <span class="owner-timeline-dot {{ sev_dot.get(n.severity.value, 'bg-accent') }}"></span>
+          {% if n.link %}<a href="{{ n.link }}" class="block rounded-xl transition hover:opacity-80">{% else %}<div>{% endif %}
+            <p class="text-sm font-medium leading-snug">{{ n.title }}</p>
+            <p class="mt-0.5 line-clamp-2 text-xs muted">{{ n.body }}</p>
+            <p class="mt-1 text-[11px] uppercase tracking-wide text-zinc-400">{{ n.created_at | timeago }}</p>
+          {% if n.link %}</a>{% else %}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <div class="mt-6 flex flex-col items-center py-8 text-center">
+        <span class="grid size-11 place-items-center rounded-2xl bg-zinc-100 text-zinc-400 dark:bg-white/[0.06]">{{ icon("bell", "size-5") }}</span>
+        <p class="mt-3 text-sm font-medium">All quiet</p>
+        <p class="mt-0.5 text-xs muted">Verification results, payments and member events appear here.</p>
+      </div>
+    {% endif %}
+  </section>
+</div>
+
+{# ------------------------------------------------------------------ gyms #}
+<section class="mt-10" aria-labelledby="gyms-title">
+  <div class="mb-4 flex items-end justify-between">
+    <div>
+      <h2 id="gyms-title" class="section-title">Your gyms</h2>
+      <p class="text-sm muted">{{ kpi.gyms }} brand{{ 's' if kpi.gyms != 1 }} · {{ total_branches }} branch{{ 'es' if total_branches != 1 }}</p>
+    </div>
+    {% if gyms %}<a href="/owner/gyms" class="text-sm font-medium text-accent hover:underline">Manage all</a>{% endif %}
+  </div>
+  {% if gyms %}
+  <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    {% for row in gyms %}
+      {% set g = row.gym %}
+      <a href="/owner/gyms/{{ g.id }}" class="card-flat card-hover group flex items-center gap-4">
+        {% if g.logo_key %}
+          <img src="{{ media_url(g.logo_key) }}" alt="" class="size-12 shrink-0 rounded-2xl object-cover ring-1 ring-black/5 dark:ring-white/10" loading="lazy">
+        {% else %}
+          <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-accent to-violet text-sm font-semibold text-white">{{ g.name | initials }}</span>
+        {% endif %}
+        <div class="min-w-0 flex-1">
+          <p class="truncate font-semibold">{{ g.name }}</p>
+          <p class="mt-0.5 truncate text-xs muted">{{ row.branches }} branch{{ 'es' if row.branches != 1 }} · {{ row.live }} live · {{ row.members }} member{{ 's' if row.members != 1 }}</p>
+          <div class="mt-2 flex flex-wrap gap-1">
+            {% if g.online_enabled %}{{ ui.badge('Online' if g.online_open else 'Online closed', 'blue' if g.online_open else 'amber', 'globe') }}{% endif %}
+            {% if g.offline_enabled %}{{ ui.badge('Physical', 'green', 'map-pin') }}{% endif %}
+            {% if not g.online_enabled and not g.offline_enabled %}{{ ui.badge('Not launched', 'zinc') }}{% endif %}
+          </div>
+        </div>
+        {{ icon("chevron-right", "size-5 shrink-0 text-zinc-400 transition group-hover:translate-x-0.5") }}
+      </a>
+    {% endfor %}
+  </div>
+  {% else %}
+    {{ ui.empty("Create your first gym", "A gym is your brand: name, country and currency. You can run it online, from physical branches, or both.", "building", "Create a gym", "/owner/gyms/new") }}
+  {% endif %}
+</section>
+
+{# ------------------------------------------------------------------ quick actions #}
+<section class="mt-10" aria-labelledby="qa-title">
+  <h2 id="qa-title" class="section-title mb-4">Quick actions</h2>
+  <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    {% set plans_href = ('/owner/gyms/' ~ first_gym.id ~ '/plans') if first_gym else '/owner/gyms/new' %}
+    {% for label, href, ico, tone in [
+        ("New gym", "/owner/gyms/new", "building", "bg-accent/10 text-accent"),
+        ("Plans & prices", plans_href, "sparkles", "bg-violet/10 text-[#9333ea] dark:text-[#d8a4ff]"),
+        ("Staff & trainers", "/owner/staff", "users", "bg-ok/10 text-[#1f8c3a] dark:text-[#4ade80]"),
+        ("Members", "/owner/customers", "user-group", "bg-indigo/10 text-indigo dark:text-[#a5a4ff]"),
+        ("Desk OTPs", "/owner/desk", "key", "bg-warn/10 text-[#b45309] dark:text-[#fbbf24]"),
+        ("Finance", "/owner/finance", "banknotes", "bg-ok/10 text-[#1f8c3a] dark:text-[#4ade80]"),
+        ("Payroll", "/owner/payroll", "receipt", "bg-accent/10 text-accent"),
+        ("Reports", "/owner/reports", "flag", "bg-bad/10 text-[#d1281e] dark:text-[#ff6b61]"),
+    ] %}
+    <a href="{{ href }}" class="card-flat card-hover flex items-center gap-3 !p-4">
+      <span class="grid size-10 shrink-0 place-items-center rounded-xl {{ tone }}">{{ icon(ico, "size-5") }}</span>
+      <span class="text-sm font-medium">{{ label }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

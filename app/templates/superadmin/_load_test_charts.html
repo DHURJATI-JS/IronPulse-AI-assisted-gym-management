@@ -1,0 +1,146 @@
+{#- Inline-SVG charts of the load-test page. Import WITH CONTEXT:
+      {% import "superadmin/_load_test_charts.html" as charts with context %}
+    Geometry comes from app/routers/superadmin_loadtest.py (step_chart / line_panel / slice_points / end_labels).
+    Strict CSP: no JS, no style attributes - colours are Tailwind text-* classes read through currentColor, chosen from
+    the validated data-viz palette (docs/load-test-page.md): one blue series hue (light #2a78d6 / dark #3987e5), its
+    lighter ordinal step for p50 (#86b6ef / #1c5cab), status red for failures (#d03b3b). Plots stretch to their box
+    (preserveAspectRatio="none") with non-scaling 2 px lines; tick labels are HTML so they stay legible at any width,
+    and direct end labels sit in an overlay that keeps a uniform scale (xMaxYMin meet), so text is never stretched.
+    Hover: native <title> tooltips (+ a CSS crosshair on the timeline); every chart has a table of its numbers. -#}
+
+{% macro tone(name) -%}
+{{ {"series": "text-[#2a78d6] dark:text-[#3987e5]",
+    "series-light": "text-[#86b6ef] dark:text-[#1c5cab]",
+    "critical": "text-[#d03b3b]",
+    "grid": "text-black/[0.07] dark:text-white/[0.09]",
+    "axis": "text-black/25 dark:text-white/25",
+    "ref": "text-zinc-500 dark:text-zinc-400",
+    "surface": "text-white dark:text-surface-dark"}.get(name, "text-zinc-500") }}
+{%- endmacro %}
+
+{#- Legend key that mirrors a line mark (dashed for a reference line) -#}
+{% macro line_key(t, dashed=False) -%}
+<svg class="h-2 w-4 shrink-0 {{ tone(t) }}" viewBox="0 0 16 8" aria-hidden="true"><line x1="1" y1="4" x2="15" y2="4" stroke="currentColor" stroke-width="2" stroke-linecap="round"{% if dashed %} stroke-dasharray="4 3"{% endif %}/></svg>
+{%- endmacro %}
+
+{#- Legend key for the knee band: the same 12 % wash as the band itself (a key mirrors its mark) -#}
+{% macro wash_key() -%}
+<svg class="size-3 shrink-0 {{ tone('series') }}" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="currentColor" fill-opacity="0.12"/></svg>
+{%- endmacro %}
+
+{#- Y tick labels (top to bottom), spaced exactly like the gridlines: the column is the plot height + one 12 px label
+    line and the plot sits 6 px (py-1.5) inside its own column, so each label centre meets its gridline. -#}
+{% macro y_axis(labels, height_cls) %}
+<div class="flex {{ height_cls }} w-12 shrink-0 flex-col justify-between text-right text-[11px] leading-3 tabular-nums muted" aria-hidden="true">
+  {% for label in labels %}<span class="truncate">{{ label }}</span>{% endfor %}
+</div>
+{% endmacro %}
+
+{#- Run-time ticks: evenly spaced zero-width labels, the first left-aligned and the last right-aligned (nothing sticks
+    out of the plot box, so phones never scroll sideways) -#}
+{% macro x_time(labels) %}
+<div class="mt-1.5 flex h-3 justify-between text-[11px] leading-3 tabular-nums muted" aria-hidden="true">
+  {% for label in labels %}<span class="flex w-0 whitespace-nowrap {{ 'justify-start' if loop.first else ('justify-end' if loop.last else 'justify-center') }}">{{ label }}</span>{% endfor %}
+</div>
+{% endmacro %}
+
+{#- Legend item: a key mirroring the mark + its text (long text wraps instead of widening the page) -#}
+{% macro legend_item(key) -%}
+<li class="inline-flex min-w-0 items-center gap-1.5 [overflow-wrap:anywhere]">{{ key }}{{ caller() }}</li>
+{%- endmacro %}
+
+{#- Columns over the load steps: c = step_chart(...); the steps table under the charts holds every value.
+    A column cut at the top of the axis (c.clipped: a step far beyond the SLO) carries a double surface gap - an axis
+    break - and its value is printed on its cap, in the row above the plot. -#}
+{% macro step_chart(c, uid, title) %}
+<figure class="min-w-0" aria-labelledby="{{ uid }}-cap">
+  <figcaption id="{{ uid }}-cap" class="mb-2 text-sm font-semibold">{{ title }}</figcaption>
+  <div class="mb-1 flex gap-2 text-[11px] leading-3 muted" aria-hidden="true">
+    <span class="w-12 shrink-0">{{ c.unit }}</span>
+    {% if c.clipped %}<span class="flex min-w-0 flex-1" data-lt-clip-labels>{% for b in c.bars %}<span class="min-w-0 flex-1 truncate text-center font-semibold tabular-nums text-ink dark:text-white">{{ b.clip.text if b.clip }}</span>{% endfor %}</span>{% endif %}
+  </div>
+  <div class="flex gap-2">
+    {{ y_axis(c.y_labels, "h-[188px]") }}
+    <div class="min-w-0 flex-1 py-1.5">
+      <svg viewBox="0 0 {{ c.w }} {{ c.h }}" preserveAspectRatio="none" class="block h-[176px] w-full overflow-visible" role="img" aria-labelledby="{{ uid }}-t {{ uid }}-d">
+        <title id="{{ uid }}-t">{{ title }}</title>
+        <desc id="{{ uid }}-d">{{ c.desc }}</desc>
+        <g class="{{ tone('grid') }}" stroke="currentColor" stroke-width="1" fill="none">
+          {% for y in c.grid[1:] %}<line x1="0" x2="{{ c.w }}" y1="{{ y }}" y2="{{ y }}" vector-effect="non-scaling-stroke"/>{% endfor %}
+        </g>
+        {% if c.knee %}<rect class="{{ tone('series') }}" x="{{ c.knee.x }}" y="0" width="{{ c.knee.w }}" height="{{ c.h }}" fill="currentColor" fill-opacity="0.12" data-lt-knee/>{% endif %}
+        <g class="{{ tone('series') }}">
+          {% for b in c.bars %}<g class="group"><title>{{ b.title }}</title><rect x="{{ b.band_x }}" width="{{ b.band_w }}" height="{{ c.h }}" fill="transparent"/>{% if b.d %}<path class="transition-opacity group-hover:opacity-70" d="{{ b.d }}" fill="currentColor"/>{% endif %}</g>{% endfor %}
+        </g>
+        {% if c.clipped %}<g class="{{ tone('surface') }}" stroke="currentColor" stroke-width="2" data-lt-breaks>
+          {% for b in c.bars if b.clip %}<line x1="{{ b.clip.x1 }}" x2="{{ b.clip.x2 }}" y1="8" y2="8" vector-effect="non-scaling-stroke"/><line x1="{{ b.clip.x1 }}" x2="{{ b.clip.x2 }}" y1="13" y2="13" vector-effect="non-scaling-stroke"/>{% endfor %}
+        </g>{% endif %}
+        {% if c.threshold %}<line class="{{ tone('ref') }}" x1="0" x2="{{ c.w }}" y1="{{ c.threshold.y }}" y2="{{ c.threshold.y }}" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/>{% endif %}
+        <line class="{{ tone('axis') }}" x1="0" x2="{{ c.w }}" y1="{{ c.h }}" y2="{{ c.h }}" stroke="currentColor" stroke-width="1" vector-effect="non-scaling-stroke"/>
+      </svg>
+      <div class="mt-1.5 flex text-[11px] leading-3 tabular-nums muted" aria-hidden="true">
+        {% for b in c.bars %}<span class="min-w-0 flex-1 truncate text-center {{ 'font-semibold text-ink dark:text-white' if b.knee }}">{{ b.label }}</span>{% endfor %}
+      </div>
+      <p class="mt-1 text-center text-[11px] muted" aria-hidden="true">users per step</p>
+    </div>
+  </div>
+  {% if c.threshold or c.knee %}
+  <ul class="mt-2 flex flex-wrap gap-x-4 gap-y-1 pl-14 text-xs muted">
+    {% if c.threshold %}{% call legend_item(line_key("ref", True)) %}{{ c.threshold.label }}{% endcall %}{% endif %}
+    {% if c.knee %}{% call legend_item(wash_key()) %}Knee: where latency climbs{% endcall %}{% endif %}
+  </ul>
+  {% endif %}
+</figure>
+{% endmacro %}
+
+{#- One small multiple over run time: p = line_panel(...) (p.slices: its hover layer; p.end_labels: direct labels at
+    the right end of the lines, drawn in a uniformly scaled overlay with a surface halo) -#}
+{% macro line_panel(p, uid) %}
+<figure class="min-w-0" aria-labelledby="{{ uid }}-cap">
+  <figcaption id="{{ uid }}-cap" class="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+    <span class="text-sm font-semibold">{{ p.title }}</span>
+    <span class="text-xs tabular-nums muted">{{ p.summary }}</span>
+  </figcaption>
+  <p class="mb-1 text-[11px] leading-3 muted" aria-hidden="true">{{ p.unit }}</p>
+  <div class="flex gap-2">
+    {{ y_axis(p.y_labels, "h-[84px]" if p.compact else "h-[132px]") }}
+    <div class="min-w-0 flex-1 py-1.5">
+      <div class="relative">
+        <svg viewBox="0 0 {{ p.w }} {{ p.h }}" preserveAspectRatio="none" class="block {{ 'h-[72px]' if p.compact else 'h-[120px]' }} w-full overflow-visible" role="img" aria-labelledby="{{ uid }}-t {{ uid }}-d">
+          <title id="{{ uid }}-t">{{ p.title }}{% if p.unit %} ({{ p.unit }}){% endif %} over the run</title>
+          <desc id="{{ uid }}-d">{{ p.desc }}</desc>
+          <g class="{{ tone('grid') }}" stroke="currentColor" stroke-width="1" fill="none">
+            {% for y in p.grid[1:] %}<line x1="0" x2="{{ p.w }}" y1="{{ y }}" y2="{{ y }}" vector-effect="non-scaling-stroke"/>{% endfor %}
+          </g>
+          {% for s in p.series | reverse %}
+          <g class="{{ tone(s.tone) }}">
+            {% if s.area %}<path d="{{ s.area }}" fill="currentColor" fill-opacity="0.1"/>{% endif %}
+            {% if s.line %}<path d="{{ s.line }}" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>{% endif %}
+          </g>
+          {% endfor %}
+          {% if p.ref %}<line class="{{ tone('ref') }}" x1="0" x2="{{ p.w }}" y1="{{ p.ref.y }}" y2="{{ p.ref.y }}" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 4" vector-effect="non-scaling-stroke"/>{% endif %}
+          <line class="{{ tone('axis') }}" x1="0" x2="{{ p.w }}" y1="{{ p.h }}" y2="{{ p.h }}" stroke="currentColor" stroke-width="1" vector-effect="non-scaling-stroke"/>
+          <g class="{{ tone('ref') }}">
+            {% for sl in p.slices %}<g class="group"><title>{{ sl.title }}</title><rect x="{{ sl.x }}" width="{{ sl.w }}" height="{{ p.h }}" fill="transparent"/><line class="opacity-0 group-hover:opacity-100" x1="{{ sl.cx }}" x2="{{ sl.cx }}" y2="{{ p.h }}" stroke="currentColor" vector-effect="non-scaling-stroke"/></g>{% endfor %}
+          </g>
+        </svg>
+        {% if p.end_labels %}<svg class="pointer-events-none absolute inset-0 h-full w-full overflow-visible muted" viewBox="0 0 40 {{ p.h }}" preserveAspectRatio="xMaxYMin meet" aria-hidden="true" data-lt-end-labels>{% for l in p.end_labels %}<text x="39" y="{{ l.y }}" text-anchor="end" font-size="11" font-weight="500" fill="currentColor" stroke-width="3" stroke-linejoin="round" paint-order="stroke" class="stroke-white dark:stroke-surface-dark">{{ l.label }}</text>{% endfor %}</svg>{% endif %}
+      </div>
+      {{ x_time(p.x_labels) }}
+    </div>
+  </div>
+  {% if p.legend %}
+  <ul class="mt-2 flex flex-wrap gap-x-4 gap-y-1 pl-14 text-xs muted">
+    {% for s in p.series %}{% call legend_item(line_key(s.tone)) %}{{ s.label }}{% endcall %}{% endfor %}
+    {% if p.ref %}{% call legend_item(line_key("ref", True)) %}{{ p.ref.label }}{% endcall %}{% endif %}
+  </ul>
+  {% endif %}
+</figure>
+{% endmacro %}
+
+{#- Share meter (higher is better): the track is a lighter step of the fill's own ramp -#}
+{% macro meter(share, label) %}
+<div class="h-2 overflow-hidden rounded-full bg-[#cde2fb] dark:bg-[#184f95]" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ (share * 100) | round(1) }}" aria-label="{{ label }}">
+  <svg viewBox="0 0 100 8" preserveAspectRatio="none" class="block h-2 w-full" aria-hidden="true"><rect class="{{ tone('series') }}" width="{{ (share * 100) | round(2) }}" height="8" fill="currentColor"/></svg>
+</div>
+{% endmacro %}

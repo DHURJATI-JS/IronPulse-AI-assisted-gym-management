@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% block title %}Trust & safety{% endblock %}
+{% block content %}
+{% call sa.header("Trust & safety", "Staff removed for conduct violations, the platform bans that followed, the network addresses those bans acted on and the identities that can never open a new account.", section, sections, counts) %}
+  <a href="/superadmin/bans" class="btn btn-secondary btn-sm">{{ icon("lock", "size-4") }} IP bans</a>
+{% endcall %}
+
+<nav class="tabs mb-5 self-start overflow-x-auto whitespace-nowrap" aria-label="Trust & safety lists">
+  {% for key, label, ico in tabs %}
+    <a href="/superadmin/trust?tab={{ key }}" class="tab {{ 'tab-active' if tab == key }}" {% if tab == key %}aria-current="page"{% endif %}>{{ label }} <span class="tabular-nums muted">{{ sa.num(tab_counts[key]) }}</span></a>
+  {% endfor %}
+</nav>
+{% set d = data %}
+
+{# =================================================================== account bans #}
+{% if tab == "bans" %}
+<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <nav class="tabs self-start" aria-label="Ban state">
+    {% for key, label in [("active", "Active"), ("lifted", "Lifted"), ("all", "All")] %}
+      <a href="/superadmin/trust?tab=bans&state={{ key }}{{ ('&q=' ~ (d.q | urlencode)) if d.q }}" class="tab {{ 'tab-active' if d.state == key }}" {% if d.state == key %}aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <form method="get" action="/superadmin/trust" class="flex gap-2" role="search">
+    <input type="hidden" name="tab" value="bans"><input type="hidden" name="state" value="{{ d.state }}">
+    <label for="ban-q" class="sr-only">Find a ban</label>
+    <input id="ban-q" name="q" value="{{ d.q }}" maxlength="80" placeholder="Name or account id" class="input !py-2 sm:w-56" autocomplete="off">
+    <button class="btn btn-secondary btn-icon !size-[38px] shrink-0" aria-label="Search">{{ icon("search", "size-4") }}</button>
+  </form>
+</div>
+{% if d.rows %}
+<ul class="grid gap-3">
+  {% for b in d.rows %}
+  {% set person = d.people.get(b.user_id) %}
+  <li id="ban-{{ b.id }}" class="card scroll-mt-24">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div class="min-w-0">
+        <p class="font-semibold">{{ b.person_name }} <span class="text-xs font-normal muted">account #{{ b.user_id }}{% if person and person.deleted_at %} · deleted{% elif not person %} · purged{% endif %}</span></p>
+        <p class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+          {{ ui.badge(source_labels.get(b.source, b.source), "red" if b.source == "severe" else "amber") }}
+          {% if b.lifted_at %}{{ ui.badge("Lifted", "zinc", "check") }}{% else %}{{ ui.badge("Active", "red", "lock") }}{% endif %}
+          <span class="muted">{{ b.created_at | dt }}{% if b.created_by_id and d.people.get(b.created_by_id) %} · after a removal by {{ d.people[b.created_by_id].full_name }}{% endif %}</span>
+        </p>
+        <p class="mt-2 break-words text-sm">{{ b.reason }}</p>
+        {% set acts = d.ip_actions.get(b.id, []) %}
+        {% if acts %}
+        <ul class="mt-3 flex flex-wrap gap-1.5" aria-label="Network addresses">
+          {% for a in acts %}<li class="chip"><span class="sa-mono">{{ a.ip }}</span> · {{ ip_action_labels.get(a.action, a.action) }}{% if a.other_accounts is not none %} ({{ a.other_accounts }} other){% endif %}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% if b.lifted_at %}
+          <p class="mt-3 text-sm muted">Lifted {{ b.lifted_at | timeago }}{% if b.lifted_by_id and d.people.get(b.lifted_by_id) %} by {{ d.people[b.lifted_by_id].full_name }}{% endif %}: “{{ b.lift_note }}”</p>
+        {% endif %}
+      </div>
+      {% if not b.lifted_at %}
+      <form method="post" action="/superadmin/trust/bans/{{ b.id }}/lift" class="grid w-full gap-2 sm:w-80" data-confirm="Lift the ban on {{ b.person_name }}? They can sign in again and the network bans of this ban are lifted.">
+        {{ ui.csrf() }}
+        <label class="label" for="lift-{{ b.id }}">Why lift it? <span class="text-bad">*</span></label>
+        <textarea id="lift-{{ b.id }}" name="note" rows="2" class="input {{ 'input-error' if lift_errors.get(b.id) }}" required minlength="{{ lift_min }}" maxlength="{{ lift_max }}" placeholder="e.g. Reviewed the complaint - the gym withdrew it">{{ lift_values.get(b.id, '') }}</textarea>
+        {% if lift_errors.get(b.id) %}<p class="field-error">{{ lift_errors[b.id] }}</p>{% endif %}
+        <button class="btn btn-secondary btn-sm">{{ icon("check", "size-4") }} Lift ban</button>
+      </form>
+      {% endif %}
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{{ sa.pagination(d.pager, "bans") }}
+{% else %}
+  {{ ui.empty("No account bans" if d.state != "lifted" else "No lifted bans", "Accounts are banned automatically after repeated conduct violations or a severe one." if not d.q else "Nothing matches this search.", "check-circle") }}
+{% endif %}
+
+{# =================================================================== violations #}
+{% elif tab == "violations" %}
+<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  <nav class="tabs self-start" aria-label="Category">
+    {% for key, label in [("", "All"), ("violation", "Conduct"), ("severe", "Severe")] %}
+      <a href="/superadmin/trust?tab=violations{{ ('&category=' ~ key) if key }}{{ ('&q=' ~ (d.q | urlencode)) if d.q }}" class="tab {{ 'tab-active' if d.category == key }}" {% if d.category == key %}aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <form method="get" action="/superadmin/trust" class="flex gap-2" role="search">
+    <input type="hidden" name="tab" value="violations"><input type="hidden" name="category" value="{{ d.category }}">
+    <label for="vio-q" class="sr-only">Find a violation</label>
+    <input id="vio-q" name="q" value="{{ d.q }}" maxlength="80" placeholder="Person, gym or account id" class="input !py-2 sm:w-56" autocomplete="off">
+    <button class="btn btn-secondary btn-icon !size-[38px] shrink-0" aria-label="Search">{{ icon("search", "size-4") }}</button>
+  </form>
+</div>
+{% if d.rows %}
+<ul class="grid gap-3">
+  {% for v in d.rows %}
+  <li class="card">
+    <p class="font-semibold">{{ v.person_name }} <span class="text-xs font-normal muted">{% if v.subject_user_id %}account #{{ v.subject_user_id }}{% else %}no account{% endif %} · {{ v.gym_name }}</span></p>
+    <p class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+      {{ ui.badge(TS.CATEGORY_LABELS.get(v.category, v.category), TS.CATEGORY_TONES.get(v.category, "zinc")) }}
+      <span class="font-medium">{{ TS.reason_label(v.reason) or v.reason }}</span>
+      <span class="muted">· {{ v.created_at | dt }}{% if v.actor_id and d.people.get(v.actor_id) %} · by {{ d.people[v.actor_id].full_name }}{% endif %}</span>
+    </p>
+    <p class="mt-2 whitespace-pre-line break-words text-sm">“{{ v.note }}”</p>
+  </li>
+  {% endfor %}
+</ul>
+{{ sa.pagination(d.pager, "violations") }}
+{% else %}
+  {{ ui.empty("No violations", "Gyms record a violation when they end an employment for a conduct reason." if not d.q else "Nothing matches this search.", "check-circle") }}
+{% endif %}
+
+{# =================================================================== network addresses #}
+{% elif tab == "ips" %}
+<div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+  <nav class="tabs self-start overflow-x-auto whitespace-nowrap" aria-label="Action">
+    {% for key, label in [("", "All"), ("banned", "Banned"), ("shared", "Flagged · shared"), ("actor", "Acting admin's"), ("platform_admin", "Platform admin's"), ("not_public", "Not public"), ("whitelisted", "Whitelisted")] %}
+      <a href="/superadmin/trust?tab=ips{{ ('&action=' ~ key) if key }}" class="tab {{ 'tab-active' if d.action == key }}" {% if d.action == key %}aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <form method="get" action="/superadmin/trust" class="flex gap-2" role="search">
+    <input type="hidden" name="tab" value="ips"><input type="hidden" name="action" value="{{ d.action }}">
+    <label for="ip-q" class="sr-only">Find an address</label>
+    <input id="ip-q" name="q" value="{{ d.q }}" maxlength="45" placeholder="Address starts with…" class="input !py-2 sm:w-56" autocomplete="off" spellcheck="false">
+    <button class="btn btn-secondary btn-icon !size-[38px] shrink-0" aria-label="Search">{{ icon("search", "size-4") }}</button>
+  </form>
+</div>
+<p class="mb-4 text-sm muted">A severe violation bans the account's recent public addresses. An address more than the shared-address threshold of other accounts used (gym Wi-Fi, carrier NAT) is skipped and flagged here instead. Extend or lift an address ban from its security page.</p>
+{% if d.rows %}
+<ul class="grid gap-3">
+  {% for a, ip_ban in d.rows %}
+  <li class="card flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div class="min-w-0">
+      <p>{% if a.action != "not_public" %}{{ sa.ip_link(a.ip) }}{% else %}<span class="sa-mono">{{ a.ip }}</span>{% endif %} <span class="text-xs muted">· account #{{ a.user_id }} · {{ a.created_at | dt }}</span></p>
+      <p class="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
+        {{ ui.badge(ip_action_labels.get(a.action, a.action), "red" if a.action == "banned" else ("amber" if a.action == "shared" else "zinc")) }}
+        {% if a.other_accounts is not none %}<span class="muted">{{ a.other_accounts }} other account{{ 's' if a.other_accounts != 1 }} used it recently</span>{% endif %}
+      </p>
+    </div>
+    {% if ip_ban %}<div class="shrink-0">{{ sa.ban_badge(ip_ban, now) }}</div>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{{ sa.pagination(d.pager, "addresses") }}
+{% else %}
+  {{ ui.empty("No addresses", "Only severe violations act on network addresses." if not d.q else "Nothing matches this search.", "globe") }}
+{% endif %}
+
+{# =================================================================== blocked identities #}
+{% else %}
+<div class="mb-4 grid gap-3">
+  <form method="get" action="/superadmin/trust" class="flex flex-col gap-2 sm:flex-row sm:items-center" role="search">
+    <input type="hidden" name="tab" value="identities">
+    <label for="id-q" class="sr-only">Check an e-mail, phone or ID hash</label>
+    <input id="id-q" name="q" value="{{ d.q }}" maxlength="254" placeholder="Check an e-mail, phone, ID hash or account id" class="input !py-2 sm:w-80" autocomplete="off" spellcheck="false">
+    <label for="id-country" class="sr-only">Phone country</label>
+    <input id="id-country" name="country" value="{{ d.country }}" maxlength="2" placeholder="IN" class="input !py-2 uppercase sm:w-20" autocomplete="off" title="Country of a national phone number">
+    <label for="id-kind" class="sr-only">Kind</label>
+    <select id="id-kind" name="kind" class="input !w-auto !py-2">
+      <option value="">Every kind</option>
+      {% for k, label in kind_labels.items() %}<option value="{{ k }}" {{ 'selected' if d.kind == k }}>{{ label }}</option>{% endfor %}
+    </select>
+    <label for="id-reason" class="sr-only">Reason</label>
+    <select id="id-reason" name="reason" class="input !w-auto !py-2">
+      <option value="">Every reason</option>
+      {% for k, label in reason_labels.items() %}<option value="{{ k }}" {{ 'selected' if d.reason == k }}>{{ label }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-secondary btn-sm shrink-0">{{ icon("search", "size-4") }} Check</button>
+  </form>
+  <p class="text-sm muted">Only keyed hashes are stored - never the e-mail, phone or ID number itself. A typed value is hashed the same way to check it and is not kept.{% if d.q and d.looked_up is not none and not d.looked_up %} “{{ d.q }}” isn't an e-mail, phone number, ID hash or account id.{% endif %}</p>
+</div>
+{% if d.rows %}
+<ul class="grid gap-3">
+  {% for r in d.rows %}
+  <li class="card flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+    <div class="min-w-0">
+      <p class="font-medium">{{ kind_labels.get(r.kind, r.kind) }} <span class="sa-mono text-xs muted" title="{{ r.value_hash }}">{{ r.value_hash[:12] }}…</span></p>
+      <p class="mt-1 text-xs muted">{{ reason_labels.get(r.reason, r.reason) }}{% if r.user_id %} · account #{{ r.user_id }}{% endif %} · {{ r.created_at | dt }}{% if r.actor_id and d.people.get(r.actor_id) %} · by {{ d.people[r.actor_id].full_name }}{% endif %}</p>
+    </div>
+    {% if r.note %}<p class="max-w-md truncate text-xs muted sm:text-right" title="{{ r.note }}">{{ r.note }}</p>{% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{{ sa.pagination(d.pager, "identities") }}
+{% elif d.q %}
+  {{ ui.empty("Not blocked", "No deleted or banned account used this.", "check-circle") }}
+{% else %}
+  {{ ui.empty("No blocked identities", "Deleted and banned accounts register their e-mail, phone and ID here.", "id-card") }}
+{% endif %}
+{% endif %}
+{% endblock %}

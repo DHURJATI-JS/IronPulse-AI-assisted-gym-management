@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}End employment · {{ emp.display_name }}{% endblock %}
+{% block content %}
+{{ ui.page_header("End " ~ emp.full_name ~ "'s employment", "Choose why it ends - the reason decides whether they can ever work at your gyms again.", eyebrow=gym.name, back="/owner/staff/" ~ emp.id) }}
+
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
+  <section class="card sm:p-8" aria-labelledby="remove-title">
+    <h2 id="remove-title" class="section-title">Reason for leaving</h2>
+    <p class="mt-1 text-sm muted">Their staff access, weekly shifts and client links end the moment you confirm. Members they coached are told the gym will assign a new trainer - never why.</p>
+    <div class="mt-6">{{ ui.form_errors(errors) }}</div>
+    <form method="post" action="/owner/staff/{{ emp.id }}/remove" class="space-y-5" data-confirm="End {{ emp.full_name }}'s employment now? This can't be undone.">
+      {{ ui.csrf() }}
+      <div>
+        <label class="label" for="f-reason">Reason <span class="text-bad">*</span></label>
+        <select id="f-reason" name="reason" class="input {{ 'input-error' if errors.reason }}" required {% if errors.reason %}aria-invalid="true" aria-describedby="e-reason"{% endif %}>
+          <option value="">Choose a reason…</option>
+          {% for cat, label, reasons in TS.REASON_GROUPS %}
+          <optgroup label="{{ label }}">
+            {% for r in reasons %}<option value="{{ r.code }}" {{ 'selected' if values.reason == r.code }}>{{ r.label }}</option>{% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+        {% if errors.reason %}<p class="field-error" id="e-reason">{{ errors.reason }}</p>{% else %}<p class="help">Pick the closest reason. Conduct and severe violations need a short note below.</p>{% endif %}
+      </div>
+      {{ ui.textarea("note", "What happened", value=values.note, error=errors.note, rows=4,
+                     placeholder="e.g. Missed 6 of 10 scheduled sessions in October after two written warnings.",
+                     attrs='maxlength="' ~ note_max ~ '"',
+                     help="Required for conduct and severe violations (at least " ~ note_min ~ " characters, at most " ~ note_max ~ "). Kept on the record and seen only by you and the IronPulse platform team - never by other gyms.") }}
+      <div>
+        {{ ui.checkbox("confirm", "I understand their access ends now and this can't be undone", attrs='required') }}
+        {% if errors.confirm %}<p class="field-error">{{ errors.confirm }}</p>{% endif %}
+      </div>
+      <button type="submit" class="btn btn-danger w-full">{{ icon("logout", "size-4") }} End employment</button>
+      <a href="/owner/staff/{{ emp.id }}" class="btn btn-ghost w-full">Keep {{ emp.full_name }}</a>
+    </form>
+  </section>
+
+  <aside class="space-y-6" aria-label="What happens">
+    <section class="card">
+      <h2 class="section-title">What each reason means</h2>
+      <dl class="mt-4 space-y-4 text-sm">
+        {% for cat, label, reasons in TS.REASON_GROUPS %}
+        <div>
+          <dt>{{ ui.badge(TS.CATEGORY_LABELS[cat], TS.CATEGORY_TONES[cat]) }}</dt>
+          <dd class="mt-1.5 muted">{{ TS.CATEGORY_HELP[cat] }}</dd>
+          <dd class="mt-1 text-xs muted">{{ reasons | map(attribute="label") | join(" · ") }}</dd>
+        </div>
+        {% endfor %}
+      </dl>
+    </section>
+
+    {% if blockers %}
+    <section class="card" aria-labelledby="pay-title">
+      <h2 id="pay-title" class="section-title">Pay still owed</h2>
+      <ul class="mt-3 list-disc space-y-1 pl-5 text-sm">{% for b in blockers %}<li>{{ b }}</li>{% endfor %}</ul>
+      <p class="mt-3 text-sm muted">A reason that lets them rejoin waits until their pay is settled. A conduct or severe violation ends their access at once - what they're owed stays due in Payroll.</p>
+      <a href="/owner/staff/{{ emp.id }}/settlement" class="btn btn-secondary mt-4 w-full">{{ icon("banknotes", "size-4") }} Settlement &amp; removal</a>
+    </section>
+    {% endif %}
+
+    {% if emp.status.value != "suspended" %}
+    <section class="card-muted">
+      <h2 class="text-sm font-semibold">Changing their position?</h2>
+      <p class="mt-1 text-sm muted">Use Change position instead - it ends this employment as a position change and invites them to the new role in one step.</p>
+      <a href="/owner/staff/{{ emp.id }}/change-position" class="btn btn-secondary btn-sm mt-3">{{ icon("refresh", "size-4") }} Change position</a>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

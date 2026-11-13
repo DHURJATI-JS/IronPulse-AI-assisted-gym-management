@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "public/_macros.html" as pub with context %}
+{% block title %}Find a gym{% endblock %}
+{% block description %}Search AI-verified gyms by name, city or distance - in-person branches and gyms you can join online.{% endblock %}
+{% block content %}
+<div class="relative isolate">
+  <div class="pub-page-glow" aria-hidden="true"></div>
+
+  <header class="mx-auto mb-8 max-w-3xl text-center animate-fade-up">
+    <p class="eyebrow mb-2">Discover</p>
+    <h1 class="pub-h2 sm:!text-5xl">Find your gym</h1>
+    <p class="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed muted">Every in-person branch here passed AI document checks, is open and shows real photos. Online gyms are open to everyone, everywhere.</p>
+  </header>
+
+  {# ---------------------------------------------------------------- search toolbar #}
+  <form method="get" action="/gyms" role="search" aria-label="Search gyms" class="glass mx-auto max-w-4xl rounded-[28px] p-3 shadow-xl shadow-black/[0.04] ring-1 ring-black/[0.06] animate-fade-up sm:p-4 dark:ring-white/[0.08]" data-component="geo-form">
+    <div class="flex flex-col gap-3 md:flex-row md:items-center">
+      <div class="relative min-w-0 flex-1">
+        <label for="gym-q" class="sr-only">Search by gym name or city</label>
+        <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400">{{ icon("search", "size-4") }}</span>
+        <input id="gym-q" type="search" name="q" value="{{ q }}" maxlength="100" autocomplete="off" placeholder="Gym name or city" class="input !pl-11">
+      </div>
+      <div class="md:w-52">
+        <label for="gym-city" class="sr-only">City</label>
+        <select id="gym-city" name="city" class="input" data-autosubmit>
+          <option value="">All cities</option>
+          {% for c in cities %}<option value="{{ c }}" {{ 'selected' if c | lower == city | lower }}>{{ c }}</option>{% endfor %}
+          {% if city and city | lower not in (cities | map('lower') | list) %}<option value="{{ city }}" selected>{{ city }}</option>{% endif %}
+        </select>
+      </div>
+      {% if mode %}<input type="hidden" name="mode" value="{{ mode }}">{% endif %}
+      <input type="hidden" name="lat" value="{{ loc.lat if loc.source == 'query' else '' }}">
+      <input type="hidden" name="lon" value="{{ loc.lon if loc.source == 'query' else '' }}">
+      <div class="flex gap-2">
+        <button type="button" class="btn btn-secondary flex-1 md:flex-none" data-component="geolocate" title="Sort by distance from your current location">Near me</button>
+        <button type="submit" class="btn btn-primary flex-1 md:flex-none">{{ icon("search", "size-4") }} Search</button>
+      </div>
+    </div>
+  </form>
+
+  {# ---------------------------------------------------------------- filters row #}
+  <div class="mx-auto mt-6 flex max-w-6xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <nav class="tabs self-start" aria-label="Training mode">
+      {% for value, label in [("", "All gyms"), ("offline", "In-person"), ("online", "Online")] %}
+        <a href="{{ mode_links[value] }}" class="tab {{ 'tab-active' if mode == value }}"{% if mode == value %} aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </nav>
+    <div class="flex flex-wrap items-center gap-2 text-sm muted">
+      {% if loc.has_coords %}
+        <span class="chip">{{ icon("map-pin", "size-3.5 text-accent") }}Nearest first · {{ 'your current location' if loc.source == 'query' else 'your saved location' }}</span>
+        {% if loc.source == 'query' %}<a href="{{ clear_location }}" class="font-semibold text-accent hover:underline">Clear</a>{% endif %}
+      {% else %}
+        <span>Sorted A–Z · tap <span class="font-semibold text-ink dark:text-white">Near me</span> to sort by distance</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ---------------------------------------------------------------- results #}
+  <section class="mx-auto mt-8 max-w-6xl" aria-label="Gyms">
+    {% if cards %}
+      <p class="mb-4 text-sm muted" aria-live="polite">{{ result.total }} gym{{ 's' if result.total != 1 }}{% if q %} matching “{{ q }}”{% endif %}{% if city %} in {{ city }}{% endif %}</p>
+      <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        {% for card in cards %}{{ pub.gym_card(card) }}{% endfor %}
+      </div>
+      {{ pub.pager(pager, "gyms") }}
+    {% elif filtered %}
+      {{ ui.empty("No gyms match your search", "Try another name or city, or switch the training mode. Online gyms are available wherever you are.", "search", "Clear filters", "/gyms") }}
+    {% else %}
+      {{ ui.empty("No gyms are listed yet", "Gyms appear here once a branch has been verified (with at least " ~ 3 ~ " photos) or a gym opens online coaching. Check back soon - or list your own gym.", "building", "List your gym", "/auth/signup") }}
+    {% endif %}
+  </section>
+
+  {# ---------------------------------------------------------------- owner CTA #}
+  <aside class="mx-auto mt-16 max-w-6xl">
+    <div class="card flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex items-start gap-4">
+        <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("building", "size-6") }}</span>
+        <div>
+          <h2 class="text-lg font-semibold tracking-tight">Own a gym?</h2>
+          <p class="mt-1 max-w-xl text-sm leading-relaxed muted">Add your branches, upload your registration and safety documents, and IronPulse verifies them with AI. Verified, open branches with real photos are listed here automatically.</p>
+        </div>
+      </div>
+      <a href="/auth/signup" class="btn btn-dark shrink-0">List your gym {{ icon("arrow-right", "size-4") }}</a>
+    </div>
+  </aside>
+</div>
+{% endblock %}

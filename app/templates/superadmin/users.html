@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% block title %}Users{% endblock %}
+{% block content %}
+{% call sa.header("Users", "Find anyone by name, e-mail, @username, phone or member ID. Deleted accounts can be restored for " ~ retention_days ~ " days before they are purged.", section, sections, counts) %}
+{% endcall %}
+
+{% if alert %}
+<div class="alert alert-{{ alert.tone }} mb-6 animate-fade-up" role="alert">
+  {{ icon("x-circle" if alert.tone == "danger" else "info", "size-5 shrink-0") }}
+  <div>
+    <p class="font-semibold">{{ alert.title }}</p>
+    {% if alert["items"] %}<ul class="mt-1 list-disc pl-5">{% for item in alert["items"] %}<li>{{ item }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+  <nav class="tabs self-start" aria-label="Account state">
+    {% for key, label in states %}
+      <a href="/superadmin/users?state={{ key }}{{ ('&q=' ~ (q | urlencode)) if q }}{{ ('&role=' ~ role) if role }}" class="tab {{ 'tab-active' if state == key }}" {% if state == key %}aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+  </nav>
+  <form method="get" action="/superadmin/users" class="flex w-full gap-2 lg:w-auto" role="search">
+    <input type="hidden" name="state" value="{{ state }}">
+    <label for="user-q" class="sr-only">Search users</label>
+    <div class="relative min-w-0 flex-1 lg:w-80">
+      <span class="pointer-events-none absolute inset-y-0 left-3.5 grid place-items-center text-zinc-400">{{ icon("search", "size-4") }}</span>
+      <input id="user-q" name="q" value="{{ q }}" maxlength="120" placeholder="Name, e-mail, @username, phone, IP-000123" autocomplete="off" spellcheck="false" class="input !py-2.5 !pl-10">
+    </div>
+    <label for="user-role" class="sr-only">Role</label>
+    <select id="user-role" name="role" class="input !w-auto !py-2.5" data-autosubmit>
+      <option value="">All roles</option>
+      {% for value, label in roles.items() %}<option value="{{ value }}" {{ 'selected' if role == value }}>{{ label }} ({{ role_counts.get(value, 0) }})</option>{% endfor %}
+    </select>
+    <button class="btn btn-dark shrink-0">{{ icon("search", "size-4") }}<span class="hidden sm:inline">Search</span></button>
+  </form>
+</div>
+
+{% if users %}
+<div class="table-wrap !overflow-visible">
+  <div class="sa-row-head sa-cols-users" aria-hidden="true"><span>Person</span><span>Role</span><span>Status</span><span>Last sign-in</span><span></span></div>
+  <ul class="sa-list">
+    {% for u in users %}
+    {% set locked = u.locked_until is not none and u.locked_until > now %}
+    {% set restorable = u.deleted_at is not none and u.purge_after is not none and u.purge_after > now %}
+    <li class="sa-row sa-cols-users {{ 'bg-bad/[0.03]' if u.deleted_at }}">
+      <div class="flex min-w-0 items-center gap-3">
+        {{ ui.avatar(u.photo_key if not u.deleted_at else None, u.display_name, "size-10", "text-sm") }}
+        <div class="min-w-0">
+          <p class="truncate font-medium">{% if not u.deleted_at %}<a href="/profile/{{ u.id }}" class="hover:text-accent">{{ u.full_name }}</a>{% else %}{{ u.full_name }} <span class="text-xs font-normal muted">(deleted)</span>{% endif %}</p>
+          <p class="truncate text-xs muted">{{ u.email or "no e-mail" }}</p>
+          <p class="truncate text-[11px] muted"><span class="font-mono">{{ "IP-%06d" | format(u.id) }}</span>{% if u.username %} · @{{ u.username }}{% endif %}{% if u.phone %} · {{ u.phone }}{% endif %}</p>
+        </div>
+      </div>
+      <div><span class="badge badge-{{ role_tones[u.role.value] }}">{{ u.role.value | humanize }}</span></div>
+      <div class="min-w-0">
+        {% if u.deleted_at %}
+          <span class="badge badge-red">Deleted</span>
+          <p class="mt-1 text-xs muted">{{ 'Purged ' ~ (u.purge_after | date) if u.purge_after else '' }}{% if u.deletion_reason %} · <span title="{{ u.deletion_reason }}">{{ u.deletion_reason | truncate(40) }}</span>{% endif %}</p>
+        {% elif locked %}
+          <span class="badge badge-amber">{{ icon("lock", "size-3.5") }}Locked</span>
+          <p class="mt-1 text-xs muted">until {{ u.locked_until | dt("%H:%M") }} · {{ u.failed_login_count }} failed</p>
+        {% elif not u.is_active %}
+          <span class="badge badge-zinc">Inactive</span>
+        {% else %}
+          <span class="badge badge-green">Active</span>
+          {% if u.role.value != 'superadmin' %}<p class="mt-1 text-xs muted">ID {{ u.id_status | humanize | lower }}</p>{% endif %}
+        {% endif %}
+      </div>
+      <div class="min-w-0 text-sm">
+        {% if u.last_login_at %}
+          <p>{{ u.last_login_at | timeago }}</p>
+          {% if u.last_login_ip %}<p class="mt-0.5">{{ sa.ip_link(u.last_login_ip) }}</p>{% endif %}
+        {% else %}<p class="muted">Never</p>{% endif %}
+      </div>
+      <div class="flex flex-wrap items-center gap-2 md:justify-end">
+        {% if not u.deleted_at and (locked or u.failed_login_count) %}
+          {{ ui.confirm_button("/superadmin/users/" ~ u.id ~ "/unlock", "Unlock", "Remove the sign-in lock for " ~ u.full_name ~ "?", variant="secondary", size="sm", ico="key", extra_fields={"next": back}) }}
+        {% endif %}
+        {% if restorable %}
+          {{ ui.confirm_button("/superadmin/users/" ~ u.id ~ "/restore", "Restore", "Restore " ~ u.full_name ~ "'s account? They will be able to sign in again.", variant="success", size="sm", ico="refresh", extra_fields={"next": back}) }}
+        {% endif %}
+        {% if not u.deleted_at and u.role.value in ('owner', 'staff') %}
+          {#- governance (app/routers/superadmin_governance.py): impact preview, then a typed confirmation -#}
+          <a href="/superadmin/governance/users/{{ u.id }}" class="btn btn-secondary btn-sm" data-governance-link>{{ icon("scale", "size-4") }} {{ 'Lift ban…' if not u.is_active else ('Ban owner…' if u.role.value == 'owner' else 'Ban employee…') }}</a>
+        {% endif %}
+        {% if not u.deleted_at and u.role.value != 'superadmin' %}
+        <details class="relative open:basis-full md:open:basis-auto" data-component="dropdown" {{ 'open' if delete_target == u.id }}>
+          <summary class="btn btn-ghost btn-sm list-none text-[#d1281e] dark:text-[#ff6b61] [&::-webkit-details-marker]:hidden">{{ icon("trash", "size-4") }} Delete…</summary>
+          <form method="post" action="/superadmin/users/{{ u.id }}/delete" class="card mt-2 !p-4 text-left md:absolute md:right-0 md:z-20 md:w-80 md:shadow-2xl"
+                data-confirm="Delete {{ u.full_name }}'s account? Their data is kept for {{ retention_days }} days and can be restored until then.">
+            {{ ui.csrf() }}
+            <input type="hidden" name="next" value="{{ back }}">
+            <label class="label" for="reason-{{ u.id }}">Reason <span class="text-bad">*</span></label>
+            <textarea id="reason-{{ u.id }}" name="reason" rows="3" maxlength="255" minlength="5" required class="input {{ 'input-error' if delete_target == u.id and delete_error }}"
+                      placeholder="Included in the e-mail to the person" {% if delete_target == u.id and delete_error %}aria-invalid="true" aria-describedby="reason-err-{{ u.id }}"{% endif %}>{{ delete_value if delete_target == u.id else '' }}</textarea>
+            {% if delete_target == u.id and delete_error %}<p class="field-error" id="reason-err-{{ u.id }}">{{ delete_error }}</p>{% endif %}
+            <button type="submit" class="btn btn-danger btn-sm mt-3 w-full">{{ icon("trash", "size-4") }} Delete account</button>
+          </form>
+        </details>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{{ sa.pagination(pager, "accounts") }}
+{% elif q %}
+  {{ ui.empty("No one matches “" ~ q ~ "”", "Try part of the name, the full e-mail, a phone number or a member ID like IP-000042.", "search", "Clear search", "/superadmin/users?state=" ~ state) }}
+{% else %}
+  {{ ui.empty("No accounts in this view", "Switch to another tab to see more accounts.", "users") }}
+{% endif %}
+{% endblock %}

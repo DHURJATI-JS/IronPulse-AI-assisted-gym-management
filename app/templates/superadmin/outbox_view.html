@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% block title %}E-mail #{{ mail.id }}{% endblock %}
+{% block content %}
+{% call sa.header(mail.subject, "E-mail #" ~ mail.id ~ " to " ~ mail.to_email, section, sections, counts, back="/superadmin/outbox") %}
+  {{ ui.status(mail.status) }}
+  {% if mail.status.value == 'failed' %}
+    {{ ui.confirm_button("/superadmin/outbox/" ~ mail.id ~ "/retry", "Retry", "Queue this e-mail again?", variant="primary", size="sm", ico="refresh", extra_fields={"next": "/superadmin/outbox/" ~ mail.id}) }}
+  {% endif %}
+{% endcall %}
+
+<div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+  <section class="card min-w-0" aria-labelledby="body-title">
+    <div class="sa-card-head">
+      <h2 id="body-title" class="sa-card-title">Plain-text body</h2>
+      <span class="chip">{{ icon("shield", "size-3.5") }} Escaped · HTML never rendered</span>
+    </div>
+    <pre class="sa-pre mt-4">{{ mail.text_body }}</pre>
+    {% if html_chars %}<p class="mt-3 text-xs muted">An HTML alternative ({{ html_chars }} characters) is attached for mail clients. It is not rendered here for safety.</p>{% endif %}
+  </section>
+
+  <aside class="card min-w-0" aria-labelledby="meta-title">
+    <h2 id="meta-title" class="sa-card-title">Delivery</h2>
+    <dl class="mt-4 grid gap-3 text-sm">
+      <div><dt class="text-xs muted">To</dt><dd class="break-words font-medium">{{ mail.to_email }}</dd></div>
+      {% if mail.cc %}<div><dt class="text-xs muted">Cc (guardian copy)</dt><dd class="break-words">{{ mail.cc | join(", ") }}</dd></div>{% endif %}
+      {% if recipient %}<div><dt class="text-xs muted">Account</dt><dd>{{ recipient.display_name }} <span class="muted">· {{ recipient.role.value | humanize }}</span></dd></div>{% endif %}
+      <div><dt class="text-xs muted">Queued</dt><dd>{{ mail.created_at | dt }}</dd></div>
+      <div><dt class="text-xs muted">Sent</dt><dd>{{ mail.sent_at | dt if mail.sent_at else "Not yet" }}</dd></div>
+      <div><dt class="text-xs muted">Attempts</dt><dd class="tabular-nums">{{ mail.attempts }}{% if mail.next_attempt_at and mail.status.value == 'queued' %} · next try {{ mail.next_attempt_at | timeago }}{% endif %}</dd></div>
+      {% if mail.last_error %}<div><dt class="text-xs muted">Last error</dt><dd class="break-words rounded-xl bg-bad/10 px-2.5 py-1.5 font-mono text-[12px] text-[#991b1b] dark:text-[#fca5a5]">{{ mail.last_error }}</dd></div>{% endif %}
+    </dl>
+  </aside>
+</div>
+{% endblock %}

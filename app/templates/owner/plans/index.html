@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "checkout/_plan.html" as pl with context %}
+{% block title %}Plans · {{ gym.name }}{% endblock %}
+{% block content %}
+{% call ui.page_header("Plans & pricing", subtitle="Set prices, edit descriptions and switch plans on or off. Price changes apply to new purchases only - existing members keep the price they paid.", eyebrow=gym.name, back="/owner/gyms/" ~ gym.id) %}
+  <a href="/owner/desk" class="btn btn-secondary btn-sm">{{ icon("key", "size-4") }}Front desk{% if stats.waiting %}<span class="badge badge-amber !py-0.5">{{ stats.waiting }}</span>{% endif %}</a>
+  <a href="/gyms/{{ gym.slug }}" class="btn btn-ghost btn-sm">{{ icon("eye", "size-4") }}Public page</a>
+{% endcall %}
+
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 animate-fade-up">
+  {{ ui.stat("Active members", stats.members, "across every plan", "user-group", "blue") }}
+  {{ ui.stat("Plans on sale", stats.on_sale ~ " / " ~ (plans | length), "visible to customers now", "sparkles", "violet") }}
+  {{ ui.stat("Revenue this month", stats.revenue | money(gym.currency), "membership payments received", "banknotes", "green") }}
+  {{ ui.stat("Desk codes waiting", stats.waiting, "customers at a branch desk", "key", "amber") }}
+</div>
+
+<section class="mt-6 grid gap-3 md:grid-cols-3 animate-fade-up" aria-label="What decides availability">
+  <div class="card-muted flex items-center gap-3">
+    <span class="grid size-10 shrink-0 place-items-center rounded-xl {{ 'bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]' if availability.online_open else 'bg-zinc-500/15 text-zinc-500 dark:text-zinc-300' }}">{{ icon("globe", "size-5") }}</span>
+    <div class="min-w-0">
+      <p class="text-sm font-semibold">Online training</p>
+      <p class="text-xs muted">{% if availability.online_open %}Open - online and combo plans can sell{% elif not gym.online_enabled %}Switched off in gym settings{% else %}Closed by the admin{% endif %}</p>
+    </div>
+  </div>
+  <div class="card-muted flex items-center gap-3">
+    <span class="grid size-10 shrink-0 place-items-center rounded-xl {{ 'bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]' if availability.branches else 'bg-zinc-500/15 text-zinc-500 dark:text-zinc-300' }}">{{ icon("building", "size-5") }}</span>
+    <div class="min-w-0">
+      <p class="text-sm font-semibold">{{ availability.branches | length }} published branch{{ 'es' if availability.branches | length != 1 }}</p>
+      <p class="text-xs muted">{% if availability.branches %}Gym and combo plans can sell{% else %}Verified + open + {{ min_photos }} photos needed{% endif %}</p>
+    </div>
+  </div>
+  <div class="card-muted flex items-center gap-3">
+    <span class="grid size-10 shrink-0 place-items-center rounded-xl {{ 'bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]' if trainer_total else 'bg-zinc-500/15 text-zinc-500 dark:text-zinc-300' }}">{{ icon("user", "size-5") }}</span>
+    <div class="min-w-0">
+      <p class="text-sm font-semibold">{{ trainer_total }} active trainer{{ 's' if trainer_total != 1 }}</p>
+      <p class="text-xs muted">{{ trainers_online }} online-capable · {{ trainers_offline }} in-gym</p>
+    </div>
+  </div>
+</section>
+
+{% if not plans %}
+  <section class="card mt-8 flex flex-col items-center px-6 py-14 text-center animate-fade-up">
+    <span class="grid size-14 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("sparkles", "size-7") }}</span>
+    <h2 class="mt-4 text-lg font-semibold">No plans yet</h2>
+    <p class="mt-1 max-w-md text-sm muted">Start with the 12 standard plans - gym, online and combo, each with optional trainer and AI coach. Prices are pre-filled for {{ gym.currency }} and you can change every one of them.</p>
+    <form method="post" action="/owner/gyms/{{ gym.id }}/plans/seed" class="mt-6">
+      {{ ui.csrf() }}
+      <button type="submit" class="btn btn-primary">{{ icon("plus", "size-4") }}Seed default plans</button>
+    </form>
+  </section>
+{% else %}
+  {% if missing %}
+    <div class="alert alert-info mt-8">
+      {{ icon("info", "size-5 shrink-0") }}
+      <div class="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p>{{ missing | length }} of the 12 standard plans {{ 'is' if missing | length == 1 else 'are' }} missing.</p>
+        <form method="post" action="/owner/gyms/{{ gym.id }}/plans/seed">{{ ui.csrf() }}<button type="submit" class="btn btn-dark btn-sm">{{ icon("plus", "size-4") }}Add missing plans</button></form>
+      </div>
+    </div>
+  {% endif %}
+
+  {% for group in groups %}
+  <section class="mt-10 animate-fade-up" aria-labelledby="g-{{ group.mode }}">
+    <div class="mb-4 flex flex-wrap items-end justify-between gap-2">
+      <div>
+        <h2 id="g-{{ group.mode }}" class="section-title">{{ group.label }}</h2>
+        <p class="text-sm muted">{{ group.blurb }}</p>
+      </div>
+    </div>
+    <div class="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      {% for p in group.plans %}
+        {% set err = errors.get(p.id, {}) %}
+        {% set val = values.get(p.id, {}) %}
+        {% set reason = reasons[p.id] %}
+        <form method="post" action="/owner/plans/{{ p.id }}" id="plan-{{ p.id }}" class="card flex flex-col gap-4 !p-5 {{ 'plan-card-error' if err }}" data-component="plan-editor" novalidate>
+          {{ ui.csrf() }}
+          <div class="flex items-start justify-between gap-3">
+            <h3 class="min-h-11 min-w-0 font-semibold leading-snug" title="Plan code: {{ p.code }}">{{ p.name }}</h3>
+            <label class="switch" title="Sell this plan">
+              <input type="checkbox" name="is_enabled" value="1" class="switch-input" {{ 'checked' if val.get('is_enabled', p.is_enabled) }} data-enabled-toggle>
+              <span class="switch-track" aria-hidden="true"></span>
+              <span class="sr-only">Sell {{ p.name }}</span>
+            </label>
+          </div>
+          <div class="-mt-2 space-y-2.5" data-plan-state>
+            <p class="flex min-h-6 flex-wrap items-center gap-1.5">
+              {% if p.includes_trainer %}<span class="chip">{{ icon("user", "size-3.5") }}Trainer</span>{% endif %}
+              {% if p.includes_ai %}<span class="chip">{{ icon("sparkles", "size-3.5") }}AI coach</span>{% endif %}
+              {% if not p.includes_trainer and not p.includes_ai %}<span class="chip">{{ icon("play", "size-3.5") }}Core plan</span>{% endif %}
+            </p>
+            {% if reason is none %}
+              <p class="flex items-center gap-1.5 text-xs font-semibold text-[#1f8c3a] dark:text-[#4ade80]"><span class="dot bg-current"></span>On sale</p>
+            {% elif reason == 'Disabled' %}
+              <p class="flex items-center gap-1.5 text-xs font-semibold muted"><span class="dot bg-current"></span>Switched off</p>
+            {% else %}
+              <p class="flex min-w-0 items-center gap-1.5 text-xs font-semibold text-[#b45309] dark:text-[#fbbf24]" title="{{ reason }}">
+                <span class="dot shrink-0 bg-current"></span><span class="truncate">Hidden · {{ reason }}</span>
+              </p>
+            {% endif %}
+          </div>
+          <div>
+            <label class="label" for="price-{{ p.id }}">Price per {{ p.duration_days }} days</label>
+            <div class="relative">
+              <span class="pointer-events-none absolute inset-y-0 left-4 flex items-center text-xs font-semibold muted">{{ p.currency }}</span>
+              <input id="price-{{ p.id }}" name="price" type="text" inputmode="decimal" autocomplete="off" required
+                     value="{{ val.get('price', p.price) }}" class="input pl-14 tabular-nums {{ 'input-error' if err.price }}"
+                     {% if err.price %}aria-invalid="true" aria-describedby="price-{{ p.id }}-err"{% endif %}>
+            </div>
+            {% if err.price %}<p class="field-error" id="price-{{ p.id }}-err">{{ err.price }}</p>{% endif %}
+          </div>
+          <div>
+            <label class="label" for="desc-{{ p.id }}">Description</label>
+            <textarea id="desc-{{ p.id }}" name="description" rows="3" maxlength="600" class="input text-[13px] leading-relaxed {{ 'input-error' if err.description }}">{{ val.get('description', p.description or '') }}</textarea>
+            {% if err.description %}<p class="field-error">{{ err.description }}</p>{% endif %}
+          </div>
+          <div class="mt-auto flex items-center justify-between gap-3 pt-1">
+            <p class="text-xs muted">{{ counts.get(p.id, 0) }} active member{{ 's' if counts.get(p.id, 0) != 1 }}</p>
+            <button type="submit" class="btn btn-dark btn-sm" data-save-button>Save</button>
+          </div>
+        </form>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  <p class="mt-8 flex items-center gap-2 text-xs muted">{{ icon("play", "size-4") }}Pre-recorded videos are included in every plan. Plans are never deleted - disable a plan to stop selling it.</p>
+{% endif %}
+{% endblock %}

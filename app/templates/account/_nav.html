@@ -1,0 +1,17 @@
+{#- Account sub-navigation (pass unread_count in the context for the badge) -#}
+{% set path = request.url.path %}
+<nav class="-mx-4 mb-8 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0" aria-label="Account sections">
+  <div class="tabs">
+    {% for href, label, ico in [
+      ("/account", "Profile", "user"),
+      ("/account/notifications", "Notifications", "bell"),
+      ("/account/identity", "ID card", "id-card"),
+      ("/account/delete", "Delete account", "trash"),
+    ] %}
+      <a href="{{ href }}" class="tab inline-flex items-center gap-1.5 whitespace-nowrap {{ 'tab-active' if path == href }}"{% if path == href %} aria-current="page"{% endif %}>
+        {{ icon(ico, "size-4") }}{{ label }}
+        {% if href == "/account/notifications" and unread_count %}<span class="badge badge-red !px-1.5 !py-0.5 tabular-nums" data-unread-count>{{ unread_count }}</span>{% endif %}
+      </a>
+    {% endfor %}
+  </div>
+</nav>

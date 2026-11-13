@@ -1,0 +1,8 @@
+{#- Centred auth layout for short flows (forgot / reset / verify / invites). Blocks: card, width -#}
+{% extends "base.html" %}
+{% block content %}
+<div class="relative flex justify-center py-4 sm:py-10">
+  <div class="auth-glow" aria-hidden="true"></div>
+  <div class="relative w-full {% block width %}max-w-md{% endblock %} animate-fade-up">{% block card %}{% endblock %}</div>
+</div>
+{% endblock %}

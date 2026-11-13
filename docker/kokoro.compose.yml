@@ -1,0 +1,33 @@
+# Kokoro TTS for the IronPulse live AI workout companion (WP-K).
+#
+# Kokoro-FastAPI serves an OpenAI-compatible speech endpoint (POST /v1/audio/speech) on port 8880, which is
+# exactly what app/services/tts.py calls. With the default settings no .env change is needed:
+#     TTS_BASE_URL=http://localhost:8880/v1   TTS_MODEL=kokoro   TTS_VOICE=af_heart   TTS_SPEED=0.95
+#
+# Start / stop (Windows, macOS, Linux):
+#     docker compose -f docker/kokoro.compose.yml up -d
+#     docker compose -f docker/kokoro.compose.yml logs -f kokoro     # first start downloads the model (~350 MB)
+#     docker compose -f docker/kokoro.compose.yml down
+# Check:  curl http://localhost:8880/v1/audio/voices      (the Live coach page then shows "Natural Kokoro voice ready")
+#
+# While the container is down the app falls back to the browser's built-in soft voice automatically.
+# NVIDIA GPU hosts can use ghcr.io/remsky/kokoro-fastapi-gpu instead (add a GPU device reservation).
+name: ironpulse-voice
+
+services:
+  kokoro:
+    # CPU build. "latest" tracks the newest release - pin a release tag (e.g. :v0.2.4) for reproducible installs.
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    container_name: ironpulse-kokoro
+    ports:
+      - "8880:8880"
+    restart: unless-stopped
+    environment:
+      # keep the server single-worker and quiet; the app caches phrases and limits concurrency itself
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8880/v1/audio/voices', timeout=5)\" || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s

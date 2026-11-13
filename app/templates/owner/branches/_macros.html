@@ -1,0 +1,14 @@
+{#- WP-B helpers: verification status badges with proper labels ("AI unavailable", not "Ai unavailable").
+      {% import "owner/branches/_macros.html" as om %}  ->  {{ om.vstatus(branch.verification_status) }} -#}
+{% set VERIFICATION_LABELS = {
+  'draft': 'Draft', 'queued': 'Queued', 'processing': 'Checking', 'verified': 'Verified',
+  'needs_review': 'In review', 'rejected': 'Rejected', 'ai_unavailable': 'AI unavailable'} %}
+
+{% macro vlabel(value) -%}
+{%- set v = value.value if value.value is defined else value -%}
+{{ VERIFICATION_LABELS.get(v | string, v | humanize) }}
+{%- endmacro %}
+
+{% macro vstatus(value) -%}
+<span class="badge badge-{{ value | tone }}"><span class="dot bg-current opacity-70"></span>{{ vlabel(value) }}</span>
+{%- endmacro %}

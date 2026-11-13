@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "public/_macros.html" as pub with context %}
+{% block title %}{{ branch.name }} · {{ gym.name }}{% endblock %}
+{% block description %}{{ gym.name }} {{ branch.name }} in {{ branch.city }}: photos, opening hours, trainers and plans.{% endblock %}
+{% block head %}<link rel="stylesheet" href="{{ static('vendor/leaflet/leaflet.css') }}">{% endblock %}
+{% block content %}
+<div class="relative isolate">
+  <div class="pub-page-glow" aria-hidden="true"></div>
+
+  <nav class="mb-6 flex min-w-0 items-center gap-1.5 text-sm muted" aria-label="Breadcrumb">
+    <a href="/gyms" class="shrink-0 hover:text-ink dark:hover:text-white">Gyms</a>{{ icon("chevron-right", "size-3.5 shrink-0") }}
+    <a href="/gyms/{{ gym.slug }}" class="truncate hover:text-ink dark:hover:text-white">{{ gym.name }}</a>{{ icon("chevron-right", "size-3.5 shrink-0") }}
+    <span class="truncate font-medium text-ink dark:text-white" aria-current="page">{{ branch.name }}</span>
+  </nav>
+
+  {# ================================================================= header #}
+  <header class="flex flex-col gap-5 animate-fade-up lg:flex-row lg:items-end lg:justify-between">
+    <div class="min-w-0">
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="badge badge-green">{{ icon("check-badge", "size-3.5") }}AI-verified branch</span>
+        {% if open_state.open %}<span class="badge badge-green"><span class="dot bg-current"></span>Open now</span>
+        {% else %}<span class="badge badge-zinc"><span class="dot bg-current opacity-70"></span>Closed</span>{% endif %}
+        {% if distance %}<span class="badge badge-blue">{{ icon("map-pin", "size-3.5") }}{{ distance }} away</span>{% endif %}
+      </div>
+      <h1 class="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">{{ branch.name }}</h1>
+      <p class="mt-2 text-lg muted">by <a href="/gyms/{{ gym.slug }}" class="font-medium text-ink hover:text-accent dark:text-white">{{ gym.name }}</a> · {{ branch.city }}</p>
+      <p class="mt-1 text-sm muted">{{ branch.formatted_address or (branch.address_line1 ~ (', ' ~ branch.address_line2 if branch.address_line2 else '') ~ ', ' ~ branch.city ~ (', ' ~ branch.state if branch.state else '') ~ (' ' ~ branch.postal_code if branch.postal_code else '')) }}</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <a href="#plans" class="btn btn-primary">{{ icon("sparkles", "size-4") }} Plans for this branch</a>
+      {% if has_coords %}<a href="https://www.openstreetmap.org/?mlat={{ branch.latitude }}&amp;mlon={{ branch.longitude }}#map=17/{{ branch.latitude }}/{{ branch.longitude }}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">{{ icon("map", "size-4") }} Directions</a>{% endif %}
+      {% if branch.phone %}<a href="tel:{{ branch.phone | replace(' ', '') }}" class="btn btn-ghost">{{ icon("phone", "size-4") }} Call</a>{% endif %}
+    </div>
+  </header>
+
+  {# ================================================================= gallery #}
+  {% if photos %}
+  <section class="mt-8 animate-fade-up" aria-label="Photo gallery">
+    {% set visible = [photos | length, 5] | min %}
+    <div class="pub-gallery" data-component="gallery">
+      {% for p in photos %}
+        {% set i = loop.index %}
+        {% set span = ('sm:col-span-2' if (visible == 3 and i > 1) or (visible == 4 and i == 2) else '') ~ (' col-span-2 sm:col-span-1' if i == visible and i > 1 and (visible - 1) % 2 == 1 else '') %}
+        <a href="{{ p.src }}" class="pub-gallery-item {{ 'hidden' if i > 5 }} {{ span }}" data-gallery-item data-caption="{{ p.caption }}" aria-label="Open photo {{ loop.index }} of {{ photos | length }}: {{ p.caption }}">
+          <img src="{{ p.src }}" alt="{{ p.caption }}" {% if not loop.first %}loading="lazy"{% endif %} decoding="async">
+          {% if loop.index == 5 and photos | length > 5 %}<span class="pub-gallery-more">+{{ photos | length - 5 }} photo{{ 's' if photos | length - 5 != 1 }}</span>{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+    <p class="mt-2 text-xs muted">{{ photos | length }} photos · tap to enlarge, use ← → keys or swipe to browse</p>
+  </section>
+  {% endif %}
+
+  <div class="mt-12 grid gap-10 lg:grid-cols-[minmax(0,1fr)_360px]">
+    <div class="min-w-0 space-y-14">
+      {# ================================================================= features #}
+      <section aria-labelledby="features-title">
+        <h2 id="features-title" class="section-title text-2xl">What's inside</h2>
+        {% if branch.features %}
+          <ul class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {% for f in branch.features %}
+              <li class="flex items-center gap-2.5 rounded-2xl bg-white px-4 py-3 text-sm font-medium ring-1 ring-black/[0.05] dark:bg-surface-dark dark:ring-white/[0.08]"><span class="grid size-6 shrink-0 place-items-center rounded-full bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("check", "size-3.5") }}</span>{{ f.name }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="mt-2 text-sm muted">The owner hasn't listed this branch's facilities yet - the photos above show the floor and machines.</p>
+        {% endif %}
+      </section>
+
+      {# ================================================================= hours #}
+      <section aria-labelledby="hours-title">
+        <div class="flex flex-wrap items-end justify-between gap-2">
+          <h2 id="hours-title" class="section-title text-2xl">Opening hours</h2>
+          <p class="text-sm {{ 'font-semibold text-[#1f8c3a] dark:text-[#4ade80]' if open_state.open else 'muted' }}">{{ open_state.text }}</p>
+        </div>
+        <div class="card mt-4 !p-3">
+          <ul class="grid gap-0.5">
+            {% for row in hours %}
+            <li class="pub-hours-row {{ 'pub-hours-today' if row.today }}"{% if row.today %} aria-current="date"{% endif %}>
+              <span>{{ row.name }}{% if row.today %} <span class="ml-1 text-xs font-medium">(today)</span>{% endif %}</span>
+              <span class="tabular-nums {{ '' if row.opens else 'muted' }}">{% if row.opens %}{{ row.opens }} – {{ row.closes }}{% else %}Closed{% endif %}</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        <p class="mt-2 text-xs muted">Times are local to the branch ({{ branch.timezone }}). Gyms open at most {{ 14 }} hours a day.</p>
+      </section>
+
+      {# ================================================================= team at this branch #}
+      <section aria-labelledby="team-title">
+        <h2 id="team-title" class="section-title text-2xl">Trainers &amp; staff at this branch</h2>
+        <p class="mt-1 text-sm muted">People with regular shifts here - schedules are local branch times.</p>
+        {% if team %}
+          <div class="mt-5 grid gap-4 sm:grid-cols-2">{% for m in team %}{{ pub.member_card(m) }}{% endfor %}</div>
+        {% else %}
+          <div class="card-muted mt-5 text-sm muted">No public shifts are scheduled at this branch yet. Ask the owner about personal training slots.</div>
+        {% endif %}
+        {% if others %}
+          <h3 class="mb-3 mt-10 text-sm font-semibold uppercase tracking-wider muted">More of the {{ gym.name }} team</h3>
+          <div class="grid gap-4 sm:grid-cols-2">{% for m in others %}{{ pub.member_card(m) }}{% endfor %}</div>
+        {% endif %}
+      </section>
+
+      {# ================================================================= plans #}
+      <section id="plans" class="scroll-mt-24" aria-labelledby="plans-title">
+        <h2 id="plans-title" class="section-title text-2xl">Plans for {{ branch.name }}</h2>
+        <p class="mt-1 text-sm muted">In-person and combo plans need you to be within {{ app.offline_max_distance_km | int }} km of this branch. Videos are included in every plan.</p>
+        {% if groups %}
+          <div class="mt-6 mb-8">{{ pub.location_gate(elig, loc, branch.name) }}</div>
+          {{ pub.plan_groups(groups, gym) }}
+          {% if app.payments_test_mode %}<p class="mt-6 flex items-center gap-2 text-xs muted">{{ icon("info", "size-4") }}Payments currently run in TEST MODE - no real money is charged.</p>{% endif %}
+        {% else %}
+          <div class="mt-6">{{ ui.empty("No plans on sale right now", gym.name ~ " hasn't published plans you can buy at the moment.", "sparkles") }}</div>
+        {% endif %}
+      </section>
+
+      {% if other_branches %}
+      <section aria-labelledby="others-title">
+        <h2 id="others-title" class="section-title text-2xl">Other {{ gym.name }} locations</h2>
+        {% if all_branches_href %}<p class="mt-1 text-sm muted">The {{ other_branches | length }} nearest of {{ other_total }}</p>{% endif %}
+        <div class="mt-5 grid gap-4">{% for bc in other_branches %}{{ pub.branch_card(bc, gym) }}{% endfor %}</div>
+        {% if all_branches_href %}
+          <a href="{{ all_branches_href }}" class="btn btn-secondary mt-5 w-full" data-all-branches>{{ icon("map-pin", "size-4") }} View all {{ other_total + 1 }} locations {{ icon("arrow-right", "size-4") }}</a>
+        {% endif %}
+      </section>
+      {% endif %}
+    </div>
+
+    {# ================================================================= sidebar #}
+    <aside class="space-y-4 lg:sticky lg:top-24 lg:self-start" aria-label="Location and contact">
+      <div class="card !p-3">
+        {% if has_coords %}
+          <div class="pub-map" data-component="branch-map" data-lat="{{ branch.latitude }}" data-lon="{{ branch.longitude }}" data-name="{{ branch.name }}" role="region" aria-label="Map showing {{ branch.name }}">
+            <div class="grid size-full place-items-center p-6 text-center text-sm muted" data-map-fallback>
+              <div>
+                <span class="mx-auto grid size-12 place-items-center rounded-2xl bg-accent/10 text-accent dark:text-[#64b5ff]">{{ icon("map", "size-6") }}</span>
+                <p class="mt-3">Loading map…</p>
+              </div>
+            </div>
+          </div>
+        {% else %}
+          <div class="pub-map grid place-items-center p-6 text-center text-sm muted">The owner hasn't pinned this branch on the map yet.</div>
+        {% endif %}
+        <div class="px-2 pb-1 pt-4">
+          <p class="font-semibold">{{ branch.name }}</p>
+          <p class="mt-1 text-sm muted">{{ branch.address_line1 }}{% if branch.address_line2 %}, {{ branch.address_line2 }}{% endif %}<br>{{ branch.city }}{% if branch.state %}, {{ branch.state }}{% endif %}{% if branch.postal_code %} {{ branch.postal_code }}{% endif %}</p>
+          {% if distance %}<p class="mt-2 text-sm font-medium text-accent">{{ icon("map-pin", "inline size-4 align-[-3px]") }} {{ distance }} from you</p>{% endif %}
+          {% if has_coords %}<a href="https://www.openstreetmap.org/?mlat={{ branch.latitude }}&amp;mlon={{ branch.longitude }}#map=17/{{ branch.latitude }}/{{ branch.longitude }}" target="_blank" rel="noopener noreferrer" class="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">Open in OpenStreetMap {{ icon("external", "size-3.5") }}</a>{% endif %}
+        </div>
+      </div>
+      {{ pub.owner_card(owner, gym) }}
+      {% if branch.phone or branch.email %}
+      <div class="card-flat text-sm">
+        <p class="font-semibold">Contact this branch</p>
+        <div class="mt-3 grid gap-2">
+          {% if branch.phone %}<a href="tel:{{ branch.phone | replace(' ', '') }}" class="flex items-center gap-2 text-accent hover:underline">{{ icon("phone", "size-4") }}{{ branch.phone }}</a>{% endif %}
+          {% if branch.email %}<a href="mailto:{{ branch.email }}" class="flex items-center gap-2 text-accent hover:underline">{{ icon("envelope", "size-4") }}<span class="truncate">{{ branch.email }}</span></a>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </aside>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script nonce="{{ csp_nonce }}" src="{{ static('vendor/leaflet/leaflet.js') }}" defer></script>{% endblock %}

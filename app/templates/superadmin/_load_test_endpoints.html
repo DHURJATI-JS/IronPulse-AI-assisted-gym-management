@@ -1,0 +1,53 @@
+{#- Endpoints table: top 25 by p95 by default; ?sort=p95|p99|requests|failures|name, ?show=all (at most 500 rows). -#}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_load_test_macros.html" as lt with context %}
+{% set ep = view.endpoints %}
+<section id="endpoints" class="mt-8 min-w-0 scroll-mt-24" aria-labelledby="lt-ep-title">
+  <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+    <div class="min-w-0">
+      <h2 id="lt-ep-title" class="section-title">Endpoints</h2>
+      {% if ep.total %}
+      <p class="mt-1 text-sm muted">
+        {% if ep.show_all or ep.total <= ep.top %}All {{ fmt.num(ep.total) }}{% else %}Top {{ ep.shown }} of {{ fmt.num(ep.total) }}{% endif %}
+        by {{ ep.sort_label }} · failure rates of 1 % or more are flagged red
+      </p>
+      {% endif %}
+    </div>
+    {% if ep.total %}{# nothing to sort: no sort chips #}
+    <nav class="flex flex-wrap gap-1.5" aria-label="Sort endpoints by">
+      {% for key, chip, href in ep.sort_links %}
+      <a href="{{ href }}" class="chip {{ '!bg-ink !text-white dark:!bg-white dark:!text-black' if key == ep.sort else 'hover:bg-zinc-900/10 dark:hover:bg-white/15' }}"{% if key == ep.sort %} aria-current="true"{% endif %}>{{ chip }}</a>
+      {% endfor %}
+    </nav>
+    {% endif %}
+  </div>
+  {% if ep.rows %}
+  <div class="table-wrap">
+    <table class="table [&_td]:tabular-nums [&_td:nth-child(n+3)]:whitespace-nowrap [&_td:nth-child(n+3)]:text-right [&_th:nth-child(n+3)]:text-right" data-lt-endpoints>
+      <caption class="sr-only">Endpoints sorted by {{ ep.sort_label }}: requests, failures, latency percentiles and throughput</caption>
+      <thead>
+        <tr>
+          <th scope="col"{% if ep.sort == 'name' %} aria-sort="ascending"{% endif %}>Endpoint</th>
+          <th scope="col">Group</th>
+          <th scope="col"{% if ep.sort == 'requests' %} aria-sort="descending"{% endif %}>Requests</th>
+          <th scope="col"{% if ep.sort == 'failures' %} aria-sort="descending"{% endif %}>Failures</th>
+          <th scope="col">p50</th>
+          <th scope="col"{% if ep.sort == 'p95' %} aria-sort="descending"{% endif %}>p95</th>
+          <th scope="col"{% if ep.sort == 'p99' %} aria-sort="descending"{% endif %}>p99</th>
+          <th scope="col">Max</th>
+          <th scope="col">Req/s</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in ep.rows %}{% set e = r.e %}<tr{% if r.flag == 'red' %} class="bg-bad/[0.04] dark:bg-bad/[0.07]"{% endif %}><td class="min-w-[13rem]"><span class="mr-2 inline-block w-11 font-mono text-[11px] font-semibold muted">{{ e.method }}</span><span class="font-mono text-[13px] [overflow-wrap:anywhere]">{{ fmt.route(e.name) }}</span></td><td class="text-sm muted">{{ e.group or "—" }}</td><td>{{ fmt.num(e.requests) }}</td><td>{{ lt.failure_rate(r.rate, r.flag, e.failures) }}</td><td>{{ fmt.ms(e.p50_ms) }}</td><td class="font-medium">{{ fmt.ms(e.p95_ms) }}</td><td>{{ fmt.ms(e.p99_ms) }}</td><td>{{ fmt.ms(e.max_ms) }}</td><td>{{ "%.1f" | format(e.rps) if e.rps < 10 else fmt.num(e.rps) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if ep.total > ep.top %}
+  <p class="mt-3"><a href="{{ ep.toggle_url }}" class="inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline" data-lt-toggle>{% if ep.show_all %}Show the top {{ ep.top }} only{% else %}Show all {{ fmt.num(ep.total) }} endpoints{% endif %}{{ icon("chevron-down" if not ep.show_all else "chevron-right", "size-4") }}</a></p>
+  {% endif %}
+  {% else %}
+  {{ lt.missing("No endpoints recorded", "The analysis wrote no per-endpoint statistics for this run.", "layers") }}
+  {% endif %}
+</section>

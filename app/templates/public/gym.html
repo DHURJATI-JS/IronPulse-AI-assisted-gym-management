@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "public/_macros.html" as pub with context %}
+{% block title %}{{ gym.name }}{% endblock %}
+{% block description %}{{ gym.tagline or (gym.name ~ " on IronPulse: verified branches, plans, trainers and online coaching.") }}{% endblock %}
+{% block content %}
+<div class="relative isolate">
+  <div class="pub-page-glow" aria-hidden="true"></div>
+
+  <nav class="mb-6 flex items-center gap-1.5 text-sm muted" aria-label="Breadcrumb">
+    <a href="/gyms" class="hover:text-ink dark:hover:text-white">Gyms</a>{{ icon("chevron-right", "size-3.5") }}<span class="truncate font-medium text-ink dark:text-white" aria-current="page">{{ gym.name }}</span>
+  </nav>
+
+  {# ================================================================= hero #}
+  <section class="grid gap-8 lg:grid-cols-[1fr_1.05fr] lg:items-center" aria-labelledby="gym-title">
+    <div class="animate-fade-up">
+      <div class="flex items-center gap-4">
+        <span class="pub-portrait size-16 !rounded-[22px] shadow-lg shadow-indigo/20">
+          {% if media_url(gym.logo_key) %}<img src="{{ media_url(gym.logo_key) }}" alt="{{ gym.name }} logo">{% else %}<span>{{ gym.name | initials }}</span>{% endif %}
+        </span>
+        <div class="flex flex-wrap gap-1.5">
+          {% if gym.online_enabled %}
+            {% if online_open %}<span class="badge badge-blue">{{ icon("video", "size-3.5") }}Online · open</span>
+            {% else %}<span class="badge badge-zinc">{{ icon("video", "size-3.5") }}Online · temporarily closed</span>{% endif %}
+          {% endif %}
+          {% if branch_total %}<span class="badge badge-green">{{ icon("check-badge", "size-3.5") }}{{ branch_total }} verified {{ 'branch' if branch_total == 1 else 'branches' }}</span>{% endif %}
+        </div>
+      </div>
+      <h1 id="gym-title" class="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">{{ gym.name }}</h1>
+      {% if gym.tagline %}<p class="mt-3 max-w-xl text-lg leading-relaxed muted">{{ gym.tagline }}</p>{% endif %}
+      {% if cities %}
+        <div class="mt-4 flex flex-wrap gap-1.5">{% for c in cities %}<span class="chip">{{ icon("map-pin", "size-3") }}{{ c }}</span>{% endfor %}{% if more_cities %}<span class="chip">+{{ more_cities }} more</span>{% endif %}</div>
+      {% endif %}
+      <div class="mt-7 flex flex-wrap gap-3">
+        <a href="#plans" class="btn btn-primary">{{ icon("sparkles", "size-4") }} See plans</a>
+        {% if branch_cards %}<a href="#locations" class="btn btn-secondary">{{ icon("map-pin", "size-4") }} Locations</a>{% endif %}
+        {% if team %}<a href="#team" class="btn btn-ghost">{{ icon("users", "size-4") }} Team</a>{% endif %}
+      </div>
+    </div>
+
+    <div class="animate-fade-up">
+      {% if hero_photos %}
+        <div class="grid h-72 grid-cols-3 grid-rows-2 gap-2 overflow-hidden rounded-[28px] sm:h-80">
+          {% for p in hero_photos[:3] %}
+            <div class="relative overflow-hidden bg-zinc-100 dark:bg-white/5 {{ 'col-span-2 row-span-2' if loop.first }}">
+              <img src="{{ media_url(p.image_key) }}" alt="{{ p.caption or ('Inside ' ~ gym.name) }}" class="size-full object-cover" {% if not loop.first %}loading="lazy"{% endif %} decoding="async">
+            </div>
+          {% endfor %}
+          {% if hero_photos | length < 3 %}
+            {% for _ in range(3 - hero_photos | length) %}<div class="pub-cover-fallback !min-h-0">{{ icon("photo", "size-6 text-accent") }}</div>{% endfor %}
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="pub-cover-fallback h-64 rounded-[28px] sm:h-80">
+          <div class="text-center">
+            <span class="mx-auto grid size-16 place-items-center rounded-2xl bg-white/80 text-accent shadow-lg dark:bg-white/10 dark:text-[#64b5ff]">{{ icon("video" if gym.online_enabled else "building", "size-7") }}</span>
+            <p class="mt-4 font-semibold">{{ 'Train with ' ~ gym.name ~ ' from anywhere' if gym.online_enabled else gym.name }}</p>
+            <p class="mt-1 text-sm muted">{{ 'Live online sessions, coaching and videos' if gym.online_enabled else 'Photos appear once a branch is verified' }}</p>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <div class="mt-14 grid gap-10 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <div class="min-w-0 space-y-16">
+      {# ================================================================= about #}
+      {% if gym.description %}
+      <section aria-labelledby="about-title">
+        <h2 id="about-title" class="section-title text-2xl">About {{ gym.name }}</h2>
+        <div class="prose-ip mt-3 whitespace-pre-line">{{ gym.description }}</div>
+      </section>
+      {% endif %}
+
+      {# ================================================================= locations #}
+      <section id="locations" class="scroll-mt-24" aria-labelledby="locations-title">
+        <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 id="locations-title" class="section-title text-2xl">Locations</h2>
+            <p class="mt-1 text-sm muted">{% if branch_total %}{{ branch_total }} verified {{ 'branch' if branch_total == 1 else 'branches' }}{% if loc.has_coords %} · nearest first{% endif %}{% if all_branches_href %} · showing {{ branch_cards | length }}{% endif %}{% else %}Online only{% endif %}</p>
+          </div>
+          {% if branch_cards and not loc.has_coords %}{{ pub.locate_form("Sort by distance", "secondary", "sm", "locations") }}{% endif %}
+        </div>
+        {% if branch_cards %}
+          <div class="grid gap-4" data-component="distance-sort">
+            {% for bc in branch_cards %}{{ pub.branch_card(bc, gym) }}{% endfor %}
+          </div>
+          {% if all_branches_href %}
+            <a href="{{ all_branches_href }}" class="btn btn-secondary mt-5 w-full" data-all-branches>{{ icon("map-pin", "size-4") }} View all {{ branch_total }} locations {{ icon("arrow-right", "size-4") }}</a>
+          {% endif %}
+        {% else %}
+          <div class="card-muted flex items-start gap-4">
+            <span class="grid size-11 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent dark:text-[#64b5ff]">{{ icon("globe", "size-5") }}</span>
+            <div>
+              <p class="font-semibold">{{ gym.name }} trains online</p>
+              <p class="mt-1 text-sm muted">There's no verified physical branch yet, so in-person and combo plans aren't on sale. Online plans work from anywhere.</p>
+            </div>
+          </div>
+        {% endif %}
+      </section>
+
+      {# ================================================================= plans #}
+      <section id="plans" class="scroll-mt-24" aria-labelledby="plans-title">
+        <div class="mb-6">
+          <h2 id="plans-title" class="section-title text-2xl">Plans</h2>
+          <p class="mt-1 text-sm muted">Prices are set by the gym, and pre-recorded workout videos are included in every plan.</p>
+        </div>
+        {% if groups %}
+          {% if has_offline_groups %}<div class="mb-8">{{ pub.location_gate(elig, loc) }}</div>{% endif %}
+          {{ pub.plan_groups(groups, gym) }}
+          {% if app.payments_test_mode %}<p class="mt-6 flex items-center gap-2 text-xs muted">{{ icon("info", "size-4") }}Payments currently run in TEST MODE - no real money is charged.</p>{% endif %}
+        {% else %}
+          {{ ui.empty("No plans on sale right now", gym.name ~ " hasn't published any plans that you can buy at the moment. Check back soon or contact the owner.", "sparkles") }}
+        {% endif %}
+        {% if groups %}
+        <div class="mt-8">
+          {% with ask_endpoint="/api/plans/ask", ask_extra={"gym_slug": gym.slug}, ask_title="Ask AI about " ~ gym.name ~ "'s plans",
+                  ask_suggestions=["Which plan suits my goal?", "Is the trainer add-on worth it for me?", "Can I train here in person?"] %}
+            {% include "partials/ask_ai.html" %}
+          {% endwith %}
+        </div>
+        {% endif %}
+      </section>
+
+      {# ================================================================= team #}
+      <section id="team" class="scroll-mt-24" aria-labelledby="team-title">
+        <div class="mb-5">
+          <h2 id="team-title" class="section-title text-2xl">Trainers &amp; staff</h2>
+          <p class="mt-1 text-sm muted">Every person here has a linked account, a photo and a verified ID.</p>
+        </div>
+        {% if team %}
+          {% if trainers %}
+            <h3 class="mb-3 text-sm font-semibold uppercase tracking-wider muted">Trainers</h3>
+            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{% for m in trainers %}{{ pub.member_card(m) }}{% endfor %}</div>
+          {% endif %}
+          {% if staff %}
+            <h3 class="mb-3 {{ 'mt-8' if trainers }} text-sm font-semibold uppercase tracking-wider muted">Team</h3>
+            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{% for m in staff %}{{ pub.member_card(m) }}{% endfor %}</div>
+          {% endif %}
+        {% else %}
+          {{ ui.empty("Team coming soon", "Trainers and staff are shown once their accounts, photos and IDs have been verified.", "users") }}
+        {% endif %}
+      </section>
+    </div>
+
+    {# ================================================================= sidebar #}
+    <aside class="space-y-4 lg:sticky lg:top-24 lg:self-start" aria-label="Gym details">
+      {{ pub.owner_card(owner, gym) }}
+      {% if gym.online_enabled %}
+      <div class="card-flat">
+        <div class="flex items-center gap-3">
+          <span class="grid size-10 place-items-center rounded-2xl {{ 'bg-accent/12 text-accent dark:text-[#64b5ff]' if online_open else 'bg-zinc-500/15 text-zinc-500 dark:text-zinc-300' }}">{{ icon("video", "size-5") }}</span>
+          <div>
+            <p class="font-semibold">Online coaching</p>
+            <p class="text-sm {{ 'text-[#1f8c3a] dark:text-[#4ade80]' if online_open else 'muted' }}">{{ 'Open - join from anywhere' if online_open else 'Temporarily closed' }}</p>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+      <div class="card-flat text-sm">
+        <p class="font-semibold">How buying works</p>
+        <ul class="mt-3 grid gap-2.5 muted">
+          <li class="flex gap-2">{{ icon("map-pin", "size-4 shrink-0 text-accent") }}In-person plans need a verified branch within {{ app.offline_max_distance_km | int }} km of you.</li>
+          <li class="flex gap-2">{{ icon("key", "size-4 shrink-0 text-accent") }}Offline sign-ups finish at the branch desk with a one-time code sent to the owner.</li>
+          <li class="flex gap-2">{{ icon("id-card", "size-4 shrink-0 text-accent") }}A verified ID card is required before a membership starts.</li>
+        </ul>
+        <a href="/plans" class="mt-4 inline-flex items-center gap-1 font-semibold text-accent hover:underline">Compare plan types {{ icon("arrow-right", "size-4") }}</a>
+      </div>
+    </aside>
+  </div>
+</div>
+{% endblock %}

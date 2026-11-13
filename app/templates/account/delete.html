@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "auth/_macros.html" as am with context %}
+{% block title %}Delete account{% endblock %}
+{% block content %}
+{% set e = errors or {} %}
+{% set role = user.role.value %}
+{{ ui.page_header("Delete your account", "Take a moment to read what happens - you can't undo it once the retention window ends.", eyebrow="Danger zone") }}
+{% include "account/_nav.html" %}
+
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
+  {# ---------------------------------------------------------------- what happens #}
+  <section class="card sm:p-8" aria-labelledby="timeline-title">
+    <h2 id="timeline-title" class="section-title">What happens next</h2>
+    <ol class="delete-timeline mt-6">
+      <li>
+        <span class="delete-timeline-dot bg-bad text-white">{{ icon("logout", "size-4") }}</span>
+        <p class="font-semibold">Today</p>
+        <p class="mt-1 text-sm leading-relaxed muted">Your account is deactivated and every device is signed out.
+          {% if role == "customer" %}Active and pending memberships are cancelled.{% elif role == "staff" %}Your staff positions end - the gym keeps records of any salary still owed to you.{% elif role == "owner" %}Your gyms stop accepting members.{% endif %}</p>
+      </li>
+      <li>
+        <span class="delete-timeline-dot bg-warn text-white">{{ icon("clock", "size-4") }}</span>
+        <p class="font-semibold">Until {{ purge_date | date }}</p>
+        <p class="mt-1 text-sm leading-relaxed muted">Your data is kept for {{ retention_days }} days and others see you as "Deleted user".</p>
+      </li>
+      <li>
+        <span class="delete-timeline-dot bg-zinc-800 text-white dark:bg-zinc-200 dark:text-black">{{ icon("trash", "size-4") }}</span>
+        <p class="font-semibold">After {{ purge_date | date }}</p>
+        <p class="mt-1 text-sm leading-relaxed muted">Everything is erased permanently: profile, photos, ID card scans, health records, chats and tasks. Payment records stay in the gym's books with your name removed.</p>
+      </li>
+    </ol>
+
+    <div class="alert alert-warning mt-6" role="note">
+      {{ icon("lock", "size-5 shrink-0") }}
+      <div>
+        <p class="font-semibold">These details can never open a new account</p>
+        <p>IronPulse allows one account per person. After deletion your e-mail <span class="font-medium">{{ user.email }}</span>{% if user.phone_normalized %}, your phone number{% endif %} and the ID card on your account can never be used to create a new IronPulse account - not even by you. We keep only a scrambled fingerprint (a keyed hash) of them to enforce this, never the details themselves.</p>
+      </div>
+    </div>
+
+    {% if role == "owner" %}
+      <div class="mt-6">{{ ui.alert("Gym owners can only delete their account once no member subscriptions are active, every salary statement is paid and no employees are still active.", "info", title="Before you go") }}</div>
+    {% endif %}
+    {% if blockers %}
+    <div class="alert alert-danger mt-6" role="alert">
+      {{ icon("x-circle", "size-5 shrink-0") }}
+      <div>
+        <p class="font-semibold">Your account can't be deleted yet</p>
+        <ul class="mt-1 list-disc space-y-0.5 pl-5">{% for reason in blockers %}<li>{{ reason }}</li>{% endfor %}</ul>
+      </div>
+    </div>
+    {% endif %}
+  </section>
+
+  {# ---------------------------------------------------------------- confirmation #}
+  <section class="card ring-2 ring-bad/20 sm:p-8 dark:ring-bad/30" aria-labelledby="confirm-title">
+    <span class="auth-icon auth-icon-red">{{ icon("alert", "size-6") }}</span>
+    <h2 id="confirm-title" class="mt-5 text-xl font-semibold tracking-tight">Confirm deletion</h2>
+    <p class="mt-1 text-sm muted">We'll e-mail you a confirmation{% if user.is_minor %} (and your guardian a copy){% endif %}.</p>
+    {% if e %}<div class="mt-5">{{ ui.form_errors(e) }}</div>{% endif %}
+    <form method="post" action="/account/delete" class="acct-form mt-6 space-y-5" data-component="delete-confirm">
+      {{ ui.csrf() }}
+      <input type="text" name="username" value="{{ user.email }}" autocomplete="username" class="hidden" tabindex="-1" aria-hidden="true">
+      {{ ui.select("reason", "Why are you leaving?", reasons, value=form.reason, help="Optional - it helps the gym improve.") }}
+      {{ am.password_input("password", "Your password", autocomplete="current-password", error=e.password) }}
+      {{ ui.field("confirm_text", "Type DELETE to confirm", value=form.confirm_text, required=True, error=e.confirm_text, placeholder="DELETE",
+                  attrs='autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="20" data-confirm-input') }}
+      <div>
+        {{ ui.checkbox("confirm_identity", "I understand this e-mail, phone number and ID can never be used for a new IronPulse account", checked=form.confirm_identity, attrs='required') }}
+        {% if e.confirm_identity %}<p class="field-error">{{ e.confirm_identity }}</p>{% endif %}
+      </div>
+      <button type="submit" class="btn btn-danger w-full" data-confirm-submit>{{ icon("trash", "size-4") }} Delete my account</button>
+      <a href="/account" class="btn btn-ghost w-full">Keep my account</a>
+    </form>
+  </section>
+</div>
+{% endblock %}

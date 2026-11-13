@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}Secure payment{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-lg animate-fade-up" data-component="cashfree-checkout" data-session-id="{{ tx.payment_session_id }}"
+     data-mode="{{ sdk_mode }}" data-fallback-url="/checkout/{{ sub.id }}">
+  <section class="card flex flex-col items-center px-6 py-12 text-center" aria-live="polite">
+    <span class="grid size-16 place-items-center rounded-full bg-accent/10 text-accent">{{ icon("lock", "size-8") }}</span>
+    <h1 class="mt-5 text-2xl font-semibold">Opening secure checkout…</h1>
+    <p class="mt-2 max-w-sm text-[15px] muted">You're paying <strong class="text-ink dark:text-white">{{ tx.amount | money(tx.currency) }}</strong> to {{ sub.gym.name }} for {{ sub.plan.name }}.</p>
+    <p class="mt-6 inline-flex items-center gap-2 text-sm muted" data-cashfree-status><span class="spinner"></span>Connecting to Cashfree</p>
+    <button type="button" class="btn btn-primary mt-7" data-cashfree-launch>{{ icon("credit-card", "size-4") }}Open payment window</button>
+    <a href="/checkout/{{ sub.id }}" class="btn btn-ghost btn-sm mt-2">Back to checkout</a>
+    <p class="mt-8 text-xs muted">Payments are processed by Cashfree Payments. Never share your card PIN or OTP with anyone - the gym will never ask for it. Order {{ tx.provider_order_id }}</p>
+  </section>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}" src="https://sdk.cashfree.com/js/v3/cashfree.js" defer></script>
+{% endblock %}

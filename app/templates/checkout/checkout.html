@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "checkout/_plan.html" as pl with context %}
+{% block title %}Checkout · {{ sub.plan.name }}{% endblock %}
+{% block content %}
+{% set desk = sub.channel.value == 'branch_desk_otp' %}
+{% set steps = ['Plan', 'Desk check', 'Payment', 'Active'] if desk else ['Plan', 'Payment', 'Active'] %}
+{% set current = {'desk': 1, 'directions': 1, 'otp': 1, 'pay': 2 if desk else 1, 'done': 3 if desk else 2, 'closed': 0}.get(step, 0) %}
+
+{% call ui.page_header("Complete your membership", subtitle=sub.plan.name ~ " at " ~ sub.gym.name, eyebrow="Checkout", back="/me/subscriptions") %}
+  {% if app.payments_test_mode and step in ('pay', 'desk', 'otp', 'directions') %}<span class="badge badge-amber">{{ icon("flag", "size-3.5") }}Test payments</span>{% endif %}
+{% endcall %}
+
+{% if step != 'closed' %}<div class="mb-8 animate-fade-up">{{ pl.stepper(steps, current) }}</div>{% endif %}
+
+<div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+  <div class="min-w-0 space-y-6">
+
+    {% if step == 'desk' %}
+      <section class="card animate-fade-up" aria-labelledby="desk-title">
+        <div class="flex items-start gap-4">
+          <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("building", "size-6") }}</span>
+          <div class="min-w-0">
+            <h2 id="desk-title" class="text-xl font-semibold">Offline memberships are bought at the branch desk</h2>
+            <p class="mt-1 text-[15px] muted">To protect you and the gym from fraud, {{ sub.plan.name }} is confirmed in person at {{ sub.branch.name }}. The desk gives you a one-time code - it's never sent by e-mail or SMS.</p>
+          </div>
+        </div>
+        {% if presence_error %}<div class="mt-6">{{ ui.alert(presence_error, "danger", "You don't seem to be at the branch") }}</div>{% endif %}
+        {% if otp_notice %}<div class="mt-6">{{ ui.alert(otp_notice, "warning") }}</div>{% endif %}
+        <div class="mt-8 rounded-[24px] bg-zinc-100/80 p-5 sm:p-6 dark:bg-white/[0.04]">
+          <p class="text-lg font-semibold">Are you physically present at {{ sub.branch.name }}?</p>
+          <p class="mt-1 text-sm muted">{{ sub.branch.address_line1 }}, {{ sub.branch.city }}</p>
+          <div class="mt-5 grid gap-3 sm:grid-cols-2">
+            <form method="post" action="/checkout/{{ sub.id }}/presence" class="flex flex-col gap-3" data-component="presence-form">
+              {{ ui.csrf() }}
+              <input type="hidden" name="present" value="yes">
+              <input type="hidden" name="lat" value="">
+              <input type="hidden" name="lon" value="">
+              <input type="hidden" name="timezone" value="">
+              <button type="submit" class="btn btn-primary w-full">{{ icon("check", "size-4") }}Yes, I'm at the desk</button>
+              <button type="button" class="btn btn-ghost btn-sm w-full" data-component="geolocate">Attach my location (recommended)</button>
+              <p class="hidden items-center justify-center gap-1.5 text-xs font-medium text-[#1f8c3a] dark:text-[#4ade80]" data-location-attached>{{ icon("check-circle", "size-3.5") }}Location attached</p>
+            </form>
+            <form method="post" action="/checkout/{{ sub.id }}/presence">
+              {{ ui.csrf() }}
+              <input type="hidden" name="present" value="no">
+              <button type="submit" class="btn btn-secondary w-full">No, not yet</button>
+            </form>
+          </div>
+          <p class="mt-4 text-xs muted">Sharing your location confirms you're inside the branch (within {{ presence_radius }} km). Without it the purchase is flagged for the owner to double-check.</p>
+        </div>
+      </section>
+
+    {% elif step == 'directions' %}
+      <section class="card animate-fade-up" aria-labelledby="dir-title">
+        <div class="flex items-start gap-4">
+          <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-violet/12 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("map", "size-6") }}</span>
+          <div class="min-w-0">
+            <h2 id="dir-title" class="text-xl font-semibold">Visit {{ sub.branch.name }} to finish</h2>
+            <p class="mt-1 text-[15px] muted">Your purchase is saved. Head to the branch desk whenever it suits you, then tap “I'm at the desk now”.</p>
+          </div>
+        </div>
+        <dl class="mt-6 grid gap-4 sm:grid-cols-2">
+          <div class="card-muted">
+            <dt class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider muted">{{ icon("map-pin", "size-4") }}Address</dt>
+            <dd class="mt-2 text-sm">{{ sub.branch.address_line1 }}{% if sub.branch.address_line2 %}, {{ sub.branch.address_line2 }}{% endif %}<br>{{ sub.branch.city }}{% if sub.branch.postal_code %} {{ sub.branch.postal_code }}{% endif %}</dd>
+          </div>
+          <div class="card-muted">
+            <dt class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider muted">{{ icon("clock", "size-4") }}Open today</dt>
+            <dd class="mt-2 text-sm">{% if hours_today %}{{ hours_today.opens_at.strftime('%H:%M') }} - {{ hours_today.closes_at.strftime('%H:%M') }}{% else %}Closed today{% endif %}</dd>
+          </div>
+          {% if sub.branch.phone %}
+          <div class="card-muted">
+            <dt class="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider muted">{{ icon("phone", "size-4") }}Phone</dt>
+            <dd class="mt-2 text-sm"><a href="tel:{{ sub.branch.phone }}" class="text-accent hover:underline">{{ sub.branch.phone }}</a></dd>
+          </div>
+          {% endif %}
+        </dl>
+        <div class="mt-6 flex flex-wrap gap-3">
+          <a href="/checkout/{{ sub.id }}" class="btn btn-primary">{{ icon("check", "size-4") }}I'm at the desk now</a>
+          {% if sub.branch.latitude is not none and sub.branch.longitude is not none %}
+            <a href="https://www.openstreetmap.org/?mlat={{ sub.branch.latitude }}&amp;mlon={{ sub.branch.longitude }}#map=17/{{ sub.branch.latitude }}/{{ sub.branch.longitude }}" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">{{ icon("external", "size-4") }}Open map</a>
+          {% endif %}
+        </div>
+        <p class="mt-6 text-xs muted">Can't travel? The gym owner can also register you at the desk with a cash payment.</p>
+      </section>
+
+    {% elif step == 'otp' %}
+      <section class="card animate-fade-up" aria-labelledby="otp-title">
+        <div class="flex items-start gap-4">
+          <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("key", "size-6") }}</span>
+          <div class="min-w-0">
+            <h2 id="otp-title" class="text-xl font-semibold">Enter the desk code</h2>
+            <p class="mt-1 text-[15px] muted">We sent a 6-digit code to the gym owner at {{ sub.branch.name }}. Ask the desk for it - it is only ever given to you in person.</p>
+          </div>
+        </div>
+        {% if otp_error %}<div class="mt-6">{{ ui.alert(otp_error, "danger") }}</div>{% endif %}
+        {% if otp_notice %}<div class="mt-6">{{ ui.alert(otp_notice, "warning") }}</div>{% endif %}
+        <form method="post" action="/checkout/{{ sub.id }}/otp" class="mx-auto mt-8 max-w-sm" data-component="otp-input">
+          {{ ui.csrf() }}
+          <label for="f-code" class="label text-center">6-digit code</label>
+          <input id="f-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required
+                 class="input otp-input {{ 'input-error' if otp_error }}" placeholder="••••••" {% if otp_error %}aria-invalid="true"{% endif %} autofocus>
+          <p class="mt-3 flex items-center justify-center gap-3 text-xs muted">
+            <span class="inline-flex items-center gap-1">{{ icon("clock", "size-3.5") }}Expires in <span data-component="countdown" data-expires="{{ challenge.expires_at.isoformat() }}" class="font-semibold tabular-nums text-ink dark:text-white">{{ challenge_minutes }} min</span></span>
+            <span aria-hidden="true">·</span>
+            <span>{{ attempts_left }} {{ 'try' if attempts_left == 1 else 'tries' }} left</span>
+          </p>
+          <button type="submit" class="btn btn-primary btn-lg mt-6 w-full">Confirm code</button>
+        </form>
+        <div class="divider"></div>
+        <form method="post" action="/checkout/{{ sub.id }}/presence" class="flex flex-col items-center gap-2 text-center sm:flex-row sm:justify-between sm:text-left" data-component="presence-form">
+          {{ ui.csrf() }}
+          <input type="hidden" name="present" value="yes">
+          <input type="hidden" name="lat" value="">
+          <input type="hidden" name="lon" value="">
+          <p class="text-sm muted">No code yet? You can request up to 3 codes per hour.</p>
+          <button type="submit" class="btn btn-ghost btn-sm">{{ icon("refresh", "size-4") }}Send a new code</button>
+        </form>
+      </section>
+
+    {% elif step == 'pay' %}
+      <section class="card animate-fade-up" aria-labelledby="pay-title">
+        <div class="flex items-start gap-4">
+          <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("credit-card", "size-6") }}</span>
+          <div class="min-w-0">
+            <h2 id="pay-title" class="text-xl font-semibold">Ready to pay</h2>
+            <p class="mt-1 text-[15px] muted">
+              {% if app.payments_test_mode %}Payments are in <strong>test mode</strong>: you'll see a simulated payment page and no real money moves.
+              {% else %}You'll pay on Cashfree's secure checkout. We never see your card or UPI details.{% endif %}
+            </p>
+          </div>
+        </div>
+        {% if desk and sub.otp_verified_at %}
+          <p class="mt-5 inline-flex items-center gap-1.5 rounded-full bg-ok/12 px-3 py-1.5 text-xs font-semibold text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("check-badge", "size-4") }}Desk code confirmed {{ sub.otp_verified_at | dt("%d %b, %H:%M") }}</p>
+        {% endif %}
+        {% if pay_error %}<div class="mt-6">{{ ui.alert(pay_error, "danger", "Payment couldn't start") }}</div>{% endif %}
+        <div class="mt-8 flex flex-col gap-5 rounded-[24px] bg-zinc-100/80 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6 dark:bg-white/[0.04]">
+          <div>
+            <p class="text-sm muted">Total due today</p>
+            <p class="kpi mt-1">{{ sub.price | money(sub.currency) }}</p>
+            <p class="mt-1 text-xs muted">{{ sub.plan.duration_days }} days · no hidden fees</p>
+          </div>
+          <form method="post" action="/checkout/{{ sub.id }}/pay">
+            {{ ui.csrf() }}
+            <button type="submit" class="btn btn-primary btn-lg w-full sm:w-auto">{{ icon("lock", "size-4") }}Pay {{ sub.price | money(sub.currency) }}</button>
+          </form>
+        </div>
+        <p class="mt-4 text-xs muted">Memberships aren't refundable once active. Your membership starts as soon as the payment is confirmed.</p>
+      </section>
+
+    {% elif step == 'done' %}
+      <section class="card flex flex-col items-center px-6 py-12 text-center animate-fade-up">
+        <span class="success-ring grid size-16 place-items-center rounded-full bg-ok text-white">{{ icon("check", "size-8") }}</span>
+        <h2 class="mt-5 text-2xl font-semibold">You're in!</h2>
+        <p class="mt-2 max-w-md text-[15px] muted">{{ sub.plan.name }} at {{ sub.gym.name }} is active from {{ sub.starts_on | date }} to {{ sub.ends_on | date }}.</p>
+        <div class="mt-7 flex flex-wrap justify-center gap-3">
+          <a href="/me/subscriptions" class="btn btn-primary">My memberships</a>
+          <a href="/me" class="btn btn-secondary">Start training</a>
+        </div>
+      </section>
+
+    {% else %}
+      <section class="card flex flex-col items-center px-6 py-12 text-center animate-fade-up">
+        <span class="grid size-16 place-items-center rounded-full bg-zinc-900/[0.06] text-zinc-500 dark:bg-white/10 dark:text-zinc-300">{{ icon("x-circle" if sub.status.value == 'failed' else "info", "size-8") }}</span>
+        <h2 class="mt-5 text-2xl font-semibold">
+          {% if 'otp_lockout' in (sub.fraud_flags or []) %}Purchase locked for security
+          {% elif 'gym_limit' in (sub.fraud_flags or []) and sub.status.value == 'failed' %}Payment received - membership not activated
+          {% elif sub.status.value == 'failed' %}This payment didn't go through
+          {% elif sub.status.value == 'cancelled' %}This purchase was cancelled
+          {% elif sub.status.value == 'expired' %}This membership has ended
+          {% else %}This membership is {{ sub.status | humanize | lower }}{% endif %}
+        </h2>
+        <p class="mt-2 max-w-md text-[15px] muted">
+          {% if 'otp_lockout' in (sub.fraud_flags or []) %}Too many incorrect desk codes were entered. Please speak to the gym owner at the desk - they can register you directly.
+          {% elif 'gym_limit' in (sub.fraud_flags or []) and sub.status.value == 'failed' %}You already hold the most gym memberships one person may have at once, so this one was not activated. {{ sub.gym.name }} has been asked to refund your payment - see My memberships for the gyms you hold.
+          {% elif sub.status.value == 'failed' %}No money was taken. You can start a new purchase whenever you're ready.
+          {% else %}You can buy a new membership any time.{% endif %}
+        </p>
+        <div class="mt-7 flex flex-wrap justify-center gap-3">
+          {% if 'otp_lockout' not in (sub.fraud_flags or []) %}<a href="/subscribe/{{ sub.gym.slug }}?plan={{ sub.plan.code }}" class="btn btn-primary">Start a new purchase</a>{% endif %}
+          <a href="/me/subscriptions" class="btn btn-secondary">My memberships</a>
+        </div>
+      </section>
+    {% endif %}
+  </div>
+
+  <aside class="lg:sticky lg:top-24 lg:self-start">
+    <div class="card space-y-5">
+      <div>
+        <p class="eyebrow">{{ sub.gym.name }}</p>
+        <p class="mt-2 text-xl font-semibold leading-snug">{{ sub.plan.name }}</p>
+        <div class="mt-2">{{ pl.chips(sub.plan) }}</div>
+      </div>
+      <dl class="space-y-3 text-sm">
+        {% if sub.branch %}
+        <div class="flex justify-between gap-4"><dt class="muted">Branch</dt><dd class="text-right font-medium">{{ sub.branch.name }}</dd></div>
+        {% endif %}
+        <div class="flex justify-between gap-4"><dt class="muted">Duration</dt><dd class="font-medium">{{ sub.plan.duration_days }} days</dd></div>
+        <div class="flex justify-between gap-4"><dt class="muted">Status</dt><dd>{{ pl.sub_status(sub.status) }}</dd></div>
+        <div class="flex justify-between gap-4"><dt class="muted">Order</dt><dd class="font-mono text-xs">#{{ sub.id }}</dd></div>
+      </dl>
+      <div class="divider !my-0"></div>
+      <div class="flex items-end justify-between">
+        <p class="text-sm muted">Total</p>
+        <p class="text-2xl font-semibold tracking-tight tabular-nums">{{ sub.price | money(sub.currency) }}</p>
+      </div>
+      {{ pl.features(sub.plan, "muted") }}
+    </div>
+  </aside>
+</div>
+{% endblock %}

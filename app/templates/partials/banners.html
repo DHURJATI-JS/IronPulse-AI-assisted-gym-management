@@ -1,0 +1,35 @@
+{# Account-level banners shown on every page #}
+{% if user %}
+  {% set profile = user.customer_profile if user.role.value == 'customer' else None %}
+  {% if profile and profile.activity_suspended %}
+    <div class="border-b border-bad/20 bg-bad/10">
+      <div class="mx-auto flex max-w-7xl items-start gap-3 px-4 py-3 text-sm text-[#991b1b] sm:px-6 lg:px-8 dark:text-[#fca5a5]">
+        {{ icon("alert", "size-5 shrink-0") }}
+        <p><strong>Gym activities are paused for your safety.</strong> {{ profile.suspension_reason or 'A health reading needs attention.' }}
+          Please consult a healthcare professional{% if user.is_minor %} and talk to your guardian{% endif %}. A gym admin must approve reactivation.
+          <a href="/me/health" class="font-semibold underline">Details</a></p>
+      </div>
+    </div>
+  {% elif user.role.value != 'superadmin' and user.id_status.value != 'verified' %}
+    <div class="border-b border-warn/20 bg-warn/10">
+      <div class="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5 text-sm text-[#92400e] sm:px-6 lg:px-8 dark:text-[#fcd34d]">
+        {{ icon("id-card", "size-5 shrink-0") }}
+        <p class="flex-1">
+          {% if user.id_status.value == 'missing' %}An ID card is mandatory for every account. Please upload yours to unlock memberships and staff features.
+          {% elif user.id_status.value in ('pending', 'processing') %}Your ID card is being verified by our OCR engines and AI - this usually takes a minute.
+          {% elif user.id_status.value == 'needs_review' %}Your ID card needs a quick manual review. We'll e-mail you once it's done.
+          {% else %}Your ID card could not be verified. Please upload a clearer photo.{% endif %}
+        </p>
+        <a href="/account/identity" class="btn btn-sm btn-dark">{{ 'Upload ID' if user.id_status.value in ('missing', 'rejected') else 'View status' }}</a>
+      </div>
+    </div>
+  {% endif %}
+{% endif %}
+{% if ai_feature is defined and ai_feature and not ai_status.available %}
+  <div class="border-b border-black/[0.06] bg-zinc-900 text-white dark:border-white/[0.08]">
+    <div class="mx-auto flex max-w-7xl items-center gap-3 px-4 py-2.5 text-sm sm:px-6 lg:px-8">
+      <span class="ai-dot" data-state="offline"></span>
+      <p><strong>AI is unavailable right now.</strong> All AI providers (Gemma gateway, Docker Gemma, Claude) are offline. Pre-recorded videos and every non-AI feature keep working.</p>
+    </div>
+  </div>
+{% endif %}

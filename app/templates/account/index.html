@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "auth/_macros.html" as am with context %}
+{% block title %}Account{% endblock %}
+{% block content %}
+{% set e = errors or {} %}
+{% set pe = pw_errors or {} %}
+{% set role = user.role.value %}
+{{ ui.page_header("Your account", "Profile, sign-in security and how we reach you. Every change is confirmed by e-mail.", eyebrow="Settings") }}
+{% include "account/_nav.html" %}
+
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+  {# ================================================================ main column #}
+  <div class="min-w-0 space-y-6">
+    {% if not user.email_verified_at %}
+    <div class="alert alert-warning flex-col gap-3 sm:flex-row sm:items-center animate-fade-up" role="status">
+      {{ icon("envelope", "size-5 shrink-0") }}
+      <p class="flex-1"><span class="font-semibold">Confirm your e-mail address.</span> We sent a link to {{ user.email }} - it's valid for 48 hours.</p>
+      <form method="post" action="/auth/verify-email/resend">
+        {{ ui.csrf() }}
+        <button type="submit" class="btn btn-dark btn-sm">Resend link</button>
+      </form>
+    </div>
+    {% endif %}
+
+    {# ------------------------------------------------------------ profile #}
+    <section id="profile" class="card scroll-mt-24 sm:p-8" aria-labelledby="profile-title">
+      <div class="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h2 id="profile-title" class="section-title">Profile</h2>
+          <p class="mt-1 text-sm muted">Keep these accurate - your name and date of birth are matched against your ID card.</p>
+        </div>
+        {{ ui.badge(role | humanize, "violet" if role == "owner" else "blue", ico="user") }}
+      </div>
+      {% if e %}{{ ui.form_errors(e) }}{% endif %}
+      <form method="post" action="/account" class="acct-form space-y-6">
+        {{ ui.csrf() }}
+        <div class="grid gap-5 sm:grid-cols-2">
+          {{ ui.field("full_name", "Full name", value=form.full_name, required=True, error=e.full_name, autocomplete="name", attrs='maxlength="120"', cls="sm:col-span-2") }}
+          {% if role == "superadmin" %}
+          {#- a platform admin's e-mail and password live in the server's .env (SUPERADMIN_EMAIL / SUPERADMIN_PASSWORD) -#}
+          {{ ui.field("email", "E-mail address", type="email", value=form.email, required=True, error=e.email, autocomplete="email",
+                      attrs='maxlength="254" readonly', help="Set by SUPERADMIN_EMAIL in the server's .env file - change it there and restart IronPulse.") }}
+          {% else %}
+          {{ ui.field("email", "E-mail address", type="email", value=form.email, required=True, error=e.email, autocomplete="email",
+                      attrs='maxlength="254" autocapitalize="off" spellcheck="false"', help="Changing it sends a confirmation link to the new address and a notice to the old one.") }}
+          {% endif %}
+          {{ am.username_input(form.username, error=e.username, optional=(not user.username), help="You can sign in with @" ~ (form.username or "username") ~ ", your e-mail, phone or member ID.") }}
+          {{ am.phone_input(form.phone, form.phone_country, error=e.phone, required=(role != "superadmin")) }}
+          {% if dob_locked %}
+          <div>
+            <label class="label" for="f-dob-locked">Date of birth</label>
+            <input id="f-dob-locked" class="input cursor-not-allowed opacity-70" value="{{ user.date_of_birth | date }}" disabled>
+            <p class="help flex items-center gap-1">{{ icon("check-badge", "size-3.5 text-ok") }} Verified against your ID card, so it can't be changed here.</p>
+          </div>
+          {% else %}
+          {{ ui.field("date_of_birth", "Date of birth", type="date", value=form.date_of_birth, required=(role != "superadmin"), error=e.date_of_birth,
+                      autocomplete="bday", attrs='max="' ~ today ~ '" min="' ~ min_dob ~ '"') }}
+          {% endif %}
+          {{ ui.select("country", "Country", countries, value=form.country, required=(role != "superadmin"), error=e.country, empty=("Choose…" if not form.country else None), attrs='autocomplete="country"') }}
+          {{ ui.field("city", "City", value=form.city, required=(role != "superadmin"), error=e.city, autocomplete="address-level2", attrs='maxlength="120"') }}
+          <div class="sm:col-span-2">{{ am.timezone_select(form.timezone, error=e.timezone, autofill=(form.timezone == "UTC")) }}</div>
+          <div class="card-muted flex items-center justify-between gap-3 !p-4 sm:col-span-2">
+            <div class="min-w-0">
+              <p class="text-xs muted">Member ID</p>
+              <p class="font-mono text-sm font-semibold tracking-wide">{{ member_id }}</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" data-copy="{{ member_id }}">{{ icon("copy", "size-4") }} Copy</button>
+          </div>
+        </div>
+        <div class="flex flex-col-reverse gap-3 border-t border-black/[0.06] pt-5 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.08]">
+          <p class="flex items-center gap-2 text-xs muted">{{ icon("envelope", "size-3.5 shrink-0") }} We e-mail you a summary of every change.</p>
+          <button type="submit" class="btn btn-primary">{{ icon("check", "size-4") }} Save changes</button>
+        </div>
+      </form>
+    </section>
+
+    {# ------------------------------------------------------------ security #}
+    <section id="security" class="card scroll-mt-24 sm:p-8" aria-labelledby="security-title">
+      <div class="mb-6">
+        <h2 id="security-title" class="section-title">Password &amp; sign-in</h2>
+        <p class="mt-1 text-sm muted">Changing your password signs you out everywhere else.</p>
+      </div>
+      {% if pe %}{{ ui.form_errors(pe) }}{% endif %}
+      {% if role == "superadmin" %}
+      <div class="alert alert-info" role="note">
+        {{ icon("lock", "size-5 shrink-0") }}
+        <div><p class="font-semibold">Managed on the server</p>
+          <p>The platform admin password is SUPERADMIN_PASSWORD in the server's .env file. Change it there and restart IronPulse: the
+            new password applies at the next start and every session is signed out. Platform admins sign in at
+            <a href="/superadmin/login" class="font-semibold underline underline-offset-2">/superadmin/login</a> only.</p></div>
+      </div>
+      {% else %}
+      <form method="post" action="/account/password" class="space-y-5">
+        {{ ui.csrf() }}
+        <input type="hidden" value="{{ user.email }}" data-personal-email>
+        <input type="hidden" value="{{ user.full_name }}" data-personal-name>
+        <input type="text" name="username" value="{{ user.email }}" autocomplete="username" class="hidden" tabindex="-1" aria-hidden="true">
+        {{ am.password_input("current_password", "Current password", autocomplete="current-password", error=pe.current_password) }}
+        <div class="grid gap-5 sm:grid-cols-2">
+          {{ am.password_input("new_password", "New password", autocomplete="new-password", error=pe.new_password, strength=True) }}
+          {{ am.password_input("new_password_confirm", "Confirm new password", autocomplete="new-password", error=pe.new_password_confirm, match="new_password") }}
+        </div>
+        <div class="flex justify-end"><button type="submit" class="btn btn-dark">{{ icon("lock", "size-4") }} Update password</button></div>
+      </form>
+      {% endif %}
+
+      <div class="divider"></div>
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-start gap-3">
+          <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("monitor", "size-5") }}</span>
+          <div>
+            <p class="font-medium">Signed in on {{ session_count }} device{{ "" if session_count == 1 else "s" }}</p>
+            <p class="text-xs muted">Last sign-in {{ user.last_login_at | dt }}{% if user.last_login_ip %} from {{ user.last_login_ip }}{% endif %}</p>
+          </div>
+        </div>
+        {% if session_count > 1 %}
+          {{ ui.confirm_button("/account/sessions/revoke-others", "Sign out other devices", "Sign out every other device signed in to your account?", variant="secondary", ico="logout") }}
+        {% endif %}
+      </div>
+    </section>
+
+    {# ------------------------------------------------------------ location + notifications #}
+    <div class="grid gap-6 xl:grid-cols-2">
+      <section id="location" class="card scroll-mt-24" aria-labelledby="location-title">
+        <div class="flex items-start gap-3">
+          <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-ok/15 text-[#1f8c3a] dark:text-[#4ade80]">{{ icon("map-pin", "size-5") }}</span>
+          <div class="min-w-0">
+            <h2 id="location-title" class="section-title">Location</h2>
+            <p class="mt-1 text-sm muted">Used for the {{ app.offline_max_distance_km | int }} km gym-distance check and to set your time zone. Shared only when you press the button.</p>
+          </div>
+        </div>
+        <div class="card-muted mt-5 !p-4 text-sm">
+          {% if user.latitude is not none and user.longitude is not none %}
+            <p class="font-medium tabular-nums">{{ "%.4f" | format(user.latitude) }}, {{ "%.4f" | format(user.longitude) }}</p>
+            <p class="mt-0.5 text-xs muted">Updated {{ user.location_updated_at | timeago }}{% if user.city %} · {{ user.city }}{% endif %}</p>
+          {% else %}
+            <p class="font-medium">No location shared yet</p>
+            <p class="mt-0.5 text-xs muted">We use your city{% if user.city %} ({{ user.city }}){% endif %} until you share it.</p>
+          {% endif %}
+        </div>
+        <button type="button" class="btn btn-secondary mt-5 w-full" data-component="geolocate" data-save="1" data-reload="1">{{ icon("map-pin", "size-4") }} Use my current location</button>
+      </section>
+
+      <section class="card" aria-labelledby="notify-title">
+        <div class="flex items-start gap-3">
+          <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("bell", "size-5") }}</span>
+          <div class="min-w-0">
+            <h2 id="notify-title" class="section-title">Notifications</h2>
+            <p class="mt-1 text-sm muted">In-app alerts appear in the Dynamic Island and the bell.</p>
+          </div>
+        </div>
+        <div class="card-muted mt-5 flex items-center justify-between gap-3 !p-4 text-sm">
+          <div class="min-w-0">
+            <p class="font-medium">E-mail copies</p>
+            <p class="mt-0.5 truncate text-xs muted">{{ user.email }}{% if user.is_minor %} + guardian{% endif %}</p>
+          </div>
+          <span class="badge badge-green">{{ icon("lock", "size-3") }} Always on</span>
+        </div>
+        <p class="mt-3 text-xs muted">Every notification is also e-mailed so payment, safety and account alerts are never missed.</p>
+        <a href="/account/notifications" class="btn btn-secondary mt-5 w-full">View history{% if unread_count %} · {{ unread_count }} unread{% endif %}</a>
+      </section>
+    </div>
+
+    {# ------------------------------------------------------------ privacy: health sharing with trainers (chat/_health_sharing.html) #}
+    {% if role == "customer" %}{% include "chat/_health_sharing.html" %}{% endif %}
+  </div>
+
+  {# ================================================================ side column #}
+  <aside class="space-y-6">
+    <section id="photo" class="card scroll-mt-24 text-center" data-component="photo-preview" aria-labelledby="photo-title">
+      <h2 id="photo-title" class="sr-only">Profile photo</h2>
+      <div class="flex justify-center">
+        <span class="avatar size-24 text-2xl ring-4 ring-accent/15">
+          {% if user.photo_key %}
+            <img src="{{ media_url(user.photo_key) }}" alt="{{ user.full_name }}" data-photo-img>
+          {% else %}
+            <img alt="Selected photo preview" class="hidden" data-photo-img><span data-photo-placeholder>{{ user.full_name | initials }}</span>
+          {% endif %}
+        </span>
+      </div>
+      <p class="mt-4 truncate text-lg font-semibold">{{ user.full_name }}</p>
+      <p class="truncate text-sm muted">{% if user.username %}@{{ user.username }} · {% endif %}{{ member_id }}</p>
+      <p class="truncate text-xs muted">{{ user.email }}</p>
+      <div class="mt-3 flex flex-wrap justify-center gap-2">
+        {% if role != "superadmin" %}<a href="/account/identity" class="badge badge-{{ user.id_status | tone }}">{{ icon("id-card", "size-3.5") }} ID {{ user.id_status | humanize | lower }}</a>{% endif %}
+        {% if user.email_verified_at %}{{ ui.badge("E-mail confirmed", "green", ico="check") }}{% else %}{{ ui.badge("E-mail unconfirmed", "amber", ico="envelope") }}{% endif %}
+      </div>
+
+      <form method="post" action="/account/photo" enctype="multipart/form-data" class="mt-6 space-y-3 text-left">
+        {{ ui.csrf() }}
+        <label class="label" for="f-photo">{{ "Replace photo" if user.photo_key else "Add a photo" }}{% if role in ("owner", "staff") %} <span class="text-bad">*</span>{% endif %}</label>
+        <input id="f-photo" name="photo" type="file" accept="image/jpeg,image/png,image/webp" class="block w-full text-sm muted" required data-photo-input
+               {% if photo_error %}aria-invalid="true" aria-describedby="e-photo"{% endif %}>
+        {% if photo_error %}<p class="field-error" id="e-photo">{{ photo_error }}</p>{% else %}<p class="help">JPG, PNG or WEBP up to {{ app.max_upload_mb }} MB. Location data is stripped.</p>{% endif %}
+        <button type="submit" class="btn btn-dark w-full">{{ icon("upload", "size-4") }} Upload photo</button>
+      </form>
+      {% if user.photo_key %}
+        {% if role in ("owner", "staff") %}
+          <p class="mt-4 text-xs muted">Gym owners and staff must keep a photo - you can replace it, but not remove it.</p>
+        {% else %}
+          <div class="mt-3">{{ ui.confirm_button("/account/photo", "Remove photo", "Remove your profile photo?", variant="ghost", extra_fields={"action": "remove"}) }}</div>
+        {% endif %}
+      {% endif %}
+    </section>
+
+    <section class="card-flat">
+      <dl class="space-y-3 text-sm">
+        <div class="flex items-center justify-between gap-3"><dt class="muted">Member since</dt><dd class="font-medium">{{ user.created_at | dt("%d %b %Y") }}</dd></div>
+        <div class="flex items-center justify-between gap-3"><dt class="muted">Time zone</dt><dd class="truncate font-medium">{{ user.timezone }}</dd></div>
+        <div class="flex items-center justify-between gap-3"><dt class="muted">Phone</dt><dd class="truncate font-medium">{{ user.phone_normalized or "—" }}</dd></div>
+      </dl>
+    </section>
+
+    <nav class="card-flat !p-2 text-sm" aria-label="Shortcuts">
+      {% set links = [("/account/identity", "id-card", "ID card & verification")] %}
+      {% if role == "customer" %}{% set links = links + [("/me/health/profile", "heart", "Health profile & guardian")] %}{% endif %}
+      {% set links = links + [("/account/notifications", "bell", "Notification history"), ("/calendar", "calendar", "Calendar & tasks")] %}
+      {% for href, ico, label in links %}
+        <a href="{{ href }}" class="flex items-center gap-3 rounded-2xl px-3 py-2.5 transition hover:bg-zinc-900/5 dark:hover:bg-white/10">
+          <span class="text-zinc-500 dark:text-zinc-400">{{ icon(ico, "size-4") }}</span><span class="flex-1 font-medium">{{ label }}</span>{{ icon("chevron-right", "size-4 text-zinc-400") }}
+        </a>
+      {% endfor %}
+    </nav>
+
+    {% if role != "superadmin" %}
+    <section class="card-flat ring-bad/20 dark:ring-bad/25">
+      <p class="flex items-center gap-2 font-semibold text-[#d1281e] dark:text-[#ff6b61]">{{ icon("trash", "size-4") }} Delete account</p>
+      <p class="mt-1 text-xs leading-relaxed muted">Your data is kept for {{ retention_days }} days, then erased for good.</p>
+      <a href="/account/delete" class="btn btn-secondary btn-sm mt-4">Review &amp; delete</a>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% block title %}IP bans{% endblock %}
+{% block content %}
+{% call sa.header("IP bans", "Automatic, AI-triage and manual bans. Lifting a ban unblocks the address in the gate immediately.", section, sections, counts) %}
+  <a href="#manual-ban" class="btn btn-danger btn-sm">{{ icon("lock", "size-4") }} Ban an address</a>
+  <a href="/superadmin/security" class="btn btn-secondary btn-sm">{{ icon("shield", "size-4") }} Security centre</a>
+{% endcall %}
+
+<div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+  <section class="min-w-0 xl:col-span-2" aria-labelledby="bans-title">
+    <h2 id="bans-title" class="sr-only">Bans</h2>
+    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <nav class="tabs self-start" aria-label="Ban state">
+        {% for key, label, n in [("active", "Active", tabs.active), ("past", "Past", tabs.past), ("all", "All", tabs.all)] %}
+          <a href="/superadmin/bans?state={{ key }}{{ ('&ip=' ~ (ipq | urlencode)) if ipq and not ip_error }}" class="tab {{ 'tab-active' if state == key }}" {% if state == key %}aria-current="page"{% endif %}>{{ label }} <span class="tabular-nums muted">{{ sa.num(n) }}</span></a>
+        {% endfor %}
+      </nav>
+      <form method="get" action="/superadmin/bans" class="flex gap-2" role="search">
+        <input type="hidden" name="state" value="{{ state }}">
+        <label for="ban-ip" class="sr-only">Find an address</label>
+        <input id="ban-ip" name="ip" value="{{ ipq }}" maxlength="45" placeholder="Find an IP…" spellcheck="false" autocomplete="off"
+               class="input !py-2 sm:w-52 {{ 'input-error' if ip_error }}" {% if ip_error %}aria-invalid="true" aria-describedby="ban-ip-error"{% endif %}>
+        <button class="btn btn-secondary btn-icon !size-[38px] shrink-0" aria-label="Search">{{ icon("search", "size-4") }}</button>
+      </form>
+    </div>
+    {% if ip_error %}<p id="ban-ip-error" class="field-error -mt-2 mb-3">{{ ip_error }}</p>{% endif %}
+
+    {% if bans %}
+    <div class="table-wrap !overflow-visible">
+      <div class="sa-row-head sa-cols-bans" aria-hidden="true"><span>Address</span><span>Reason</span><span>Status</span><span></span></div>
+      <ul class="sa-list">
+        {% for b in bans %}
+        {% set is_active = b.lifted_at is none and (b.banned_until is none or b.banned_until > now) %}
+        <li class="sa-row sa-cols-bans">
+          <div class="min-w-0">
+            {{ sa.ip_link(b.ip) }}
+            <p class="mt-1 flex flex-wrap items-center gap-1.5 text-xs muted">{{ sa.severity(b.severity) }} offence {{ b.offense_count }}{% if b.had_subscription %} · <span class="badge badge-green !py-0.5">Subscriber</span>{% endif %}</p>
+          </div>
+          <div class="min-w-0">
+            <p class="line-clamp-2 text-sm break-words" title="{{ b.reason }}">{{ b.reason }}</p>
+            <p class="mt-1 flex flex-wrap items-center gap-1.5 text-xs muted">{{ sa.source_badge(b.created_by) }} {{ b.created_at | dt }}{% if b.user_id and people.get(b.user_id) %} · {{ people[b.user_id].display_name }}{% endif %}</p>
+          </div>
+          <div class="min-w-0">
+            {{ sa.ban_badge(b, now) }}
+            {% if b.lifted_at %}<p class="mt-1 text-xs muted">{{ b.lifted_at | timeago }}{% if b.lifted_by_id and people.get(b.lifted_by_id) %} · {{ people[b.lifted_by_id].display_name }}{% elif not b.lifted_by_id %} · automatic{% endif %}</p>{% endif %}
+          </div>
+          <div class="flex items-center gap-2 md:justify-end">
+            {% if is_active %}
+              {{ ui.confirm_button("/superadmin/bans/" ~ b.id ~ "/lift", "Lift", "Lift every active ban on " ~ b.ip ~ "?", variant="secondary", size="sm", ico="check", extra_fields={"next": pager.url(pager.page)}) }}
+            {% endif %}
+            <a href="/superadmin/security/ip/{{ b.ip }}" class="btn btn-ghost btn-sm" aria-label="Details for {{ b.ip }}">{{ icon("chevron-right", "size-4") }}</a>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {{ sa.pagination(pager, "bans") }}
+    {% elif state == "active" and not ipq %}
+      {{ ui.empty("No active bans", "Nobody is blocked right now. Automatic bans appear here the moment the gate stops an attacker.", "check-circle") }}
+    {% else %}
+      {{ ui.empty("No bans found", "Nothing matches this view." if ipq else "There is no ban history yet.", "lock") }}
+    {% endif %}
+  </section>
+
+  <aside class="grid min-w-0 content-start gap-6" aria-label="Manual ban and policy">
+    <section id="manual-ban" class="card scroll-mt-24" aria-labelledby="manual-title">
+      <h2 id="manual-title" class="sa-card-title">Ban an address</h2>
+      <p class="sa-card-sub">Applies instantly. A manual ban replaces any active ban for the same address.</p>
+      <form method="post" action="/superadmin/bans" class="mt-5 grid gap-4" novalidate>
+        {{ ui.csrf() }}
+        {{ ui.field("ip", "IP address", value=form.ip, required=True, error=errors.ip, placeholder="203.0.113.7 or 2001:db8::1", help="Your current address is " ~ my_ip ~ " - it can't be banned.", attrs='maxlength="60" spellcheck="false" autocomplete="off"') }}
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="label" for="f-duration">Duration <span class="text-bad">*</span></label>
+            <select id="f-duration" name="duration" class="input {{ 'input-error' if errors.duration }}" required>
+              {% for key, label, td in durations %}<option value="{{ key }}" {{ 'selected' if key == form.duration }}>{{ label }}</option>{% endfor %}
+            </select>
+            {% if errors.duration %}<p class="field-error">{{ errors.duration }}</p>{% endif %}
+          </div>
+          {{ ui.select("severity", "Severity", [("1", "1 · low"), ("2", "2"), ("3", "3 · medium"), ("4", "4"), ("5", "5 · critical")], value=form.severity, required=True, error=errors.severity) }}
+        </div>
+        {{ ui.field("reason", "Reason", value=form.reason, required=True, error=errors.reason, placeholder="e.g. Credential stuffing against /auth/login", attrs='maxlength="300" minlength="5"') }}
+        <button type="submit" class="btn btn-danger" data-busy-label="Banning…">{{ icon("lock", "size-4") }} Ban address</button>
+      </form>
+    </section>
+
+    <section class="card-muted" aria-labelledby="policy-title">
+      <h2 id="policy-title" class="text-sm font-semibold">Ban policy</h2>
+      <ul class="mt-3 grid gap-2 text-sm leading-relaxed">
+        <li class="flex gap-2">{{ icon("user", "size-4 mt-0.5 shrink-0 text-accent") }}<span><strong class="font-semibold">Members with a subscription:</strong> 2-24 h, by severity.</span></li>
+        <li class="flex gap-2">{{ icon("lock", "size-4 mt-0.5 shrink-0 text-bad") }}<span><strong class="font-semibold">Repeat offenders without one:</strong> permanent - only you can lift it.</span></li>
+        <li class="flex gap-2">{{ icon("sparkles", "size-4 mt-0.5 shrink-0 text-violet") }}<span><strong class="font-semibold">AI triage</strong> can extend bans within this policy and lift automatic bans of severity ≤ 3.</span></li>
+      </ul>
+      {% if whitelist %}<p class="mt-4 text-xs muted">Whitelisted from rate limits: <span class="font-mono">{{ whitelist | join(", ") }}</span></p>{% endif %}
+      <p class="mt-2 text-xs muted">{{ sa.num(tabs.permanent) }} permanent ban{{ 's' if tabs.permanent != 1 }} in force.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

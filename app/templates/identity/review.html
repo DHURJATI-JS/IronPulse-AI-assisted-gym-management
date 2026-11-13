@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "identity/_macros.html" as idm with context %}
+{% block title %}Review ID card{% endblock %}
+{% block content %}
+{% set e = errors or {} %}
+{% set f = form or {} %}
+{{ ui.page_header("Review " ~ subject_name ~ "'s ID card",
+    "Compare the card with the member in front of you. The automatic checks below show what the OCR engines found - you make the final call.",
+    eyebrow="Identity review", back=(next if next != "/owner/identity/" ~ doc.id else ("/superadmin/reviews" if is_admin else "/owner/customers"))) }}
+
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+  <div class="min-w-0 space-y-6">
+    {# ------------------------------------------------------------ summary #}
+    <section class="card idv-hero sm:p-8 animate-fade-up" data-tone="{{ idm.tone_of(doc.status) }}" aria-labelledby="rv-title">
+      <div class="relative flex flex-col gap-6 sm:flex-row sm:items-center">
+        {% if doc.consensus_pct is not none %}
+          {{ idm.ring(doc.consensus_pct, idm.tone_of(doc.status), "size-24", caption="Consensus") }}
+        {% else %}
+          {{ idm.hero_icon("id-card", idm.tone_of(doc.status)) }}
+        {% endif %}
+        <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-center gap-2">
+            {{ ui.status(doc.status) }}
+            <span class="chip">{{ icon("id-card", "size-3.5") }}{{ doc.doc_label }} · {{ doc.country }}</span>
+          </div>
+          <h2 id="rv-title" class="mt-3 text-2xl font-semibold tracking-tight">
+            {% if doc.status == "needs_review" %}Waiting for your decision{% elif doc.status == "verified" %}Verified{% elif doc.status == "rejected" %}Rejected{% else %}Being checked{% endif %}
+          </h2>
+          <p class="mt-1 text-sm muted">Uploaded {{ doc.created_at | dt }}{% if doc.reviewed_at %} · reviewed {{ doc.reviewed_at | dt }}{% endif %}</p>
+          {% if doc.reason %}<div class="mt-4">{{ ui.alert(doc.reason, "danger" if doc.status == "rejected" else "warning") }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="divider"></div>
+      {{ idm.stepper(steps) }}
+    </section>
+
+    {# ------------------------------------------------------------ account vs card #}
+    <section class="card sm:p-8" aria-labelledby="rv-compare-title">
+      <h2 id="rv-compare-title" class="section-title">Account vs. card</h2>
+      <p class="mt-1 text-sm muted">What the member told us, next to what the engines read from the card.</p>
+      <div class="table-wrap mt-5 !rounded-[20px] !ring-black/[0.04] dark:!ring-white/[0.06]">
+        <table class="table">
+          <thead><tr><th scope="col">Field</th><th scope="col">Account</th><th scope="col">On the card</th></tr></thead>
+          <tbody>
+            <tr><td class="muted">Name</td>
+                <td class="font-medium">{% if subject %}<a class="hover:underline" href="/profile/{{ subject.id }}">{{ subject.display_name }}</a>{% else %}{{ subject_name }}{% endif %}</td>
+                <td class="font-medium">{{ doc.name_on_id or "Not read" }}</td></tr>
+            <tr><td class="muted">Date of birth</td>
+                <td class="tabular-nums">{{ subject.date_of_birth | date if subject and subject.date_of_birth else "—" }}</td>
+                <td class="tabular-nums">{{ doc.dob_on_id | date if doc.dob_on_id else "Not read" }}</td></tr>
+            <tr><td class="muted">ID number</td><td class="muted">—</td><td class="font-mono">{{ doc.number_masked or "Not read" }}</td></tr>
+            <tr><td class="muted">Expiry</td><td class="muted">—</td><td class="tabular-nums">{{ doc.expires_on | date if doc.expires_on else "None printed" }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    {# ------------------------------------------------------------ engines + checks #}
+    <section class="card sm:p-8" aria-labelledby="rv-engines-title">
+      <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 id="rv-engines-title" class="section-title">OCR engines</h2>
+          <p class="mt-1 text-sm muted">{% if doc.engines_ran %}{{ doc.agreeing }} of {{ doc.engines_read }} engine{{ "" if doc.engines_read == 1 else "s" }} that read the card agreed on the number.{% else %}The engines haven't read this card yet.{% endif %}</p>
+        </div>
+        <div class="shrink-0">{{ ui.ai_chip(disclaimer=False) }}</div>
+      </div>
+      {{ idm.engines(engine_rows, cols="sm:grid-cols-2") }}
+    </section>
+
+    {% if check_rows %}
+    <section class="card sm:p-8" aria-labelledby="rv-checks-title">
+      <h2 id="rv-checks-title" class="section-title">Checks</h2>
+      <p class="mt-1 mb-6 text-sm muted">{{ doc.checks_passed }} of {{ doc.checks_total }} passed.</p>
+      {{ idm.checks(check_rows) }}
+      {% if doc.ai_summary %}
+      <div class="card-muted mt-6 !p-4">
+        <p class="flex items-center gap-2 text-sm font-semibold">{{ icon("sparkles", "size-4 text-violet") }} AI document check</p>
+        <p class="mt-1.5 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{{ doc.ai_summary }}</p>
+        {{ ui.ai_disclaimer("Supporting evidence only - never the sole basis for a decision.") }}
+      </div>
+      {% endif %}
+    </section>
+    {% endif %}
+  </div>
+
+  {# ================================================================ side column #}
+  <aside class="min-w-0 space-y-6" aria-label="Card images and decision">
+    <section class="card" aria-labelledby="rv-images-title">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <h2 id="rv-images-title" class="section-title">Card images</h2>
+        <span class="chip">{{ icon("shield", "size-3.5") }} Views are logged</span>
+      </div>
+      <div class="space-y-3">
+        {{ idm.thumb(doc.id, "front", "Front side") }}
+        {% if doc.has_back %}{{ idm.thumb(doc.id, "back", "Back side") }}{% endif %}
+      </div>
+    </section>
+
+    {% if can_review %}
+    <section class="card" aria-labelledby="rv-decision-title">
+      <h2 id="rv-decision-title" class="section-title">Your decision</h2>
+      <p class="mt-1 text-sm muted">The member is notified by e-mail and in the app.</p>
+      {% if e %}<div class="mt-4">{{ ui.form_errors(e) }}</div>{% endif %}
+      <form method="post" action="/owner/identity/{{ doc.id }}/review" class="mt-5 space-y-4" data-component="idv-review">
+        {{ ui.csrf() }}
+        <input type="hidden" name="next" value="{{ next }}">
+        <fieldset class="grid gap-3">
+          <legend class="sr-only">Decision</legend>
+          <label class="idv-choice">
+            <input type="radio" name="decision" value="approve" class="mt-1 accent-ok" required {{ 'checked' if f.decision == 'approve' }}>
+            <span><span class="flex items-center gap-1.5 text-sm font-semibold">{{ icon("check-circle", "size-4 text-ok") }} Approve</span>
+              <span class="mt-0.5 block text-xs muted">The card is genuine and belongs to this member.</span></span>
+          </label>
+          <label class="idv-choice">
+            <input type="radio" name="decision" value="reject" class="mt-1 accent-bad" {{ 'checked' if f.decision == 'reject' }}>
+            <span><span class="flex items-center gap-1.5 text-sm font-semibold">{{ icon("x-circle", "size-4 text-bad") }} Reject</span>
+              <span class="mt-0.5 block text-xs muted">Wrong person, unreadable, expired or suspicious - they'll be asked for a new card.</span></span>
+          </label>
+        </fieldset>
+        {% if not is_admin %}
+        <label class="flex items-start gap-3 rounded-2xl bg-zinc-100/80 p-3 text-sm dark:bg-white/[0.05]">
+          <input type="checkbox" name="seen_original" value="1" class="checkbox mt-0.5" data-review-seen {{ 'checked' if f.seen_original }}>
+          <span><span class="font-medium">I checked the original card in person</span>
+            <span class="block text-xs muted">Required to approve - you registered this member at your desk.</span></span>
+        </label>
+        {% endif %}
+        <div>
+          <label class="label" for="f-note">Note <span class="hidden text-bad" data-note-required>* required to reject</span></label>
+          <textarea id="f-note" name="note" rows="3" maxlength="500" class="input {{ 'input-error' if e.note }}" data-review-note
+                    placeholder="e.g. Photo too blurry to read the number - please retake it in daylight.">{{ f.note or "" }}</textarea>
+          {% if e.note %}<p class="field-error">{{ e.note }}</p>{% else %}<p class="help">Shown to the member when you reject the card.</p>{% endif %}
+        </div>
+        <button type="submit" class="btn btn-primary w-full">{{ icon("check", "size-4") }} Submit decision</button>
+      </form>
+    </section>
+    {% else %}
+    <section class="card-muted" aria-label="Review status">
+      <p class="flex items-center gap-2 text-sm font-semibold">{{ icon("info", "size-4") }} Nothing to decide</p>
+      <p class="mt-1 text-xs leading-relaxed muted">
+        {% if doc.status in ("pending", "processing") %}The automatic check is still running - come back in a minute.
+        {% elif doc.status == "verified" %}This card is already verified.
+        {% else %}This card was rejected. The member has been asked to upload a new one.{% endif %}
+      </p>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

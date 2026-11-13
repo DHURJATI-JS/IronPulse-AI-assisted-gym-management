@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% block title %}{{ store.name ~ " store" if store else "Shop" }}{% endblock %}
+{% block description %}{{ ("Shop " ~ store.name ~ " - supplements, gear and wearables.") if store else "Supplements, apparel, accessories and wearables from IronPulse gyms - with safety notes personalised to your health profile." }}{% endblock %}
+{% block content %}
+<div class="relative isolate">
+  <div class="shop-glow" aria-hidden="true"></div>
+  {{ shop.toolbar("shop", cart_count) }}
+
+  {# ---------------------------------------------------------------- hero / store header #}
+  {% if store %}
+    <header class="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between animate-fade-up">
+      <div class="flex items-center gap-4">
+        {% if store.logo_key %}
+          <img src="{{ media_url(store.logo_key) }}" alt="" class="size-16 rounded-[20px] object-cover shadow-lg ring-1 ring-black/5 dark:ring-white/10">
+        {% else %}
+          <span class="grid size-16 place-items-center rounded-[20px] bg-gradient-to-br from-accent via-indigo to-violet text-xl font-semibold text-white shadow-lg shadow-indigo/30">{{ store.name | initials }}</span>
+        {% endif %}
+        <div class="min-w-0">
+          <p class="eyebrow mb-1">Official store</p>
+          <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">{{ store.name }}</h1>
+          {% if store.tagline %}<p class="mt-1 text-[15px] muted">{{ store.tagline }}</p>{% endif %}
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <a href="/gyms/{{ store.slug }}" class="btn btn-secondary btn-sm">{{ icon("building", "size-4") }}Visit the gym</a>
+        <a href="/shop" class="btn btn-ghost btn-sm">All stores {{ icon("arrow-right", "size-4") }}</a>
+      </div>
+    </header>
+  {% else %}
+    <header class="mx-auto mb-9 max-w-3xl text-center animate-fade-up">
+      <p class="eyebrow mb-3">IronPulse Shop</p>
+      <h1 class="shop-display">Fuel every rep. <span class="gradient-text">Gear up smarter.</span></h1>
+      <p class="mx-auto mt-4 max-w-xl text-[15px] leading-relaxed muted">Supplements, apparel, accessories and wearables from your gym - with safety notes personalised to your health profile, and an AI you can ask about any product.</p>
+      <div class="mt-5 flex flex-wrap justify-center gap-2">
+        <span class="chip">{{ icon("shield", "size-3.5 text-[#1f8c3a] dark:text-[#4ade80]") }}Personalised safety checks</span>
+        <span class="chip">{{ icon("map-pin", "size-3.5 text-accent") }}Pick up at your gym</span>
+        <span class="chip">{{ icon("lock", "size-3.5 text-violet") }}Secure checkout</span>
+      </div>
+    </header>
+  {% endif %}
+
+  {# ---------------------------------------------------------------- search & filters #}
+  <form method="get" action="{{ base }}" role="search" aria-label="Search products" class="glass shop-search mx-auto max-w-5xl animate-fade-up">
+    <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
+      <div class="relative min-w-0 flex-1">
+        <label for="shop-q" class="sr-only">Search products</label>
+        <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400">{{ icon("search", "size-4") }}</span>
+        <input id="shop-q" type="search" name="q" value="{{ filters.q }}" maxlength="80" autocomplete="off" placeholder="Search whey, creatine, gym bag, smartwatch…" class="input !pl-11">
+      </div>
+      <div class="grid grid-cols-2 gap-3 sm:flex sm:items-center">
+        {#- the stores with the most products (never every gym); the others: "Find another store" below -#}
+        {% if not store and (stores | length > 1 or more_stores or filters.gym_id) %}
+          <div class="col-span-2 sm:w-48">
+            <label for="shop-gym" class="sr-only">Store</label>
+            <select id="shop-gym" name="gym" class="input" data-autosubmit>
+              <option value="">All stores</option>
+              {% for s in stores %}<option value="{{ s.id }}" {{ 'selected' if filters.gym_id == s.id }}>{{ s.name }}</option>{% endfor %}
+            </select>
+          </div>
+        {% endif %}
+        <div class="sm:w-48">
+          <label for="shop-sort" class="sr-only">Sort by</label>
+          <select id="shop-sort" name="sort" class="input" data-autosubmit>
+            {% for value, label in sorts.items() %}<option value="{{ value }}" {{ 'selected' if filters.sort == value }}>{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <label class="flex cursor-pointer items-center justify-center gap-2.5 rounded-2xl px-3 py-2.5 text-sm font-medium">
+          <input type="checkbox" name="in_stock" value="1" class="peer sr-only" {{ 'checked' if filters.in_stock }} data-autosubmit>
+          <span class="shop-switch" aria-hidden="true"></span>
+          <span class="whitespace-nowrap">In stock</span>
+        </label>
+        {% if filters.category %}<input type="hidden" name="category" value="{{ filters.category }}">{% endif %}
+        <button type="submit" class="btn btn-primary col-span-2 sm:col-span-1">{{ icon("search", "size-4") }}Search</button>
+      </div>
+    </div>
+  </form>
+
+  {% if not store and more_stores %}
+    {#- store typeahead (GET /api/shop/stores?q=, at most 20): its links keep the other filters -#}
+    <div class="mx-auto mt-3 flex max-w-5xl justify-end">
+      <details class="relative" data-component="dropdown shop-store-search" data-url="/api/shop/stores" data-base="{{ store_search_base }}">
+        <summary class="btn btn-ghost btn-sm list-none">{{ shop.svg("store", "size-4") }}Find another store{{ icon("chevron-down", "size-4") }}</summary>
+        <div class="card absolute right-0 z-20 mt-2 w-64 p-2 text-sm">
+          <label for="shop-store-q" class="sr-only">Store name</label>
+          <input id="shop-store-q" type="search" maxlength="60" autocomplete="off" placeholder="Store name…" class="input" data-store-q>
+          <ul class="mt-2 grid gap-0.5" data-store-results aria-live="polite"></ul>
+          <p class="px-3 py-2 text-xs muted" data-store-hint>Type 2 or more letters of the store's name.</p>
+        </div>
+      </details>
+    </div>
+  {% endif %}
+
+  {% if categories %}
+    <nav class="mx-auto mt-6 max-w-5xl animate-fade-up" aria-label="Categories">
+      <div class="shop-chip-row sm:justify-center">
+        <a href="{{ all_href }}" class="shop-chip" {% if not filters.category %}aria-current="true"{% endif %}>{{ icon("layers", "size-4") }}All<span class="shop-chip-count">{{ total_products }}</span></a>
+        {% for c in categories %}
+          <a href="{{ c.href }}" class="shop-chip" {% if filters.category == c.value %}aria-current="true"{% endif %}>{{ icon(c.icon, "size-4") }}{{ c.label }}<span class="shop-chip-count">{{ c.count }}</span></a>
+        {% endfor %}
+      </div>
+    </nav>
+  {% endif %}
+
+  {# ---------------------------------------------------------------- results #}
+  <section class="mt-8" aria-label="Products">
+    {% if cards %}
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm muted" aria-live="polite">
+        <p>{{ "{:,}".format(total) }}{{ "+" if page.total_capped }} product{{ 's' if total != 1 }}{% if filters.q %} for “<span class="font-medium text-ink dark:text-white">{{ filters.q }}</span>”{% endif %}{% if page.pages > 1 %} · showing {{ "{:,}".format(page.first) }}–{{ "{:,}".format(page.last) }}{% endif %}</p>
+        {% if filters.active %}<a href="{{ clear_href }}" class="inline-flex items-center gap-1 font-semibold text-accent hover:underline">{{ icon("x", "size-3.5") }}Clear filters</a>{% endif %}
+      </div>
+      {{ shop.grid(cards, show_gym=not store) }}
+
+      {#- a window of page links (1 … 4 5 [6] 7 8 … 500), never one per page; at most 500 pages -#}
+      {{ ui.pager(page, params=keep, path=base, label="Product pages") }}
+    {% elif filters.active %}
+      {{ ui.empty("No products match", "Try a different search, another category, or turn off “In stock”. Searches also match similar words - “protein” finds whey.", "search", "Clear filters", clear_href) }}
+    {% else %}
+      <div class="card flex flex-col items-center overflow-hidden px-6 py-16 text-center">
+        <span class="grid size-16 place-items-center rounded-[22px] bg-gradient-to-br from-accent/15 via-indigo/10 to-violet/15 text-accent">{{ shop.svg("bag", "size-8") }}</span>
+        <h2 class="mt-5 text-xl font-semibold tracking-tight">{{ store.name ~ "'s store is getting ready" if store else "The shop is getting ready" }}</h2>
+        <p class="mt-2 max-w-md text-sm leading-relaxed muted">Gym owners add whey, creatine, bags, watches and more from their owner dashboard. Products appear here as soon as they're listed.</p>
+        <div class="mt-6 flex flex-wrap justify-center gap-2">
+          {% if user and user.role.value == "owner" %}
+            <a href="/owner/shop" class="btn btn-primary">{{ icon("plus", "size-4") }}Open my shop dashboard</a>
+          {% else %}
+            <a href="/gyms" class="btn btn-secondary">{{ icon("map-pin", "size-4") }}Browse gyms</a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </section>
+
+  {% if not user and cards %}
+    <aside class="mt-14">
+      <div class="card flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex items-start gap-4">
+          <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]">{{ icon("sparkles", "size-6") }}</span>
+          <div>
+            <h2 class="text-lg font-semibold tracking-tight">Ask the AI about any product</h2>
+            <p class="mt-1 max-w-xl text-sm leading-relaxed muted">Sign in to get answers about ingredients, use and suitability - checked against your own health profile, allergies and age.</p>
+          </div>
+        </div>
+        <a href="/auth/login?next={{ request.url.path | urlencode }}" class="btn btn-dark shrink-0">Sign in {{ icon("arrow-right", "size-4") }}</a>
+      </div>
+    </aside>
+  {% endif %}
+</div>
+{% endblock %}

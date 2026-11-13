@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/finance/_macros.html" as fin with context %}
+{% block title %}Final settlement · {{ employee.display_name }}{% endblock %}
+{% block content %}
+{% set cur = employee.currency %}
+{% set terminated = employee.status.value == 'terminated' %}
+{% call ui.page_header(employee.display_name, "Clear every salary up to the last working day (plus any gratuity), then end the employment.", eyebrow="Final settlement & termination", back="/owner/staff/" ~ employee.id) %}
+  {{ ui.status(employee.status) }}
+  <a href="/owner/payroll?employee={{ employee.id }}" class="btn btn-secondary btn-sm">{{ icon("receipt", "size-4") }} Salary history</a>
+{% endcall %}
+{{ fin.finance_nav("payroll") }}
+
+{# ------------------------------------------------------------------ who #}
+<section class="card mb-6 animate-fade-up" aria-label="Staff member">
+  <div class="flex flex-col gap-5 sm:flex-row sm:items-center">
+    {{ ui.avatar(employee.photo_key, employee.display_name, "size-16", "text-lg") }}
+    <div class="min-w-0 flex-1">
+      <p class="text-lg font-semibold">{{ employee.display_name }}</p>
+      <p class="text-sm muted">{{ employee.role_title or (employee.role | humanize) }} · {{ gym.name }} · {{ employee.employment_type | humanize }}</p>
+    </div>
+    <dl class="grid grid-cols-2 gap-x-8 gap-y-3 text-sm sm:grid-cols-4">
+      <div><dt class="text-xs muted">Monthly salary</dt><dd class="font-semibold tabular-nums">{{ employee.monthly_salary | money(cur) }}</dd></div>
+      <div><dt class="text-xs muted">Hired</dt><dd class="font-semibold">{{ employee.hire_date | date }}</dd></div>
+      <div><dt class="text-xs muted">Country rules</dt><dd class="font-semibold">{{ rules_name }}</dd></div>
+      <div><dt class="text-xs muted">{{ 'Left on' if terminated else 'Status' }}</dt><dd class="font-semibold">{{ (employee.termination_date | date) if terminated else (employee.status | humanize) }}</dd></div>
+    </dl>
+  </div>
+</section>
+
+{% if terminated %}
+  <section class="card mb-6 animate-fade-up">
+    <div class="flex items-start gap-4">
+      <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-zinc-500/10 text-zinc-500 dark:text-zinc-300">{{ icon("check-badge", "size-6") }}</span>
+      <div>
+        <h2 class="section-title">Employment ended</h2>
+        <p class="mt-1 text-sm muted">{{ employee.display_name }} left on {{ employee.termination_date | date }}{% if employee.termination_reason %} - {{ employee.termination_reason }}{% endif %}. Their shifts were removed and client assignments ended.</p>
+        {% if final %}<a href="/owner/payroll/{{ final.id }}" class="btn btn-secondary btn-sm mt-4">{{ icon("receipt", "size-4") }} Final settlement · {{ final.net_pay | money(final.currency) }}</a>{% endif %}
+      </div>
+    </div>
+  </section>
+{% endif %}
+
+{% if blocked %}
+  <div class="alert alert-danger mb-6 animate-fade-up" role="alert">
+    {{ icon("lock", "size-5 shrink-0") }}
+    <div><p class="font-semibold">Termination blocked</p><ul class="mt-1 list-disc pl-5">{% for b in blocked %}<li>{{ b }}</li>{% endfor %}</ul></div>
+  </div>
+{% endif %}
+
+{% if not terminated %}
+<ol class="grid gap-6" aria-label="Steps">
+  {# ================================================================ 1. outstanding dues #}
+  {% set dues_clear = not dues %}
+  <li class="card animate-fade-up" aria-labelledby="step1-title">
+    <div class="flex items-start gap-4">
+      <span class="fin-step {{ 'fin-step-done' if dues_clear }}">{% if dues_clear %}{{ icon("check", "size-4") }}{% else %}1{% endif %}</span>
+      <div class="min-w-0 flex-1">
+        <h2 id="step1-title" class="section-title">Outstanding salary</h2>
+        <p class="mt-0.5 text-sm muted">{% if dues %}{{ dues | length }} statement{{ 's' if dues | length != 1 }} not yet paid · {% for c, v in dues_totals.items() %}{{ v | money(c) }}{% if not loop.last %} + {% endif %}{% endfor %}{% else %}Every generated statement is paid.{% endif %}</p>
+        {% if dues %}
+          <ul class="-mx-2 mt-4 grid gap-1">
+            {% for st in dues %}
+              <li>
+                <a href="/owner/payroll/{{ st.id }}" class="flex flex-wrap items-center justify-between gap-3 rounded-2xl px-2 py-2.5 transition hover:bg-zinc-900/[0.04] dark:hover:bg-white/[0.05]">
+                  <span class="min-w-0">
+                    <span class="block text-sm font-medium">{{ 'Final settlement' if st.is_final_settlement else ('Salary ' ~ (st.period_start | date('%B %Y'))) }}</span>
+                    <span class="block text-xs muted">{{ st.period_start | date("%d %b") }} – {{ st.period_end | date("%d %b %Y") }} · {{ st.days_worked }} days</span>
+                  </span>
+                  <span class="flex items-center gap-3">
+                    {{ fin.statement_status(st) }}
+                    <span class="text-sm font-semibold tabular-nums">{{ st.net_pay | money(st.currency) }}</span>
+                    {{ icon("chevron-right", "size-4 muted") }}
+                  </span>
+                </a>
+              </li>
+            {% endfor %}
+          </ul>
+        {% endif %}
+        {% if dues.accrued %}
+          <div class="mt-4 card-muted !p-4">
+            <p class="text-sm"><span class="font-semibold">Earned since the last statement:</span> {{ dues.accrued.gross | money(dues.accrued.currency) }} gross for {{ dues.accrued.days }} day{{ 's' if dues.accrued.days != 1 }} ({{ dues.accrued.period_start | date("%d %b") }} – {{ dues.accrued.period_end | date("%d %b %Y") }}).</p>
+            <p class="mt-1 text-xs muted">{% if can_settle %}It is included automatically in the final settlement below.{% else %}It will be on the next monthly statement.{% endif %}</p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </li>
+
+  {# ================================================================ 2. final settlement #}
+  <li class="card animate-fade-up" aria-labelledby="step2-title">
+    <div class="flex items-start gap-4">
+      {% set fs_done = final and final.status.value == 'paid' %}
+      <span class="fin-step {{ 'fin-step-done' if fs_done or never_started }}">{% if fs_done or never_started %}{{ icon("check", "size-4") }}{% else %}2{% endif %}</span>
+      <div class="min-w-0 flex-1">
+        <h2 id="step2-title" class="section-title">Final settlement</h2>
+        {% if never_started %}
+          <p class="mt-0.5 text-sm muted">{{ employee.display_name }} never started work (status: {{ employee.status | humanize }}), so there is no salary or gratuity to settle.</p>
+        {% elif final %}
+          <div class="mt-4 flex flex-col gap-4 rounded-2xl ring-1 ring-black/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between dark:ring-white/[0.08]">
+            <div>
+              <p class="text-sm font-semibold">{{ final.net_pay | money(final.currency) }} <span class="font-normal muted">· last day {{ (final.rules.settlement or {}).get('termination_date', '') }} · {{ (final.rules.settlement or {}).get('reason_label', '') }}</span></p>
+              <p class="mt-0.5 text-xs muted">Salary {{ final.gross_pay | money(final.currency) }} · gratuity {{ final.gratuity | money(final.currency) }}</p>
+            </div>
+            <div class="flex items-center gap-3">
+              {{ fin.statement_status(final) }}
+              <a href="/owner/payroll/{{ final.id }}" class="btn {{ 'btn-secondary' if fs_done else 'btn-primary' }} btn-sm">{{ 'View' if fs_done else 'Pay now' }} {{ icon("arrow-right", "size-4") }}</a>
+            </div>
+          </div>
+        {% elif can_settle %}
+          <p class="mt-0.5 text-sm muted">Salary for every day not yet on a statement up to the last working day, plus the {{ rules_name }} end-of-service benefit if eligible.</p>
+          {{ ui.form_errors(errors) if errors.get("form") }}
+          <form method="get" action="/owner/staff/{{ employee.id }}/settlement" class="mt-5 grid gap-4 sm:grid-cols-2" id="settlement-form">
+            {{ ui.field("termination_date", "Last working day", type="date", value=values.termination_date, required=True, error=errors.get("termination_date"), attrs='min="' ~ employee.hire_date.isoformat() ~ '" max="' ~ max_termination ~ '"') }}
+            <div>
+              <label class="label" for="f-reason">Reason for leaving <span class="text-bad">*</span></label>
+              <select id="f-reason" name="reason" class="input {{ 'input-error' if errors.get('reason') }}" required>
+                {% for code, label in reasons %}<option value="{{ code }}" {{ 'selected' if values.reason == code }}>{{ label }}</option>{% endfor %}
+              </select>
+              {% if errors.get('reason') %}<p class="field-error">{{ errors.reason }}</p>{% else %}<p class="help">Affects gratuity / severance in some countries.</p>{% endif %}
+            </div>
+            {{ ui.field("unpaid_leave_days", "Unpaid leave days", type="number", value=values.unpaid_leave_days, error=errors.get("unpaid_leave_days"), attrs='min="0" step="1" inputmode="numeric"', help="Days in the final period that are not paid.") }}
+            {{ ui.field("note", "Note (optional)", value=values.note, error=errors.get("note"), attrs='maxlength="200"', placeholder="e.g. Moving to another city") }}
+            <div class="flex flex-wrap gap-2 sm:col-span-2">
+              <button class="btn btn-secondary">{{ icon("refresh", "size-4") }} Update preview</button>
+            </div>
+          </form>
+
+          {% if preview %}
+            <div class="mt-6 rounded-[24px] bg-zinc-50 p-5 ring-1 ring-black/[0.04] dark:bg-white/[0.03] dark:ring-white/[0.06]" aria-live="polite">
+              <div class="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p class="eyebrow">Preview</p>
+                  <p class="mt-1 text-3xl font-semibold tracking-tight">{{ preview.net_pay | money(preview.currency) }}</p>
+                  <p class="text-xs muted">net payable on {{ preview.period_end | date }}</p>
+                </div>
+                <span class="badge badge-amber">{{ icon("info", "size-3.5") }}Estimate</span>
+              </div>
+              <div class="mt-4">
+                {% if preview.rules.proration %}
+                  {{ fin.proration_rows(preview.rules.proration, preview.monthly_salary, preview.currency, False) }}
+                {% else %}
+                  <div class="fin-row"><span class="muted">Salary already on statements up to this day</span><span>{{ 0 | money(preview.currency) }}</span></div>
+                {% endif %}
+                {% for code, v in preview.employee_deductions.items() %}
+                  <div class="fin-row"><span>{{ v.label }}</span><span>&minus;{{ v.amount | money(preview.currency) }}</span></div>
+                {% endfor %}
+                {% if preview.tax_withholding %}<div class="fin-row"><span>Income tax (estimate)</span><span>&minus;{{ preview.tax_withholding | money(preview.currency) }}</span></div>{% endif %}
+                {% set g = preview.gratuity_result %}
+                <div class="fin-row">
+                  <span>{{ g.label if g else 'Gratuity' }}
+                    <span class="block text-xs muted">{{ g.explanation if g else '' }}</span>
+                    {% if g and g.steps %}<ul class="mt-1 grid gap-0.5 text-xs muted">{% for s in g.steps %}<li>· {{ s }}</li>{% endfor %}</ul>{% endif %}
+                  </span>
+                  <span>+{{ preview.gratuity | money(preview.currency) }}</span>
+                </div>
+                <div class="fin-row fin-row-total"><span>Net final settlement</span><span>{{ preview.net_pay | money(preview.currency) }}</span></div>
+              </div>
+              {% if preview_expl and preview_expl.warnings %}
+                <ul class="mt-4 grid gap-1 text-xs text-[#92400e] dark:text-[#fcd34d]">{% for w in preview_expl.warnings[:4] %}<li class="flex gap-1.5">{{ icon("alert", "size-3.5 mt-0.5 shrink-0") }}<span>{{ w }}</span></li>{% endfor %}</ul>
+              {% endif %}
+              <form method="post" action="/owner/staff/{{ employee.id }}/settlement" class="mt-5">
+                {{ ui.csrf() }}
+                {% for k in ("termination_date", "reason", "unpaid_leave_days", "note") %}<input type="hidden" name="{{ k }}" value="{{ values[k] }}">{% endfor %}
+                <button class="btn btn-primary w-full sm:w-auto">{{ icon("receipt", "size-4") }} Create final settlement</button>
+              </form>
+            </div>
+          {% endif %}
+        {% else %}
+          <p class="mt-0.5 text-sm muted">A final settlement can be created for active or suspended staff.</p>
+        {% endif %}
+      </div>
+    </div>
+  </li>
+
+  {# ================================================================ 3. terminate #}
+  <li class="card animate-fade-up" aria-labelledby="step3-title">
+    <div class="flex items-start gap-4">
+      <span class="fin-step {{ 'fin-step-locked' if blockers }}">{% if blockers %}{{ icon("lock", "size-4") }}{% else %}3{% endif %}</span>
+      <div class="min-w-0 flex-1">
+        <h2 id="step3-title" class="section-title">End the employment</h2>
+        {% if blockers %}
+          <p class="mt-0.5 text-sm muted">Unlocks when everything above is paid:</p>
+          <ul class="mt-3 grid gap-2 text-sm">
+            {% for b in blockers %}<li class="flex items-start gap-2">{{ icon("lock", "size-4 mt-0.5 shrink-0 muted") }}<span>{{ b }}</span></li>{% endfor %}
+          </ul>
+          <p class="mt-3 text-sm muted">Ending it for a conduct or safety reason doesn't wait for payroll: <a href="/owner/staff/{{ employee.id }}/remove" class="font-medium text-accent hover:underline">choose the reason</a>. The pay they are owed stays in Payroll.</p>
+        {% else %}
+          <p class="mt-0.5 text-sm muted">Everything is paid. Ending the employment removes {{ employee.display_name }}'s weekly shifts, ends their client assignments and notifies them. Salary history stays in the ledger. You choose the reason on the next page; it is kept on the staff record.</p>
+          <div class="mt-5"><a href="/owner/staff/{{ employee.id }}/remove" class="btn btn-danger">{{ icon("logout", "size-4") }} Choose a reason and end the employment</a></div>
+        {% endif %}
+      </div>
+    </div>
+  </li>
+</ol>
+{% endif %}
+{% endblock %}

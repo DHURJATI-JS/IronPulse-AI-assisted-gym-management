@@ -1,0 +1,1125 @@
+{
+ "schema": 1,
+ "run_id": "20261109-1200-prod-like",
+ "started_at": "2026-11-09T12:00:00Z",
+ "ended_at": "2026-11-09T12:10:00Z",
+ "duration_s": 600,
+ "target": {
+  "host": "http://127.0.0.1:12000",
+  "workers": 2,
+  "environment": "production",
+  "redis": false,
+  "notes": "First attempt: Redis off, DB_POOL_SIZE=5.",
+  "db_rows": {
+   "users": 24318,
+   "gyms": 120
+  }
+ },
+ "machine": {
+  "cpus": 10,
+  "memory_gb": 32,
+  "os": "macOS 27.2 (arm64)",
+  "python": "3.15.2",
+  "locust_version": "2.43.1"
+ },
+ "verdict": {
+  "passed": false,
+  "headline": "Fails the 200-user SLOs: page p95 1,380 ms and 2.3 % errors - Redis was off and every request waited for a database session.",
+  "slos": [
+   {
+    "name": "page p95 < 1 s at 200 users",
+    "target": "< 1 s",
+    "actual": "1,380 ms",
+    "passed": false
+   },
+   {
+    "name": "Error rate at 200 users",
+    "target": "< 1 %",
+    "actual": "2.31 %",
+    "passed": false,
+    "users": 200
+   },
+   {
+    "name": "Throughput at 200 users",
+    "target": "≥ 300 req/s",
+    "actual": "215 req/s",
+    "passed": false
+   },
+   {
+    "name": "Abusive traffic throttled",
+    "target": "≥ 95 %",
+    "actual": "62.0 %",
+    "passed": false
+   }
+  ]
+ },
+ "capacity": {
+  "max_users_within_slo": 50,
+  "max_rps_within_slo": 97.6,
+  "knee_users": 100,
+  "note": "Latency rises steeply from 100 users; throughput stops growing at ~220 req/s."
+ },
+ "totals": {
+  "requests": 90576,
+  "failures": 1098,
+  "error_rate": 0.01212,
+  "rps": 151.0,
+  "p50_ms": 206.8,
+  "p95_ms": 1550.0,
+  "p99_ms": 5768.0,
+  "max_ms": 18746.0
+ },
+ "steps": [
+  {
+   "users": 25,
+   "start_s": 0,
+   "end_s": 120,
+   "rps": 49.8,
+   "error_rate": 0.0,
+   "p50_ms": 61,
+   "p95_ms": 190,
+   "p99_ms": 420,
+   "passed": true,
+   "slo_p95_ms": 205
+  },
+  {
+   "users": 50,
+   "start_s": 120,
+   "end_s": 240,
+   "rps": 97.6,
+   "error_rate": 0.0011,
+   "p50_ms": 72,
+   "p95_ms": 248,
+   "p99_ms": 610,
+   "passed": true,
+   "slo_p95_ms": 270
+  },
+  {
+   "users": 100,
+   "start_s": 240,
+   "end_s": 360,
+   "rps": 171.2,
+   "error_rate": 0.0084,
+   "p50_ms": 188,
+   "p95_ms": 905,
+   "p99_ms": 1900,
+   "passed": false,
+   "slo_p95_ms": 980
+  },
+  {
+   "users": 200,
+   "start_s": 360,
+   "end_s": 480,
+   "rps": 214.9,
+   "error_rate": 0.0231,
+   "p50_ms": 640,
+   "p95_ms": 1240,
+   "p99_ms": 3010,
+   "passed": false,
+   "slo_p95_ms": 1380
+  },
+  {
+   "users": 300,
+   "start_s": 480,
+   "end_s": 600,
+   "rps": 221.3,
+   "error_rate": 0.0612,
+   "p50_ms": 1320,
+   "p95_ms": 3480,
+   "p99_ms": 7210,
+   "passed": false,
+   "slo_p95_ms": 3920
+  }
+ ],
+ "timeline": [
+  {
+   "t_s": 10,
+   "users": 25,
+   "rps": 51.1,
+   "p50_ms": 56.3,
+   "p95_ms": 175.4,
+   "failures_per_s": 0.0,
+   "cpu_pct": 16.3,
+   "rss_mb": 520.2,
+   "db_connections": 3
+  },
+  {
+   "t_s": 20,
+   "users": 25,
+   "rps": 49.3,
+   "p50_ms": 64.5,
+   "p95_ms": 200.7,
+   "failures_per_s": 0.0,
+   "cpu_pct": 19.1,
+   "rss_mb": 520.4,
+   "db_connections": 3
+  },
+  {
+   "t_s": 30,
+   "users": 25,
+   "rps": 48.6,
+   "p50_ms": 57.3,
+   "p95_ms": 178.3,
+   "failures_per_s": 0.0,
+   "cpu_pct": 14.6,
+   "rss_mb": 526.0,
+   "db_connections": 4
+  },
+  {
+   "t_s": 40,
+   "users": 25,
+   "rps": 51.1,
+   "p50_ms": 63.7,
+   "p95_ms": 198.5,
+   "failures_per_s": 0.0,
+   "cpu_pct": 15.8,
+   "rss_mb": 526.9,
+   "db_connections": 2
+  },
+  {
+   "t_s": 50,
+   "users": 25,
+   "rps": 49.0,
+   "p50_ms": 67.1,
+   "p95_ms": 208.9,
+   "failures_per_s": 0.0,
+   "cpu_pct": 16.7,
+   "rss_mb": 527.5,
+   "db_connections": 3
+  },
+  {
+   "t_s": 60,
+   "users": 25,
+   "rps": 50.2,
+   "p50_ms": 57.8,
+   "p95_ms": 180.2,
+   "failures_per_s": 0.0,
+   "cpu_pct": 14.7,
+   "rss_mb": 528.9,
+   "db_connections": 2
+  },
+  {
+   "t_s": 70,
+   "users": 25,
+   "rps": 49.6,
+   "p50_ms": 65.0,
+   "p95_ms": 202.4,
+   "failures_per_s": 0.0,
+   "cpu_pct": 16.2,
+   "rss_mb": 535.1,
+   "db_connections": 2
+  },
+  {
+   "t_s": 80,
+   "users": 25,
+   "rps": 49.8,
+   "p50_ms": 64.8,
+   "p95_ms": 201.8,
+   "failures_per_s": 0.0,
+   "cpu_pct": 16.6,
+   "rss_mb": 535.3,
+   "db_connections": 3
+  },
+  {
+   "t_s": 90,
+   "users": 25,
+   "rps": 51.1,
+   "p50_ms": 66.0,
+   "p95_ms": 205.6,
+   "failures_per_s": 0.0,
+   "cpu_pct": 16.4,
+   "rss_mb": 537.3,
+   "db_connections": 1
+  },
+  {
+   "t_s": 100,
+   "users": 25,
+   "rps": 49.7,
+   "p50_ms": 61.6,
+   "p95_ms": 191.7,
+   "failures_per_s": 0.0,
+   "cpu_pct": 15.9,
+   "rss_mb": 538.5,
+   "db_connections": 2
+  },
+  {
+   "t_s": 110,
+   "users": 25,
+   "rps": 47.9,
+   "p50_ms": 62.2,
+   "p95_ms": 193.8,
+   "failures_per_s": 0.0,
+   "cpu_pct": 15.2,
+   "rss_mb": 540.5,
+   "db_connections": 1
+  },
+  {
+   "t_s": 120,
+   "users": 25,
+   "rps": 50.9,
+   "p50_ms": 67.0,
+   "p95_ms": 208.8,
+   "failures_per_s": 0.0,
+   "cpu_pct": 16.8,
+   "rss_mb": 542.6,
+   "db_connections": 3
+  },
+  {
+   "t_s": 130,
+   "users": 50,
+   "rps": 96.6,
+   "p50_ms": 69.5,
+   "p95_ms": 239.4,
+   "failures_per_s": 0.1,
+   "cpu_pct": 28.9,
+   "rss_mb": 543.4,
+   "db_connections": 6
+  },
+  {
+   "t_s": 140,
+   "users": 50,
+   "rps": 99.2,
+   "p50_ms": 75.5,
+   "p95_ms": 260.1,
+   "failures_per_s": 0.09,
+   "cpu_pct": 30.3,
+   "rss_mb": 543.8,
+   "db_connections": 7
+  },
+  {
+   "t_s": 150,
+   "users": 50,
+   "rps": 100.0,
+   "p50_ms": 68.3,
+   "p95_ms": 235.3,
+   "failures_per_s": 0.11,
+   "cpu_pct": 29.1,
+   "rss_mb": 547.9,
+   "db_connections": 7
+  },
+  {
+   "t_s": 160,
+   "users": 50,
+   "rps": 95.3,
+   "p50_ms": 68.7,
+   "p95_ms": 236.7,
+   "failures_per_s": 0.11,
+   "cpu_pct": 29.5,
+   "rss_mb": 549.2,
+   "db_connections": 5
+  },
+  {
+   "t_s": 170,
+   "users": 50,
+   "rps": 99.9,
+   "p50_ms": 68.6,
+   "p95_ms": 236.3,
+   "failures_per_s": 0.08,
+   "cpu_pct": 29.2,
+   "rss_mb": 545.8,
+   "db_connections": 8
+  },
+  {
+   "t_s": 180,
+   "users": 50,
+   "rps": 94.7,
+   "p50_ms": 72.2,
+   "p95_ms": 248.6,
+   "failures_per_s": 0.09,
+   "cpu_pct": 31.4,
+   "rss_mb": 548.8,
+   "db_connections": 7
+  },
+  {
+   "t_s": 190,
+   "users": 50,
+   "rps": 100.5,
+   "p50_ms": 67.6,
+   "p95_ms": 232.9,
+   "failures_per_s": 0.08,
+   "cpu_pct": 30.5,
+   "rss_mb": 547.8,
+   "db_connections": 7
+  },
+  {
+   "t_s": 200,
+   "users": 50,
+   "rps": 100.9,
+   "p50_ms": 73.6,
+   "p95_ms": 253.4,
+   "failures_per_s": 0.14,
+   "cpu_pct": 30.9,
+   "rss_mb": 550.8,
+   "db_connections": 6
+  },
+  {
+   "t_s": 210,
+   "users": 50,
+   "rps": 100.6,
+   "p50_ms": 67.5,
+   "p95_ms": 232.6,
+   "failures_per_s": 0.12,
+   "cpu_pct": 29.4,
+   "rss_mb": 554.2,
+   "db_connections": 8
+  },
+  {
+   "t_s": 220,
+   "users": 50,
+   "rps": 94.2,
+   "p50_ms": 77.9,
+   "p95_ms": 268.2,
+   "failures_per_s": 0.08,
+   "cpu_pct": 29.4,
+   "rss_mb": 555.4,
+   "db_connections": 7
+  },
+  {
+   "t_s": 230,
+   "users": 50,
+   "rps": 99.2,
+   "p50_ms": 66.8,
+   "p95_ms": 230.0,
+   "failures_per_s": 0.13,
+   "cpu_pct": 30.8,
+   "rss_mb": 560.0,
+   "db_connections": 5
+  },
+  {
+   "t_s": 240,
+   "users": 50,
+   "rps": 96.5,
+   "p50_ms": 78.2,
+   "p95_ms": 269.3,
+   "failures_per_s": 0.12,
+   "cpu_pct": 28.6,
+   "rss_mb": 557.6,
+   "db_connections": 5
+  },
+  {
+   "t_s": 250,
+   "users": 100,
+   "rps": 175.5,
+   "p50_ms": 197.7,
+   "p95_ms": 951.8,
+   "failures_per_s": 1.48,
+   "cpu_pct": 51.7,
+   "rss_mb": 563.0,
+   "db_connections": 16
+  },
+  {
+   "t_s": 260,
+   "users": 100,
+   "rps": 173.9,
+   "p50_ms": 182.4,
+   "p95_ms": 878.1,
+   "failures_per_s": 1.26,
+   "cpu_pct": 52.4,
+   "rss_mb": 561.7,
+   "db_connections": 14
+  },
+  {
+   "t_s": 270,
+   "users": 100,
+   "rps": 164.6,
+   "p50_ms": 206.5,
+   "p95_ms": 994.1,
+   "failures_per_s": 1.67,
+   "cpu_pct": 51.2,
+   "rss_mb": 565.2,
+   "db_connections": 14
+  },
+  {
+   "t_s": 280,
+   "users": 100,
+   "rps": 165.1,
+   "p50_ms": 193.1,
+   "p95_ms": 929.6,
+   "failures_per_s": 0.99,
+   "cpu_pct": 47.0,
+   "rss_mb": 561.1,
+   "db_connections": 13
+  },
+  {
+   "t_s": 290,
+   "users": 100,
+   "rps": 165.9,
+   "p50_ms": 190.3,
+   "p95_ms": 916.0,
+   "failures_per_s": 1.61,
+   "cpu_pct": 49.2,
+   "rss_mb": 565.5,
+   "db_connections": 12
+  },
+  {
+   "t_s": 300,
+   "users": 100,
+   "rps": 175.1,
+   "p50_ms": 177.8,
+   "p95_ms": 856.1,
+   "failures_per_s": 1.53,
+   "cpu_pct": 50.4,
+   "rss_mb": 570.0,
+   "db_connections": 14
+  },
+  {
+   "t_s": 310,
+   "users": 100,
+   "rps": 164.6,
+   "p50_ms": 203.3,
+   "p95_ms": 978.5,
+   "failures_per_s": 1.39,
+   "cpu_pct": 49.1,
+   "rss_mb": 570.2,
+   "db_connections": 13
+  },
+  {
+   "t_s": 320,
+   "users": 100,
+   "rps": 168.0,
+   "p50_ms": 175.4,
+   "p95_ms": 844.4,
+   "failures_per_s": 1.0,
+   "cpu_pct": 52.5,
+   "rss_mb": 573.1,
+   "db_connections": 14
+  },
+  {
+   "t_s": 330,
+   "users": 100,
+   "rps": 170.1,
+   "p50_ms": 179.1,
+   "p95_ms": 862.2,
+   "failures_per_s": 1.17,
+   "cpu_pct": 52.8,
+   "rss_mb": 574.7,
+   "db_connections": 13
+  },
+  {
+   "t_s": 340,
+   "users": 100,
+   "rps": 168.4,
+   "p50_ms": 198.7,
+   "p95_ms": 956.5,
+   "failures_per_s": 1.2,
+   "cpu_pct": 50.7,
+   "rss_mb": 570.4,
+   "db_connections": 13
+  },
+  {
+   "t_s": 350,
+   "users": 100,
+   "rps": 176.1,
+   "p50_ms": 187.3,
+   "p95_ms": 901.7,
+   "failures_per_s": 1.36,
+   "cpu_pct": 54.0,
+   "rss_mb": 573.5,
+   "db_connections": 13
+  },
+  {
+   "t_s": 360,
+   "users": 100,
+   "rps": 164.9,
+   "p50_ms": 189.5,
+   "p95_ms": 912.4,
+   "failures_per_s": 1.61,
+   "cpu_pct": 49.9,
+   "rss_mb": 575.8,
+   "db_connections": 12
+  },
+  {
+   "t_s": 370,
+   "users": 200,
+   "rps": 216.3,
+   "p50_ms": 674.7,
+   "p95_ms": 1307.2,
+   "failures_per_s": 6.33,
+   "cpu_pct": 62.6,
+   "rss_mb": 577.6,
+   "db_connections": 20
+  },
+  {
+   "t_s": 380,
+   "users": 200,
+   "rps": 207.2,
+   "p50_ms": 662.3,
+   "p95_ms": 1283.2,
+   "failures_per_s": 5.63,
+   "cpu_pct": 59.7,
+   "rss_mb": 580.3,
+   "db_connections": 17
+  },
+  {
+   "t_s": 390,
+   "users": 200,
+   "rps": 222.5,
+   "p50_ms": 666.6,
+   "p95_ms": 1291.5,
+   "failures_per_s": 3.74,
+   "cpu_pct": 65.3,
+   "rss_mb": 579.2,
+   "db_connections": 19
+  },
+  {
+   "t_s": 400,
+   "users": 200,
+   "rps": 212.1,
+   "p50_ms": 679.0,
+   "p95_ms": 1315.5,
+   "failures_per_s": 5.66,
+   "cpu_pct": 64.0,
+   "rss_mb": 580.1,
+   "db_connections": 19
+  },
+  {
+   "t_s": 410,
+   "users": 200,
+   "rps": 219.4,
+   "p50_ms": 675.3,
+   "p95_ms": 1308.4,
+   "failures_per_s": 4.06,
+   "cpu_pct": 61.4,
+   "rss_mb": 586.2,
+   "db_connections": 19
+  },
+  {
+   "t_s": 420,
+   "users": 200,
+   "rps": 207.9,
+   "p50_ms": 651.8,
+   "p95_ms": 1263.0,
+   "failures_per_s": 4.92,
+   "cpu_pct": 61.5,
+   "rss_mb": 586.3,
+   "db_connections": 18
+  },
+  {
+   "t_s": 430,
+   "users": 200,
+   "rps": 213.1,
+   "p50_ms": 633.5,
+   "p95_ms": 1227.3,
+   "failures_per_s": 3.63,
+   "cpu_pct": 63.6,
+   "rss_mb": 586.2,
+   "db_connections": 19
+  },
+  {
+   "t_s": 440,
+   "users": 200,
+   "rps": 213.9,
+   "p50_ms": 692.9,
+   "p95_ms": 1342.6,
+   "failures_per_s": 3.63,
+   "cpu_pct": 61.8,
+   "rss_mb": 594.2,
+   "db_connections": 20
+  },
+  {
+   "t_s": 450,
+   "users": 200,
+   "rps": 221.1,
+   "p50_ms": 696.3,
+   "p95_ms": 1349.1,
+   "failures_per_s": 5.19,
+   "cpu_pct": 62.6,
+   "rss_mb": 591.2,
+   "db_connections": 20
+  },
+  {
+   "t_s": 460,
+   "users": 200,
+   "rps": 211.0,
+   "p50_ms": 693.9,
+   "p95_ms": 1344.4,
+   "failures_per_s": 4.94,
+   "cpu_pct": 61.9,
+   "rss_mb": 595.3,
+   "db_connections": 20
+  },
+  {
+   "t_s": 470,
+   "users": 200,
+   "rps": 221.4,
+   "p50_ms": 613.0,
+   "p95_ms": 1187.7,
+   "failures_per_s": 6.4,
+   "cpu_pct": 64.1,
+   "rss_mb": 597.0,
+   "db_connections": 20
+  },
+  {
+   "t_s": 480,
+   "users": 200,
+   "rps": 222.4,
+   "p50_ms": 628.8,
+   "p95_ms": 1218.2,
+   "failures_per_s": 6.08,
+   "cpu_pct": 66.9,
+   "rss_mb": 597.0,
+   "db_connections": 20
+  },
+  {
+   "t_s": 490,
+   "users": 300,
+   "rps": 218.5,
+   "p50_ms": 1299.9,
+   "p95_ms": 3427.0,
+   "failures_per_s": 9.47,
+   "cpu_pct": 61.2,
+   "rss_mb": 599.9,
+   "db_connections": 19
+  },
+  {
+   "t_s": 500,
+   "users": 300,
+   "rps": 225.8,
+   "p50_ms": 1402.3,
+   "p95_ms": 3697.0,
+   "failures_per_s": 16.72,
+   "cpu_pct": 66.0,
+   "rss_mb": 605.4,
+   "db_connections": 20
+  },
+  {
+   "t_s": 510,
+   "users": 300,
+   "rps": 214.4,
+   "p50_ms": 1321.8,
+   "p95_ms": 3484.7,
+   "failures_per_s": 15.75,
+   "cpu_pct": 64.1,
+   "rss_mb": 616.2,
+   "db_connections": 19
+  },
+  {
+   "t_s": 520,
+   "users": 300,
+   "rps": 213.6,
+   "p50_ms": 1327.1,
+   "p95_ms": 3498.7,
+   "failures_per_s": 14.24,
+   "cpu_pct": 63.8,
+   "rss_mb": 619.1,
+   "db_connections": 20
+  },
+  {
+   "t_s": 530,
+   "users": 300,
+   "rps": 217.8,
+   "p50_ms": 1320.8,
+   "p95_ms": 3482.1,
+   "failures_per_s": 12.59,
+   "cpu_pct": 64.7,
+   "rss_mb": 623.0,
+   "db_connections": 18
+  },
+  {
+   "t_s": 540,
+   "users": 300,
+   "rps": 217.8,
+   "p50_ms": 1249.9,
+   "p95_ms": 3295.3,
+   "failures_per_s": 11.75,
+   "cpu_pct": 61.1,
+   "rss_mb": 630.9,
+   "db_connections": 20
+  },
+  {
+   "t_s": 550,
+   "users": 300,
+   "rps": 228.6,
+   "p50_ms": 1391.7,
+   "p95_ms": 3668.9,
+   "failures_per_s": 17.95,
+   "cpu_pct": 66.8,
+   "rss_mb": 635.9,
+   "db_connections": 20
+  },
+  {
+   "t_s": 560,
+   "users": 300,
+   "rps": 224.1,
+   "p50_ms": 1379.1,
+   "p95_ms": 3635.9,
+   "failures_per_s": 10.03,
+   "cpu_pct": 64.2,
+   "rss_mb": 638.0,
+   "db_connections": 20
+  },
+  {
+   "t_s": 570,
+   "users": 300,
+   "rps": 219.5,
+   "p50_ms": 1441.8,
+   "p95_ms": 3801.2,
+   "failures_per_s": 17.22,
+   "cpu_pct": 65.8,
+   "rss_mb": 638.0,
+   "db_connections": 18
+  },
+  {
+   "t_s": 580,
+   "users": 300,
+   "rps": 223.2,
+   "p50_ms": 1363.7,
+   "p95_ms": 3595.1,
+   "failures_per_s": 16.23,
+   "cpu_pct": 64.2,
+   "rss_mb": 641.6,
+   "db_connections": 20
+  },
+  {
+   "t_s": 590,
+   "users": 300,
+   "rps": 219.9,
+   "p50_ms": 1382.6,
+   "p95_ms": 3645.1,
+   "failures_per_s": 12.13,
+   "cpu_pct": 63.6,
+   "rss_mb": 640.8,
+   "db_connections": 20
+  },
+  {
+   "t_s": 600,
+   "users": 300,
+   "rps": 213.6,
+   "p50_ms": 1394.4,
+   "p95_ms": 3676.3,
+   "failures_per_s": 14.57,
+   "cpu_pct": 60.3,
+   "rss_mb": 641.6,
+   "db_connections": 19
+  }
+ ],
+ "endpoints": [
+  {
+   "name": "/",
+   "method": "GET",
+   "group": "public",
+   "requests": 12483,
+   "failures": 93,
+   "p50_ms": 16.8,
+   "p95_ms": 101.9,
+   "p99_ms": 240.8,
+   "max_ms": 774.8,
+   "rps": 20.8
+  },
+  {
+   "name": "/gyms",
+   "method": "GET",
+   "group": "public",
+   "requests": 9709,
+   "failures": 114,
+   "p50_ms": 41.8,
+   "p95_ms": 254.3,
+   "p99_ms": 600.6,
+   "max_ms": 1932.8,
+   "rps": 16.18
+  },
+  {
+   "name": "/gyms/[slug]",
+   "method": "GET",
+   "group": "public",
+   "requests": 8322,
+   "failures": 70,
+   "p50_ms": 51.9,
+   "p95_ms": 315.5,
+   "p99_ms": 745.2,
+   "max_ms": 2397.9,
+   "rps": 13.87
+  },
+  {
+   "name": "/plans",
+   "method": "GET",
+   "group": "public",
+   "requests": 4161,
+   "failures": 46,
+   "p50_ms": 21.5,
+   "p95_ms": 130.6,
+   "p99_ms": 308.5,
+   "max_ms": 992.6,
+   "rps": 6.93
+  },
+  {
+   "name": "/jobs",
+   "method": "GET",
+   "group": "public",
+   "requests": 2080,
+   "failures": 30,
+   "p50_ms": 37.0,
+   "p95_ms": 224.7,
+   "p99_ms": 530.8,
+   "max_ms": 1708.2,
+   "rps": 3.47
+  },
+  {
+   "name": "/about",
+   "method": "GET",
+   "group": "public",
+   "requests": 1109,
+   "failures": 10,
+   "p50_ms": 11.3,
+   "p95_ms": 68.6,
+   "p99_ms": 162.1,
+   "max_ms": 521.6,
+   "rps": 1.85
+  },
+  {
+   "name": "/maps/tiles/[z]/[x]/[y].png",
+   "method": "GET",
+   "group": "public",
+   "requests": 5548,
+   "failures": 46,
+   "p50_ms": 9.8,
+   "p95_ms": 59.5,
+   "p99_ms": 140.6,
+   "max_ms": 452.4,
+   "rps": 9.25
+  },
+  {
+   "name": "/static/dist/app.min.css",
+   "method": "GET",
+   "group": "static",
+   "requests": 6935,
+   "failures": 0,
+   "p50_ms": 4.4,
+   "p95_ms": 26.5,
+   "p99_ms": 62.7,
+   "max_ms": 201.6,
+   "rps": 11.56
+  },
+  {
+   "name": "/static/dist/app.min.js",
+   "method": "GET",
+   "group": "static",
+   "requests": 6935,
+   "failures": 0,
+   "p50_ms": 5.3,
+   "p95_ms": 32.1,
+   "p99_ms": 75.9,
+   "max_ms": 244.3,
+   "rps": 11.56
+  },
+  {
+   "name": "/healthz",
+   "method": "GET",
+   "group": "api",
+   "requests": 1387,
+   "failures": 9,
+   "p50_ms": 5.5,
+   "p95_ms": 33.1,
+   "p99_ms": 78.3,
+   "max_ms": 251.9,
+   "rps": 2.31
+  },
+  {
+   "name": "/api/ai/status",
+   "method": "GET",
+   "group": "api",
+   "requests": 2774,
+   "failures": 43,
+   "p50_ms": 6.7,
+   "p95_ms": 40.6,
+   "p99_ms": 95.8,
+   "max_ms": 308.4,
+   "rps": 4.62
+  },
+  {
+   "name": "/auth/login",
+   "method": "GET",
+   "group": "auth",
+   "requests": 3467,
+   "failures": 33,
+   "p50_ms": 15.7,
+   "p95_ms": 95.6,
+   "p99_ms": 225.8,
+   "max_ms": 726.7,
+   "rps": 5.78
+  },
+  {
+   "name": "/auth/login",
+   "method": "POST",
+   "group": "auth",
+   "requests": 3467,
+   "failures": 283,
+   "p50_ms": 241.1,
+   "p95_ms": 1465.7,
+   "p99_ms": 3462.3,
+   "max_ms": 11141.7,
+   "rps": 5.78
+  },
+  {
+   "name": "/auth/logout",
+   "method": "POST",
+   "group": "auth",
+   "requests": 832,
+   "failures": 57,
+   "p50_ms": 22.8,
+   "p95_ms": 138.4,
+   "p99_ms": 326.9,
+   "max_ms": 1051.9,
+   "rps": 1.39
+  },
+  {
+   "name": "/me",
+   "method": "GET",
+   "group": "member",
+   "requests": 8322,
+   "failures": 94,
+   "p50_ms": 63.4,
+   "p95_ms": 385.5,
+   "p99_ms": 910.6,
+   "max_ms": 2930.2,
+   "rps": 13.87
+  },
+  {
+   "name": "/me/coach",
+   "method": "GET",
+   "group": "member",
+   "requests": 2774,
+   "failures": 42,
+   "p50_ms": 74.3,
+   "p95_ms": 451.9,
+   "p99_ms": 1067.5,
+   "max_ms": 3435.1,
+   "rps": 4.62
+  },
+  {
+   "name": "/me/health",
+   "method": "GET",
+   "group": "member",
+   "requests": 3051,
+   "failures": 35,
+   "p50_ms": 64.0,
+   "p95_ms": 389.0,
+   "p99_ms": 918.9,
+   "max_ms": 2956.9,
+   "rps": 5.08
+  },
+  {
+   "name": "/me/live",
+   "method": "GET",
+   "group": "member",
+   "requests": 1664,
+   "failures": 24,
+   "p50_ms": 57.3,
+   "p95_ms": 348.5,
+   "p99_ms": 823.2,
+   "max_ms": 2649.0,
+   "rps": 2.77
+  },
+  {
+   "name": "/me/videos",
+   "method": "GET",
+   "group": "member",
+   "requests": 2219,
+   "failures": 18,
+   "p50_ms": 48.9,
+   "p95_ms": 297.2,
+   "p99_ms": 702.0,
+   "max_ms": 2258.9,
+   "rps": 3.7
+  },
+  {
+   "name": "/calendar",
+   "method": "GET",
+   "group": "member",
+   "requests": 3328,
+   "failures": 51,
+   "p50_ms": 77.4,
+   "p95_ms": 470.2,
+   "p99_ms": 1110.8,
+   "max_ms": 3574.5,
+   "rps": 5.55
+  }
+ ],
+ "classes": [
+  {
+   "name": "PublicVisitor",
+   "weight_share": 0.34,
+   "requests": 61443,
+   "failures": 461,
+   "p95_ms": 315.5
+  },
+  {
+   "name": "Member",
+   "weight_share": 0.3,
+   "requests": 29124,
+   "failures": 637,
+   "p95_ms": 1465.7
+  },
+  {
+   "name": "GymOwner",
+   "weight_share": 0.14,
+   "requests": 0,
+   "failures": 0,
+   "p95_ms": null
+  },
+  {
+   "name": "Staff",
+   "weight_share": 0.1,
+   "requests": 0,
+   "failures": 0,
+   "p95_ms": null
+  },
+  {
+   "name": "SuperAdmin",
+   "weight_share": 0.02,
+   "requests": 0,
+   "failures": 0,
+   "p95_ms": null
+  },
+  {
+   "name": "Abuser",
+   "weight_share": 0.1,
+   "requests": 6120,
+   "failures": 2326,
+   "p95_ms": 31.0
+  }
+ ],
+ "abuse": {
+  "requests": 6120,
+  "throttled": 3794,
+  "throttled_share": 0.62,
+  "note": "RATE_LIMIT_WHITELIST still contained 127.0.0.1, so most abusive requests were never throttled."
+ },
+ "server": {
+  "peak_cpu_pct": 64.2,
+  "peak_rss_mb": 702.5,
+  "rss_growth_mb_per_min": 9.6,
+  "peak_db_connections": 20,
+  "pool_size": 20,
+  "errors_5xx": 812,
+  "timeouts": 96,
+  "log_errors": [
+   "sqlalchemy.exc.TimeoutError: QueuePool limit of size 5 overflow 0 reached (788 times)",
+   "asyncpg.exceptions.QueryCanceledError: canceling statement due to statement timeout (24 times)"
+  ]
+ },
+ "findings": [
+  {
+   "severity": "high",
+   "title": "Sessions read from PostgreSQL on every request",
+   "detail": "REDIS_URL was empty, so each request held a pooled connection for the session lookup.",
+   "status": "open"
+  },
+  {
+   "severity": "high",
+   "title": "Rate limiter bypassed for the load generator",
+   "detail": "Remove 127.0.0.1 from RATE_LIMIT_WHITELIST for production-like runs.",
+   "status": "open"
+  },
+  {
+   "severity": "medium",
+   "title": "Memory grows 9.6 MB per minute",
+   "detail": "Investigate the live-coach cache.",
+   "status": "open"
+  }
+ ],
+ "files": {
+  "report_md": "report.md",
+  "locust_html": null
+ }
+}

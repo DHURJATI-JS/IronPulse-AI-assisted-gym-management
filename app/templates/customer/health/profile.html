@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "customer/health/_macros.html" as hm with context %}
+{% block title %}Health profile{% endblock %}
+{% block content %}
+{% call ui.page_header("Health profile", "Personalises your coaching, keeps every workout within safe limits for your conditions and times your bedtime reminder. Only you, your trainers and your gym's admins can see it.", eyebrow="Health", back="/me/health") %}
+  {{ ui.ai_chip() }}
+  <a href="/me/health/profile/fitness" class="btn btn-secondary btn-sm">{{ icon("dumbbell", "size-4") }} Training preferences</a>
+  <a href="/me/health/profile/ai" class="btn btn-secondary btn-sm">{{ icon("sparkles", "size-4") }} What the AI knows</a>
+{% endcall %}
+
+<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
+  {# ================================================================ profile form #}
+  <form method="post" action="/me/health/profile" class="hp-form min-w-0 space-y-6 lg:col-span-2" novalidate>
+    {{ ui.csrf() }}
+    {{ ui.form_errors(errors.values() | list if errors else None) }}
+
+    <section class="card" aria-labelledby="training-title">
+      <div class="mb-5 flex items-center gap-3">
+        <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("bolt", "size-5") }}</span>
+        <div><h2 id="training-title" class="section-title">Training</h2><p class="text-sm muted">What you're working towards.</p></div>
+      </div>
+      <div class="fieldset max-sm:grid-cols-1">
+        {{ ui.select("goal", "Goal", goals, value=form.goal, required=True, error=errors.get("goal")) }}
+        {{ ui.select("fitness_level", "Fitness level", levels, value=form.fitness_level, required=True, error=errors.get("fitness_level")) }}
+      </div>
+    </section>
+
+    <section id="sleep" class="card scroll-mt-24" aria-labelledby="sleep-title">
+      <div class="mb-5 flex items-center gap-3">
+        <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-indigo/12 text-indigo">{{ icon("moon-star", "size-5") }}</span>
+        <div><h2 id="sleep-title" class="section-title">Sleep &amp; recovery</h2><p class="text-sm muted">We work out your bedtime from your wake-up time and the sleep your age needs.</p></div>
+      </div>
+      <div class="fieldset max-sm:grid-cols-1">
+        {{ ui.field("wake_time", "Usual wake-up time", type="time", value=form.wake_time, required=True, error=errors.get("wake_time"), help="24-hour time, in your time zone (" ~ (user.timezone or "UTC") ~ ").") }}
+        <div class="rounded-2xl bg-zinc-100/80 p-4 dark:bg-white/[0.05]">
+          <p class="text-xs font-medium muted">Your bedtime</p>
+          <p class="mt-1 text-2xl font-semibold tracking-tight">{{ plan.bedtime.strftime('%H:%M') }}</p>
+          <p class="mt-1 text-xs muted">{{ plan.need_label }} of sleep for your age · reminder at {{ plan.reminder_at.strftime('%H:%M') }}</p>
+        </div>
+      </div>
+      <div class="mt-5">
+        {{ ui.checkbox("sleep_reminders", "Bedtime reminders", checked=form.sleep_reminders, help="A gentle nudge 30 minutes before bedtime, once a day.") }}
+      </div>
+    </section>
+
+    {% if minor %}
+    <section class="card" aria-labelledby="guardian-title">
+      <div class="mb-5 flex items-center gap-3">
+        <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-warn/15 text-[#b45309] dark:text-[#fbbf24]">{{ icon("users", "size-5") }}</span>
+        <div><h2 id="guardian-title" class="section-title">Parent or guardian <span class="text-bad">*</span></h2>
+          <p class="text-sm muted">Required for members under 18. They get a copy of safety and account messages.</p></div>
+      </div>
+      <div class="fieldset max-sm:grid-cols-1">
+        {{ ui.field("guardian_name", "Full name", value=form.guardian_name, required=True, error=errors.get("guardian_name"), autocomplete="off") }}
+        {{ ui.field("guardian_relation", "Relationship", value=form.guardian_relation, error=errors.get("guardian_relation"), placeholder="Mother, father, guardian…") }}
+        {{ ui.field("guardian_email", "E-mail", type="email", value=form.guardian_email, required=True, error=errors.get("guardian_email"), autocomplete="off") }}
+        {{ ui.field("guardian_phone", "Phone", type="tel", value=form.guardian_phone, required=True, error=errors.get("guardian_phone"), autocomplete="off", help="Include the country code if outside your country.") }}
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="card" aria-labelledby="emergency-title">
+      <div class="mb-5 flex items-center gap-3">
+        <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-bad/10 text-bad">{{ icon("phone", "size-5") }}</span>
+        <div><h2 id="emergency-title" class="section-title">Emergency contact</h2><p class="text-sm muted">Someone your gym can call if something happens during training.</p></div>
+      </div>
+      <div class="fieldset max-sm:grid-cols-1">
+        {{ ui.field("emergency_contact_name", "Name", value=form.emergency_contact_name, error=errors.get("emergency_contact_name"), autocomplete="off") }}
+        {{ ui.field("emergency_contact_phone", "Phone", type="tel", value=form.emergency_contact_phone, error=errors.get("emergency_contact_phone"), autocomplete="off") }}
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="notes-title">
+      <h2 id="notes-title" class="section-title mb-4">Notes for your coach</h2>
+      {{ ui.textarea("health_notes", "Anything else that helps us keep you safe", value=form.health_notes, rows=3, error=errors.get("health_notes"), help="Optional, up to 1,000 characters.", attrs='maxlength="1000"') }}
+    </section>
+
+    <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+      <a href="/me/health" class="btn btn-ghost">Cancel</a>
+      <button type="submit" class="btn btn-primary">{{ icon("check", "size-4") }} Save profile</button>
+    </div>
+  </form>
+
+  {# ================================================================ conditions + AC #}
+  <div class="min-w-0 space-y-6">
+    <section id="conditions" class="card scroll-mt-24" aria-labelledby="conditions-title">
+      <div class="flex items-center justify-between gap-3">
+        <h2 id="conditions-title" class="section-title">Conditions &amp; allergies</h2>
+        <span class="badge badge-zinc">{{ conditions | length }}{{ "+" if conditions_more }}</span>
+      </div>
+      <p class="mt-1 text-sm muted">Illnesses, allergies, medications and injuries. Our safety rules and the AI coach use them to rule out unsafe exercises.</p>
+
+      {% if conditions %}
+      <ul class="mt-4 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+        {% for c in conditions %}
+        <li class="flex items-start gap-3 py-3">
+          <span class="mt-0.5 grid size-8 shrink-0 place-items-center rounded-xl {{ {'condition': 'bg-accent/10 text-accent', 'allergy': 'bg-warn/15 text-[#b45309] dark:text-[#fbbf24]', 'medication': 'bg-violet/15 text-[#9333ea] dark:text-[#d8a4ff]', 'injury': 'bg-bad/10 text-bad'}.get(c.kind.value, 'bg-zinc-500/10') }}">
+            {{ icon({'condition': 'heart', 'allergy': 'alert', 'medication': 'layers', 'injury': 'activity'}.get(c.kind.value, 'info'), "size-4") }}
+          </span>
+          <div class="min-w-0 flex-1">
+            <p class="text-sm font-medium [overflow-wrap:anywhere]">{{ c.name }}</p>
+            <p class="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs muted">
+              <span>{{ c.kind.value | humanize }}</span>
+              {% if c.tag %}<span class="badge badge-blue whitespace-nowrap !py-0.5">{{ tag_labels.get(c.tag, c.tag) }}</span>{% endif %}
+              {% if c.source != 'self' %}<span>· added by {{ 'your gym' if c.source == 'owner' else 'AI intake' }}</span>{% endif %}
+            </p>
+            {% if c.notes %}<p class="mt-1 text-xs muted [overflow-wrap:anywhere]">{{ c.notes }}</p>{% endif %}
+          </div>
+          <form method="post" action="/me/health/profile/conditions/{{ c.id }}/delete" class="shrink-0" data-confirm="Remove “{{ c.name }}” from your health profile?">
+            {{ ui.csrf() }}
+            <button type="submit" class="btn btn-ghost btn-icon !size-9 hover:!bg-bad/10 hover:!text-bad" aria-label="Remove {{ c.name }}" title="Remove">{{ icon("trash", "size-4") }}</button>
+          </form>
+        </li>
+        {% endfor %}
+      </ul>
+      {% if conditions_more %}<p class="mt-2 text-xs muted">Showing the first {{ conditions | length }} items. Remove ones you no longer need to see the rest.</p>{% endif %}
+      {% else %}
+      <div class="mt-4 rounded-2xl bg-zinc-100/80 p-4 text-sm muted dark:bg-white/[0.04]">Nothing listed. Add anything a trainer should know - even “none” is useful to confirm.</div>
+      {% endif %}
+
+      <form method="post" action="/me/health/profile/conditions" class="hp-form mt-5 space-y-3 border-t border-black/[0.06] pt-5 dark:border-white/[0.08]">
+        {{ ui.csrf() }}
+        <p class="text-sm font-semibold">Add to your profile <span class="font-normal muted">· up to {{ max_conditions }} items</span></p>
+        {{ ui.select("kind", "Type", kinds, value=cond_form.kind, required=True, error=cond_errors.get("kind")) }}
+        {{ ui.field("name", "Name", value=cond_form.name, required=True, error=cond_errors.get("name"), placeholder="e.g. Asthma, peanut allergy, ACL tear", attrs='maxlength="120"') }}
+        {{ ui.field("notes", "Notes (optional)", value=cond_form.notes, error=cond_errors.get("notes"), placeholder="Since when, how it affects training…", attrs='maxlength="255"') }}
+        <button type="submit" class="btn btn-secondary w-full">{{ icon("plus", "size-4") }} Add</button>
+      </form>
+    </section>
+
+    {{ hm.ac_card(ac) }}
+  </div>
+</div>
+{% endblock %}

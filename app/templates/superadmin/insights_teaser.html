@@ -1,0 +1,24 @@
+{#- Teaser of the site overview on /superadmin. No query: ``insights_teaser()`` (app/routers/superadmin_insights.py)
+    reads the urgent list of the digest this process computed last - when there is a recent one. -#}
+{% set teaser = insights_teaser() if insights_teaser is defined else None %}
+<section aria-label="Site overview" class="card-flat mb-6 animate-fade-up" data-insights-teaser>
+  <div class="flex flex-wrap items-center gap-3">
+    <span class="grid size-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-accent via-indigo to-violet text-white">{{ icon("sparkles", "size-4") }}</span>
+    <div class="min-w-0 flex-1">
+      <p class="text-sm font-semibold">Site overview · Ask the AI</p>
+      {% if teaser %}
+      <p class="text-xs muted">{{ teaser.total }} urgent item{{ 's' if teaser.total != 1 }} · figures of {{ teaser.minutes }} min ago</p>
+      {% else %}
+      <p class="text-xs muted">What's going on today, spammers and frequent limit offenders, and what to fix first.</p>
+      {% endif %}
+    </div>
+    <a href="/superadmin/insights" class="btn btn-secondary btn-sm shrink-0">Open {{ icon("arrow-right", "size-4") }}</a>
+  </div>
+  {% if teaser and teaser["items"] %}
+  <ul class="mt-3 grid gap-1.5 text-sm">
+    {% for u in teaser["items"] %}
+    <li><a href="{{ u.href }}" class="flex min-w-0 items-center gap-2 hover:text-accent"><span class="badge badge-{{ teaser.tones.get(u.severity, 'zinc') }}">{{ u.severity | capitalize }}</span><span class="truncate">{{ u.title }}</span></a></li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</section>

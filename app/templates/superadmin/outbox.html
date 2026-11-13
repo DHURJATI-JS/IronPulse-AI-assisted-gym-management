@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% block title %}E-mail outbox{% endblock %}
+{% block content %}
+{% call sa.header("E-mail outbox", ("Delivered over SMTP by the background worker." if smtp else "No SMTP server configured - e-mails are written to var/mail/*.eml instead of being sent.") ~ " Bodies are shown as plain text only.", section, sections, counts) %}
+  {% if by_status.failed %}
+    {{ ui.confirm_button("/superadmin/outbox/retry-failed", "Retry all failed (" ~ sa.num(by_status.failed) ~ ")", "Queue all " ~ sa.num(by_status.failed) ~ " failed e-mails again?", variant="primary", size="sm", ico="refresh") }}
+  {% endif %}
+{% endcall %}
+
+<div class="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+  <nav class="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1" aria-label="Delivery status">
+    <a href="/superadmin/outbox{{ ('?q=' ~ (q | urlencode)) if q }}" class="chip shrink-0 {{ 'ring-2 ring-accent/50' if not status }}">All</a>
+    {% for s in states %}
+      <a href="/superadmin/outbox?status={{ s }}{{ ('&q=' ~ (q | urlencode)) if q }}" class="chip shrink-0 {{ 'ring-2 ring-accent/50' if status == s }}" {% if status == s %}aria-current="true"{% endif %}>
+        <span class="sa-dot sa-dot-{{ {'sent': 'green', 'logged': 'green', 'failed': 'red', 'queued': 'amber', 'sending': 'blue'}[s] }}" aria-hidden="true"></span>{{ s | humanize }} <span class="tabular-nums muted">{{ sa.num(by_status[s]) }}</span>
+      </a>
+    {% endfor %}
+  </nav>
+  <form method="get" action="/superadmin/outbox" class="flex gap-2" role="search">
+    {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+    <label for="mail-q" class="sr-only">Search recipient or subject</label>
+    <input id="mail-q" name="q" value="{{ q }}" maxlength="120" placeholder="Recipient or subject…" class="input !py-2 sm:w-64" autocomplete="off">
+    <button class="btn btn-secondary btn-icon !size-[38px] shrink-0" aria-label="Search">{{ icon("search", "size-4") }}</button>
+  </form>
+</div>
+
+{% if mails %}
+<div class="table-wrap !overflow-visible">
+  <div class="sa-row-head sa-cols-outbox" aria-hidden="true"><span>Recipient</span><span>Subject</span><span>Status</span><span></span></div>
+  <ul class="sa-list">
+    {% for m in mails %}
+    <li class="sa-row sa-cols-outbox">
+      <div class="min-w-0">
+        <p class="truncate text-sm font-medium">{{ m.to_email }}</p>
+        <p class="truncate text-xs muted">{{ m.created_at | dt }}{% if m.cc %} · cc {{ m.cc | join(", ") }}{% endif %}</p>
+      </div>
+      <div class="min-w-0">
+        <p class="truncate text-sm">{{ m.subject }}</p>
+        {% if m.last_error %}<p class="mt-0.5 truncate text-xs text-[#d1281e] dark:text-[#ff6b61]" title="{{ m.last_error }}">{{ m.last_error }}</p>{% endif %}
+      </div>
+      <div>
+        {{ ui.status(m.status) }}
+        <p class="mt-1 text-xs muted">{{ m.attempts }} attempt{{ 's' if m.attempts != 1 }}{% if m.sent_at %} · {{ m.sent_at | timeago }}{% endif %}</p>
+      </div>
+      <div class="flex items-center gap-2 md:justify-end">
+        {% if m.status.value == 'failed' %}
+          {{ ui.confirm_button("/superadmin/outbox/" ~ m.id ~ "/retry", "Retry", "Queue this e-mail to " ~ m.to_email ~ " again?", variant="secondary", size="sm", ico="refresh", extra_fields={"next": back}) }}
+        {% endif %}
+        <a href="/superadmin/outbox/{{ m.id }}" class="btn btn-ghost btn-sm">{{ icon("eye", "size-4") }} View</a>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{{ sa.pagination(pager, "e-mails") }}
+{% elif q or status %}
+  {{ ui.empty("No e-mails match", "Try another status or search term.", "search", "Show all", "/superadmin/outbox") }}
+{% else %}
+  {{ ui.empty("The outbox is empty", "Every notification is also e-mailed - messages appear here as soon as one is queued.", "envelope") }}
+{% endif %}
+{% endblock %}

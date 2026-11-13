@@ -1,0 +1,64 @@
+{#- Reusable ID-card upload fields (embed inside any multipart form):
+      {% import "identity/_fields.html" as idf with context %}
+      {{ idf.id_fields(prefix="id", default_country="IN", required=True) }}
+    Optional: doc_type="passport" (pre-selected type), errors={"id_front": "...", ...} (inline field errors).
+    Posted fields: <prefix>_doc_type, <prefix>_country, <prefix>_front (file), <prefix>_back (file, optional)
+    Server side: app.services.id_verification.submit_identity_document(...)
+    Progressive enhancement (12-identity.js "id-upload"): drag & drop, instant preview, type/size hints.
+-#}
+{% set ID_TYPES = [
+  ("national_id", "National ID card"), ("passport", "Passport"), ("driving_license", "Driving licence"),
+  ("aadhaar", "Aadhaar (India)"), ("pan", "PAN card (India)"), ("voter_id", "Voter ID"),
+  ("residence_permit", "Residence permit"), ("student_id", "Student ID (minors)"), ("other", "Other government ID")
+] %}
+
+{% macro _drop(name, label, required=False, optional=False, error=None) %}
+<div class="min-w-0">
+  <label class="label" for="f-{{ name }}">{{ label }}{% if optional %} <span class="font-normal muted">(optional)</span>{% elif required %} <span class="text-bad">*</span>{% endif %}</label>
+  <div class="idv-drop{{ ' idv-drop-error' if error }}" data-drop>
+    <img class="idv-drop-preview hidden" alt="" data-preview>
+    <span class="idv-drop-empty" data-empty>
+      <span class="idv-drop-icon" aria-hidden="true">{{ icon("camera", "size-5") }}</span>
+      <span class="text-xs muted" data-drop-hint>Drop a photo here</span>
+    </span>
+    <input id="f-{{ name }}" name="{{ name }}" type="file" accept="image/jpeg,image/png,image/webp" class="idv-drop-input"
+           {% if required %}required{% endif %} {% if error %}aria-invalid="true" aria-describedby="e-{{ name }}"{% endif %}>
+  </div>
+  {% if error %}<p class="field-error" id="e-{{ name }}">{{ error }}</p>{% endif %}
+  <p class="field-error hidden" data-client-error role="alert"></p>
+</div>
+{% endmacro %}
+
+{% macro id_fields(prefix="id", default_country="IN", required=True, doc_type=None, errors=None) %}
+{% set er = errors or {} %}
+{% set selected = doc_type or ('aadhaar' if default_country == 'IN' else 'national_id') %}
+<fieldset class="card-muted space-y-5" data-component="id-upload" data-max-mb="{{ app.max_upload_mb if app is defined and app else 10 }}">
+  <legend class="sr-only">Identity card</legend>
+  <div class="flex items-start gap-3">
+    <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent/12 text-accent dark:text-[#64b5ff]">{{ icon("id-card", "size-5") }}</span>
+    <div>
+      <p class="font-semibold">Government ID card{% if required %} <span class="text-bad">*</span>{% endif %}</p>
+      <p class="text-xs leading-relaxed muted">Mandatory for every account. Several OCR engines cross-check it; images are encrypted and only the last 4 digits of the number are kept visible.</p>
+    </div>
+  </div>
+  <div class="grid gap-4 sm:grid-cols-2">
+    <div>
+      <label class="label" for="f-{{ prefix }}_doc_type">Document type</label>
+      <select id="f-{{ prefix }}_doc_type" name="{{ prefix }}_doc_type" class="input {{ 'input-error' if er[prefix ~ '_doc_type'] }}" {% if required %}required{% endif %} data-doc-type>
+        {% for v, l in ID_TYPES %}<option value="{{ v }}" {{ 'selected' if v == selected }}>{{ l }}</option>{% endfor %}
+      </select>
+      {% if er[prefix ~ '_doc_type'] %}<p class="field-error">{{ er[prefix ~ '_doc_type'] }}</p>{% endif %}
+    </div>
+    <div>
+      <label class="label" for="f-{{ prefix }}_country">Issuing country (ISO code)</label>
+      <input id="f-{{ prefix }}_country" name="{{ prefix }}_country" class="input uppercase {{ 'input-error' if er[prefix ~ '_country'] }}" maxlength="2" minlength="2" pattern="[A-Za-z]{2}" value="{{ default_country }}" autocomplete="country" {% if required %}required{% endif %} data-country>
+      {% if er[prefix ~ '_country'] %}<p class="field-error">{{ er[prefix ~ '_country'] }}</p>{% endif %}
+    </div>
+    {{ _drop(prefix ~ "_front", "Front side", required=required, error=er[prefix ~ '_front']) }}
+    {{ _drop(prefix ~ "_back", "Back side", optional=True, error=er[prefix ~ '_back']) }}
+  </div>
+  <p class="hidden items-start gap-2 rounded-2xl bg-accent/10 px-3 py-2 text-xs text-[#0b5cad] dark:text-[#8cc8ff]" data-passport-hint>
+    {{ icon("info", "size-4 shrink-0") }}<span>Photograph the passport's photo page so both code lines (the ones full of &lt; signs) at the bottom are sharp - they carry check digits we verify.</span>
+  </p>
+</fieldset>
+{% endmacro %}

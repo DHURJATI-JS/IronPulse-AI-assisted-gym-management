@@ -1,0 +1,745 @@
+{
+  "_doc": "Allowlist of the N+1 checks (tests/test_no_n_plus_one.py, tests/test_no_n_plus_one_jobs.py, scripts/find_query_loops.py). Every entry needs a written reason; nothing here may hide a real N+1. skip_routes: GET routes the crawler does not measure (file downloads, static, health, external proxies). unreachable_routes: GET routes that answer 200 for no role of the seeded world (redirects to measured pages, one-time tokens), with the reason - a route that answers 200 for nobody and is not listed fails the crawl, and an entry whose route IS measured fails too. route_growth: '<route> [<role>]' (or '<route>' for every role) -> {max_extra, reason}: bounded extra statements allowed on the large world. job_growth: '<case name>' -> {per_row, shapes, reason}: background work that is per row BY DESIGN - at most per_row statements per extra row, and only statements whose normalised SQL starts with one of 'shapes' may repeat per row. jobs_not_batched: @periodic / @job_handler names that handle one entity (not a batch), with the reason. loops: scanner fingerprints '<file>::<function>::<call start>' -> {reason, fn_sha}: loops that are not N+1s (chunk loops, retries, fixed small lists, start-up DDL), pinned to the reviewed code (fn_sha: the function, the module helpers it calls and the module constants they read) - when that code changes the entry must be reviewed again and re-pinned with `.venv/bin/python scripts/find_query_loops.py --refresh <fingerprint>`; entries matching no loop fail.",
+  "skip_routes": {
+    "/healthz": "health check: no page, no rows (the crawler also uses it to get the CSRF cookie)",
+    "/robots.txt": "static text file",
+    "/favicon.ico": "static file",
+    "/media/{key:path}": "file download: a public media file from disk, one key, no list",
+    "/auth/remembered/photo/{token}": "file download: one remembered account's photo (account chooser), one row",
+    "/identity/{doc_id}/{side}": "file download: one decrypted ID card image",
+    "/owner/branches/{branch_id}/documents/{doc_id}/file": "file download: one decrypted branch document",
+    "/owner/staff/{employee_id}/documents/{doc_id}": "file download: one decrypted staff document",
+    "/owner/enquiries/{enquiry_id}/resume": "file download: one job applicant's resume",
+    "/owner/finance/transactions.csv": "file download: the streamed CSV export (keyset batches of bounded size, tests/test_finance_scale.py)",
+    "/owner/payroll/{statement_id:int}/proof": "file download: one payment proof",
+    "/owner/payroll/{statement_id:int}/test-receipt.png": "file download: a generated test receipt image",
+    "/superadmin/files/branch-doc/{doc_id}": "file download: one decrypted branch document",
+    "/superadmin/files/employee-doc/{doc_id}": "file download: one decrypted staff document",
+    "/superadmin/load-test/{run_id}/report.md": "file download: a load-test report file from disk",
+    "/superadmin/load-test/{run_id}/locust.html": "file download: a load-test HTML report from disk",
+    "/maps/tiles/{z}/{x}/{y}.png": "file download: map tile proxy (external tile server, no database rows)",
+    "/api/geo/search": "external geocoder proxy: no database rows involved",
+    "/api/geo/reverse": "external geocoder proxy: no database rows involved"
+  },
+  "unreachable_routes": {
+    "/owner/staff/{employee_id}/clients": "redirect only: 303 to /owner/staff/{id}?tab=clients, measured as a variant",
+    "/owner/staff/{employee_id}/documents": "redirect only: 303 to /owner/staff/{id}?tab=documents, measured as a variant",
+    "/owner/staff/{employee_id}/shifts": "redirect only: 303 to /owner/staff/{id}?tab=schedule, measured as a variant",
+    "/profile": "redirect only: 303 to /profile/{the viewer's id}, which is measured",
+    "/shop/p/{product_id}": "redirect only: 301 to the product's canonical /shop/p/{id}/{slug} page, which is measured",
+    "/shop/orders/{order_id}/pay": "for the seeded (test-mode) unpaid order it redirects to /shop/orders/{id}/test-gateway, which is measured; the Cashfree page renders that ONE order",
+    "/shop/checkout/return": "a gateway return: syncs ONE order with the payment provider and redirects to its order page (measured); without ?order_id= it redirects to /shop/orders (measured)",
+    "/checkout/return": "a gateway return: settles ONE membership transaction (?order_id= of a real gateway order) and redirects; 404 / 403 without one - no list involved",
+    "/auth/verify-email": "consumes its one-time token on the first GET (the measured request would see a used link); without one it renders the 400 'link not valid' page - one token lookup, no list",
+    "/me/health/metrics/confirm": "needs the signed upload token of ONE pending reading (?token=); without it, it redirects to /me/health (measured) - one reading, no list"
+  },
+  "route_growth": {},
+  "job_growth": {
+    "governance_orders: open orders of a suspended gym": {
+      "per_row": 21,
+      "shapes": [
+        "SELECT shop_orders.",
+        "SELECT shop_order_items.",
+        "SELECT refunds.",
+        "SELECT users.",
+        "SELECT products.",
+        "INSERT INTO refunds",
+        "INSERT INTO transactions",
+        "INSERT INTO inventory_movements",
+        "INSERT INTO notifications",
+        "INSERT INTO email_outbox",
+        "INSERT INTO audit_logs",
+        "UPDATE products SET",
+        "UPDATE shop_orders SET",
+        "UPDATE refunds SET",
+        "UPDATE shop_order_items SET"
+      ],
+      "reason": "per order by design (app/services/governance.py _orders_job): each open order is closed through the shop's own cancellation (its row locks, the gateway refund, the restock, the REFUND ledger row, the buyer's notice - shop_payments.platform_close_order -> cancel_order) in its own short transaction, so a gateway refund is never rolled back with another order's failure; keyset-picked, at most JOB_BATCH (100) per run within JOB_BUDGET_S, then the job re-queues itself for the rest"
+    },
+    "governance_refunds: memberships of a suspended gym": {
+      "per_row": 8,
+      "shapes": [
+        "SELECT subscriptions.",
+        "SELECT transactions.",
+        "UPDATE trainer_clients SET",
+        "UPDATE subscriptions SET",
+        "INSERT INTO transactions",
+        "INSERT INTO notifications",
+        "INSERT INTO email_outbox"
+      ],
+      "reason": "per membership by design (app/services/governance.py _refunds_job): each pro-rata refund is its own payment-gateway call and its own short transaction - money moved at the gateway is never rolled back with another member's failure; the next membership is picked by keyset, at most JOB_BATCH (100) per run within JOB_BUDGET_S, then the job re-queues itself for the rest"
+    },
+    "payroll_monthly_generation: gyms": {
+      "per_row": 9,
+      "shapes": [
+        "SELECT gyms.",
+        "SELECT users.",
+        "SELECT employees.",
+        "SELECT salary_statements.",
+        "INSERT INTO salary_statements",
+        "INSERT INTO jobs",
+        "INSERT INTO notifications",
+        "INSERT INTO email_outbox"
+      ],
+      "reason": "one short transaction per gym by design: a gym's month (its staff, covered ranges, the multi-row statement INSERT, the explanation jobs, the owner's notification) commits or rolls back on its own and is never held open with another gym's; gyms are picked in keyset chunks of GEN_GYM_BATCH and the work inside one gym is constant whatever its staff count (measured by 'payroll_monthly_generation: staff of one gym')"
+    },
+    "purge_deleted_accounts: gym owners": {
+      "per_row": 14,
+      "shapes": [
+        "SELECT set_config(",
+        "SELECT users.",
+        "SELECT identity_documents.",
+        "SELECT branch_photos.",
+        "SELECT branch_documents.",
+        "SELECT gyms.",
+        "SELECT job_enquiries.",
+        "SELECT employees.",
+        "SELECT employee_documents.",
+        "SELECT DISTINCT product_reviews.",
+        "UPDATE transactions SET party_label",
+        "DELETE FROM users"
+      ],
+      "reason": "one transaction per gym OWNER by design (app/services/accounts.py purge_due_accounts): their whole gyms cascade with them (branches, staff, members' records, files), so one owner's purge never shares a transaction - or a rollback - with another's, and its stored files are deleted only after it commits; inside it the work is set-based (one statement per kind of row / file, whatever the gyms' size). Ordinary accounts are purged a whole chunk per transaction (measured by 'purge_deleted_accounts'); owners are rare (an owner can delete the account only once the gyms have no live memberships, unpaid salaries or active staff)"
+    },
+    "shop_expire_unpaid": {
+      "per_row": 2,
+      "shapes": [
+        "SELECT shop_orders.",
+        "UPDATE shop_orders SET status"
+      ],
+      "reason": "per order by design: every unpaid order is a payment-gateway (Cashfree) order that is verified with the gateway BEFORE its own short transaction (lock the order, cancel it) - no transaction ever waits on an HTTP call; the candidates are read in keyset chunks of 50 and a run stops after EXPIRE_BUDGET_S (app/services/shop_payments.py expire_unpaid_orders)"
+    }
+  },
+  "jobs_not_batched": {
+    "verify_identity": "one ID card per job (OCR engines + AI on its images); the periodic identity_sweep that re-queues many is measured",
+    "verify_branch": "one branch per job (its documents are capped at 20 per branch and each needs its own OCR/AI pass)",
+    "verify_payment_proof": "one salary statement's payment proof per job (OCR + checks of that one proof)",
+    "staff_activation_check": "one employment per job (its requirements and certificates); the staff_activation_sweep that queues many is measured",
+    "payroll_explain": "one salary statement per job (one AI explanation); the bulk queueing by the payroll generation is measured",
+    "coach_plan": "one member's AI workout plan per job",
+    "health_ai_note": "one metric reading's AI note per job",
+    "health_ac_note": "one member's AI air-conditioning / recovery note per job"
+  },
+  "loops": {
+    "app/ai/assistant.py::chat::execute_action(db, ctx, a)": {
+      "reason": "at most MAX_ACTIONS (5) assistant actions per chat message, each a different command",
+      "fn_sha": "64362adc6af0"
+    },
+    "app/ai/memory.py::_remove::db.execute(delete(HealthCondition).where(HealthCondition.id == c.id, Hea": {
+      "reason": "at most FORGET_MAX (10) items per 'forget' request, each of a different kind (health row, fitness list, scalar) written under the member's locks",
+      "fn_sha": "ec197fc2c09e"
+    },
+    "app/ai/memory.py::_remove::fp.remove_item(db, user.id, h.field, h.value, forget=True)": {
+      "reason": "at most FORGET_MAX (10) items per 'forget' request, each of a different kind (health row, fitness list, scalar) written under the member's locks",
+      "fn_sha": "ec197fc2c09e"
+    },
+    "app/ai/memory.py::_remove::fp.set_scalar(db, user.id, 'notes', None, forget=True)": {
+      "reason": "at most FORGET_MAX (10) items per 'forget' request, each of a different kind (health row, fitness list, scalar) written under the member's locks",
+      "fn_sha": "ec197fc2c09e"
+    },
+    "app/ai/memory.py::_remove::fp.set_scalar(db, user.id, h.field, None, forget=True)": {
+      "reason": "at most FORGET_MAX (10) items per 'forget' request, each of a different kind (health row, fitness list, scalar) written under the member's locks",
+      "fn_sha": "ec197fc2c09e"
+    },
+    "app/ai/memory.py::_remove::hs.ensure_profile(db, user)": {
+      "reason": "at most FORGET_MAX (10) items per 'forget' request, each of a different kind (health row, fitness list, scalar) written under the member's locks",
+      "fn_sha": "ec197fc2c09e"
+    },
+    "app/ai/memory.py::_remove::hs.ensure_profile(db, user)#2": {
+      "reason": "at most FORGET_MAX (10) items per 'forget' request, each of a different kind (health row, fitness list, scalar) written under the member's locks",
+      "fn_sha": "ec197fc2c09e"
+    },
+    "app/ai/memory.py::_restore::fp.add_item(db, user.id, f, value)": {
+      "reason": "at most FORGET_MAX (10) items per 'undo forget', each of a different kind, restored under the member's locks in the documented lock order",
+      "fn_sha": "72e1ecabe9d9"
+    },
+    "app/ai/memory.py::_restore::fp.lock_row(db, user.id)": {
+      "reason": "at most FORGET_MAX (10) items per 'undo forget', each of a different kind, restored under the member's locks in the documented lock order",
+      "fn_sha": "72e1ecabe9d9"
+    },
+    "app/ai/memory.py::_restore::fp.lock_row(db, user.id)#2": {
+      "reason": "at most FORGET_MAX (10) items per 'undo forget', each of a different kind, restored under the member's locks in the documented lock order",
+      "fn_sha": "72e1ecabe9d9"
+    },
+    "app/ai/memory.py::_restore::fp.lock_row(db, user.id)#3": {
+      "reason": "at most FORGET_MAX (10) items per 'undo forget', each of a different kind, restored under the member's locks in the documented lock order",
+      "fn_sha": "72e1ecabe9d9"
+    },
+    "app/ai/memory.py::_restore::fp.set_scalar(db, user.id, f, prev)": {
+      "reason": "at most FORGET_MAX (10) items per 'undo forget', each of a different kind, restored under the member's locks in the documented lock order",
+      "fn_sha": "72e1ecabe9d9"
+    },
+    "app/ai/memory.py::_restore::hs.add_condition(db, user.id, kind=kind, name=name, notes=clean(item.get": {
+      "reason": "at most FORGET_MAX (10) items per 'undo forget', each of a different kind, restored under the member's locks in the documented lock order",
+      "fn_sha": "72e1ecabe9d9"
+    },
+    "app/ai/memory.py::_restore::hs.ensure_profile(db, user)": {
+      "reason": "at most FORGET_MAX (10) items per 'undo forget', each of a different kind, restored under the member's locks in the documented lock order",
+      "fn_sha": "72e1ecabe9d9"
+    },
+    "app/ai/memory.py::_restore::hs.ensure_profile(db, user)#2": {
+      "reason": "at most FORGET_MAX (10) items per 'undo forget', each of a different kind, restored under the member's locks in the documented lock order",
+      "fn_sha": "72e1ecabe9d9"
+    },
+    "app/db.py::create_indexes_concurrently::conn.exec_driver_sql(ddl)": {
+      "reason": "schema maintenance: one CREATE/DROP INDEX CONCURRENTLY per index of the model (DDL cannot be batched)",
+      "fn_sha": "9b71b2ac9d1d"
+    },
+    "app/db.py::create_indexes_concurrently::conn.exec_driver_sql(f'DROP INDEX CONCURRENTLY IF EXISTS \"{name}\"')": {
+      "reason": "schema maintenance: one CREATE/DROP INDEX CONCURRENTLY per index of the model (DDL cannot be batched)",
+      "fn_sha": "9b71b2ac9d1d"
+    },
+    "app/db.py::create_indexes_concurrently::conn.exec_driver_sql(f'DROP INDEX CONCURRENTLY IF EXISTS \"{old}\"')": {
+      "reason": "schema maintenance: one CREATE/DROP INDEX CONCURRENTLY per index of the model (DDL cannot be batched)",
+      "fn_sha": "9b71b2ac9d1d"
+    },
+    "app/db.py::create_indexes_concurrently::conn.exec_driver_sql(fix)": {
+      "reason": "schema maintenance: the one data fix a missing unique index of the models declares (BEFORE_UNIQUE_INDEX), run once right before that index is built concurrently - one statement per such index, never per row",
+      "fn_sha": "9b71b2ac9d1d"
+    },
+    "app/db.py::ensure_extensions::conn.execute(text(f'CREATE EXTENSION IF NOT EXISTS \"{ext}\"'))": {
+      "reason": "start-up schema maintenance: one statement per required PostgreSQL extension (a fixed list), under startup_lock",
+      "fn_sha": "37a502e34b3e"
+    },
+    "app/db.py::ensure_extensions::conn.scalar(text('SELECT 1 FROM pg_extension WHERE extname = :n'), {'n':": {
+      "reason": "start-up schema maintenance: one statement per required PostgreSQL extension (a fixed list), under startup_lock",
+      "fn_sha": "37a502e34b3e"
+    },
+    "app/db.py::startup_lock::conn.scalar(text('SELECT pg_try_advisory_lock(:k)'), {'k': key})": {
+      "reason": "start-up: waits for the schema advisory lock (one try per second while another worker migrates)",
+      "fn_sha": "0120b169b76a"
+    },
+    "app/db.py::sync_schema.run::conn.execute(stmt)": {
+      "reason": "the statements of ONE schema change in one savepoint - the DDL itself, preceded for a new unique index by the data fix its table declares (app.db.BEFORE_UNIQUE_INDEX): at most 2, never per data row",
+      "fn_sha": "1897b66b3f59"
+    },
+    "app/db.py::sync_schema::conn.execute(AddConstraint(cons))": {
+      "reason": "start-up schema maintenance: one DDL statement per changed constraint of the model, under startup_lock - never per data row",
+      "fn_sha": "1897b66b3f59"
+    },
+    "app/db.py::sync_schema::conn.execute(text(f'ALTER TABLE \"{table.name}\" DROP CONSTRAINT \"{name}\"'": {
+      "reason": "start-up schema maintenance: one DDL statement per changed constraint of the model, under startup_lock - never per data row",
+      "fn_sha": "1897b66b3f59"
+    },
+    "app/db.py::sync_schema::run(f'check {name}', AddConstraint(cons))": {
+      "reason": "start-up schema maintenance: one DDL statement per added column / index / constraint of the models (a fixed schema, never per data row), run once under startup_lock",
+      "fn_sha": "1897b66b3f59"
+    },
+    "app/db.py::sync_schema::run(f'column {table.name}.{col.name}', text(f'ALTER TABLE \"{table.name}\"": {
+      "reason": "start-up schema maintenance: one DDL statement per added column / index / constraint of the models (a fixed schema, never per data row), run once under startup_lock",
+      "fn_sha": "1897b66b3f59"
+    },
+    "app/db.py::sync_schema::run(f'index {idx.name}', *([text(fix)] if fix else []), CreateIndex(idx,": {
+      "reason": "start-up schema maintenance: one DDL statement per added column / index / constraint of the models (a fixed schema, never per data row), run once under startup_lock",
+      "fn_sha": "1897b66b3f59"
+    },
+    "app/db.py::sync_schema::run(f'unique {name}', AddConstraint(cons))": {
+      "reason": "start-up schema maintenance: one DDL statement per added column / index / constraint of the models (a fixed schema, never per data row), run once under startup_lock",
+      "fn_sha": "1897b66b3f59"
+    },
+    "app/routers/auth_extras.py::forgot_username_submit::notify(db, user, 'Your sign-in details', f\"You (or someone using your e-": {
+      "reason": "at most 5 accounts per contact (find_users_for_recovery LIMIT 5) get their sign-in details",
+      "fn_sha": "e6e73accec70"
+    },
+    "app/routers/owner_finance.py::_csv_rows::_csv_batch(_csv_stmt(f, size=size, cursor=cursor))": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (the CSV export, one keyset batch of transactions per query) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "c416c8d8e03f"
+    },
+    "app/routers/owner_gyms.py::gym_create::_unique_slug(db, values['name'])": {
+      "reason": "retry loop: at most 3 attempts to insert the gym with a fresh unique slug after a slug collision",
+      "fn_sha": "24f1d37bd71d"
+    },
+    "app/routers/owner_gyms.py::gym_create::db.flush()": {
+      "reason": "retry loop: at most 3 attempts to insert the gym with a fresh unique slug after a slug collision",
+      "fn_sha": "24f1d37bd71d"
+    },
+    "app/routers/owner_staff.py::staff_client_assign::notify(db, pu, f'Client reassigned: {customer.display_name}', f'{custome": {
+      "reason": "the previous trainers of ONE member's subscription (one active link per subscription): one 'client reassigned' notice each",
+      "fn_sha": "0802915c2aa4"
+    },
+    "app/security/admin_login.py::unban::lift_ip_bans(db, key, actor=None, note=note, source='cli')": {
+      "reason": "at most two keys of ONE address (the address and its IPv6 /64), run once from the server's terminal (manage.py unban)",
+      "fn_sha": "d6cfc589ab8b"
+    },
+    "app/security/bans.py::_incremental_ban_sync::db.execute(select(IpBan.id, IpBan.ip, IpBan.banned_until, IpBan.severity": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (ip_bans read by id keyset, SYNC_ROWS per query) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "3078e04d748f"
+    },
+    "app/security/bans.py::_reload_addresses::db.execute(select(IpBan.ip, IpBan.banned_until, IpBan.severity).where(Ip": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (addresses in IN lists of at most SYNC_ROWS) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "2b47be9988bf"
+    },
+    "app/services/accounts.py::identifier_conflict::db.execute(stmt)": {
+      "reason": "fixed list: at most two checks (e-mail, phone)",
+      "fn_sha": "77f7b78268e8"
+    },
+    "app/services/accounts.py::purge_due_accounts::_employee_file_keys(s, emp_ids)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (PURGE_BATCH due accounts / employee records per transaction; a gym owner is purged on their own because whole gyms cascade with them) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "10ec90fc4c1e"
+    },
+    "app/services/accounts.py::purge_due_accounts::_purge_users(ids, now)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (PURGE_BATCH due accounts / employee records per transaction; a gym owner is purged on their own because whole gyms cascade with them) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "10ec90fc4c1e"
+    },
+    "app/services/accounts.py::purge_due_accounts::long_statement(s)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (PURGE_BATCH due accounts / employee records per transaction; a gym owner is purged on their own because whole gyms cascade with them) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "10ec90fc4c1e"
+    },
+    "app/services/accounts.py::purge_due_accounts::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "10ec90fc4c1e"
+    },
+    "app/services/accounts.py::purge_due_accounts::run.next()#2": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "10ec90fc4c1e"
+    },
+    "app/services/accounts.py::purge_due_accounts::s.execute(delete(Employee).where(Employee.id.in_(emp_ids)))": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (PURGE_BATCH due accounts / employee records per transaction; a gym owner is purged on their own because whole gyms cascade with them) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "10ec90fc4c1e"
+    },
+    "app/services/accounts.py::purge_due_accounts::s.execute(select(Employee.id).where(Employee.purge_after.is_not(None), E": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (PURGE_BATCH due accounts / employee records per transaction; a gym owner is purged on their own because whole gyms cascade with them) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "10ec90fc4c1e"
+    },
+    "app/services/accounts.py::purge_due_accounts::s.execute(select(User.id, exists(select(Gym.id).where(Gym.owner_id == Us": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (PURGE_BATCH due accounts / employee records per transaction; a gym owner is purged on their own because whole gyms cascade with them) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "10ec90fc4c1e"
+    },
+    "app/services/accounts.py::purge_due_accounts::s.execute(update(Transaction).where(Transaction.employee_id.in_(emp_ids)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (PURGE_BATCH due accounts / employee records per transaction; a gym owner is purged on their own because whole gyms cascade with them) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "10ec90fc4c1e"
+    },
+    "app/services/chat.py::post_message::db.scalar(select(Notification.id).where(Notification.user_id == rid, Not": {
+      "reason": "at most two recipients per chat message (the other party, plus the assigned staff member for an owner's reply): one e-mail-throttle probe and one notification each",
+      "fn_sha": "6a350d27f156"
+    },
+    "app/services/chat.py::post_message::notify(db, rid, title, preview, category=NotificationCategory.MESSAGE, s": {
+      "reason": "at most two recipients per chat message (the other party, plus the assigned staff member for an owner's reply): one e-mail-throttle probe and one notification each",
+      "fn_sha": "6a350d27f156"
+    },
+    "app/services/checkout.py::_subscriptions_daily::fn(db)": {
+      "reason": "fixed list: the three daily steps (expire, remind, cancel stale), each chunked itself",
+      "fn_sha": "35519f524ba1"
+    },
+    "app/services/checkout.py::cancel_stale_pending::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "c66377c32b68"
+    },
+    "app/services/checkout.py::cancel_stale_pending::s.execute(update(Subscription).where(Subscription.id.in_(stale)).values(": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (SUBS_BATCH stale purchases and their transactions) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "c66377c32b68"
+    },
+    "app/services/checkout.py::cancel_stale_pending::s.execute(update(Transaction).where(Transaction.subscription_id.in_(ids)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (SUBS_BATCH stale purchases and their transactions) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "c66377c32b68"
+    },
+    "app/services/checkout.py::expire_due_subscriptions::_close_expired(s, rows)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (SUBS_BATCH subscriptions claimed with LIMIT ... SKIP LOCKED) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "ab545adce472"
+    },
+    "app/services/checkout.py::expire_due_subscriptions::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "ab545adce472"
+    },
+    "app/services/checkout.py::expire_due_subscriptions::s.execute(update(Subscription).where(Subscription.id.in_(doomed)).values": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (SUBS_BATCH subscriptions claimed with LIMIT ... SKIP LOCKED) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "ab545adce472"
+    },
+    "app/services/checkout.py::send_expiry_reminders::notify_bulk(s, [Note(sub.customer, REMINDER_TITLE, f'{sub.plan.name} at ": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (SUBS_BATCH subscriptions, one notify_bulk per chunk) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "9b763a4dbac5"
+    },
+    "app/services/checkout.py::send_expiry_reminders::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "9b763a4dbac5"
+    },
+    "app/services/checkout.py::send_expiry_reminders::s.execute(select(Subscription).options(joinedload(Subscription.plan), jo": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (SUBS_BATCH subscriptions, one notify_bulk per chunk) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "9b763a4dbac5"
+    },
+    "app/services/content.py::sync_exercises::db.refresh(row, attribute_names=['embedding'])": {
+      "reason": "start-up content sync of the fixed exercise library (app/data/exercises.py): only rows whose embedding changed in a deploy are reloaded - never on a request",
+      "fn_sha": "67ac1e2acee5"
+    },
+    "app/services/governance.py::_orders_job::db.commit()": {
+      "reason": "a background job settling ONE gym: one order cancellation + refund per transaction on purpose (money moved at the payment gateway is never rolled back with another one's failure), at most JOB_BATCH (100) per run within JOB_BUDGET_S, then the job re-queues itself for the rest",
+      "fn_sha": "2f450ed45091"
+    },
+    "app/services/governance.py::_orders_job::db.commit()#2": {
+      "reason": "a background job settling ONE gym: one order cancellation + refund per transaction on purpose (money moved at the payment gateway is never rolled back with another one's failure), at most JOB_BATCH (100) per run within JOB_BUDGET_S, then the job re-queues itself for the rest",
+      "fn_sha": "2f450ed45091"
+    },
+    "app/services/governance.py::_orders_job::db.rollback()": {
+      "reason": "a background job settling ONE gym: one order cancellation + refund per transaction on purpose (money moved at the payment gateway is never rolled back with another one's failure), at most JOB_BATCH (100) per run within JOB_BUDGET_S, then the job re-queues itself for the rest",
+      "fn_sha": "2f450ed45091"
+    },
+    "app/services/governance.py::_orders_job::db.scalar(select(ShopOrder.id).where(ShopOrder.gym_id == gym_id, ShopOrd": {
+      "reason": "a background job settling ONE gym: one order cancellation + refund per transaction on purpose (money moved at the payment gateway is never rolled back with another one's failure), at most JOB_BATCH (100) per run within JOB_BUDGET_S, then the job re-queues itself for the rest",
+      "fn_sha": "2f450ed45091"
+    },
+    "app/services/governance.py::_orders_job::sp.platform_close_order(db, order_id, actor, reason='The store closed on": {
+      "reason": "a background job settling ONE gym: one order cancellation + refund per transaction on purpose (money moved at the payment gateway is never rolled back with another one's failure), at most JOB_BATCH (100) per run within JOB_BUDGET_S, then the job re-queues itself for the rest",
+      "fn_sha": "2f450ed45091"
+    },
+    "app/services/governance.py::_refunds_job::db.commit()": {
+      "reason": "a background job settling ONE gym: one membership refund per transaction on purpose (money moved at the payment gateway is never rolled back with another one's failure), at most JOB_BATCH (100) per run within JOB_BUDGET_S, then the job re-queues itself for the rest",
+      "fn_sha": "37faa6cfed0d"
+    },
+    "app/services/governance.py::_refunds_job::db.commit()#2": {
+      "reason": "a background job settling ONE gym: one membership refund per transaction on purpose (money moved at the payment gateway is never rolled back with another one's failure), at most JOB_BATCH (100) per run within JOB_BUDGET_S, then the job re-queues itself for the rest",
+      "fn_sha": "37faa6cfed0d"
+    },
+    "app/services/governance.py::_refunds_job::db.scalar(select(Subscription.id).where(Subscription.gym_id == gym_id, S": {
+      "reason": "a background job settling ONE gym: one membership refund per transaction on purpose (money moved at the payment gateway is never rolled back with another one's failure), at most JOB_BATCH (100) per run within JOB_BUDGET_S, then the job re-queues itself for the rest",
+      "fn_sha": "37faa6cfed0d"
+    },
+    "app/services/governance.py::_refunds_job::refund_membership(db, sub_id, as_of=as_of, actor_id=actor_id)": {
+      "reason": "a background job settling ONE gym: one membership refund per transaction on purpose (money moved at the payment gateway is never rolled back with another one's failure), at most JOB_BATCH (100) per run within JOB_BUDGET_S, then the job re-queues itself for the rest",
+      "fn_sha": "37faa6cfed0d"
+    },
+    "app/services/governance.py::ban_employee::TS.end_employment(db, emp, reason=reason.code, note=note, actor=admin, g": {
+      "reason": "the current employments of ONE banned person (at most EMPLOYMENTS_MAX = 50; a person rarely has more than a few): each employment gets its own final settlement (priced for that person, in a savepoint), client reassignment and ending - a super-admin action, rate-limited",
+      "fn_sha": "3b2aa5ce8eb6"
+    },
+    "app/services/governance.py::ban_employee::_reassign_clients(db, emp, target)": {
+      "reason": "the current employments of ONE banned person (at most EMPLOYMENTS_MAX = 50; a person rarely has more than a few): each employment gets its own final settlement (priced for that person, in a savepoint), client reassignment and ending - a super-admin action, rate-limited",
+      "fn_sha": "3b2aa5ce8eb6"
+    },
+    "app/services/governance.py::ban_employee::pr.create_final_settlement(db, emp, today, 'misconduct' if reason.severe": {
+      "reason": "the current employments of ONE banned person (at most EMPLOYMENTS_MAX = 50; a person rarely has more than a few): each employment gets its own final settlement (priced for that person, in a savepoint), client reassignment and ending - a super-admin action, rate-limited",
+      "fn_sha": "3b2aa5ce8eb6"
+    },
+    "app/services/governance.py::ban_owner::queue_member_refunds(db, admin, g, as_of=today, request=request, audit_i": {
+      "reason": "one deduplicated refund job per gym of ONE banned owner (at most OWNER_GYMS_MAX = 100 - an owner has a handful); enqueue() is one upsert each",
+      "fn_sha": "f2b2620bd852"
+    },
+    "app/services/governance.py::create_settlements::pr.create_final_settlement(db, emp, last_day, SETTLEMENT_REASON, note=f'": {
+      "reason": "at most SETTLEMENTS_PER_CLICK (50) final settlements per click, each priced for its own person (statements, gratuity) in a savepoint so one refusal never stops the others",
+      "fn_sha": "96e7d590d2f3"
+    },
+    "app/services/health.py::ac_note_job::_word_ac(db, user)": {
+      "reason": "retry loop: at most 2 AI attempts for ONE member's note",
+      "fn_sha": "498baf016fff"
+    },
+    "app/services/health.py::bedtime_reminders::_claim_bedtime(s, due)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (BEDTIME_BATCH customers, one claim and one notify_bulk per chunk) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "252c70073618"
+    },
+    "app/services/health.py::bedtime_reminders::notify_bulk(s, [Note(user, 'Time to wind down', f'Time to wind down - sh": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (BEDTIME_BATCH customers, one claim and one notify_bulk per chunk) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "252c70073618"
+    },
+    "app/services/health.py::bedtime_reminders::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "252c70073618"
+    },
+    "app/services/health.py::bedtime_reminders::s.execute(select(User, CustomerProfile.wake_time, CustomerProfile.last_b": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (BEDTIME_BATCH customers, one claim and one notify_bulk per chunk) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "252c70073618"
+    },
+    "app/services/health.py::suspend_customer::audit(db, None, 'health.suspend', 'user', customer.id, gym_id=gym_id, de": {
+      "reason": "audit() only adds the row to the session (no statement of its own): the rows of the member's gyms (at most 3 online + 1 in-person by the membership caps) go out in ONE batched INSERT at the next flush - as long as nothing in the function flushes per recipient (the per-recipient notify loops here must become notify_bulk)",
+      "fn_sha": "34d9690822e1"
+    },
+    "app/services/identity_lookup.py::generate_username::username_taken(db, candidate)": {
+      "reason": "retry loop: at most 12 candidate usernames for ONE account until one is free",
+      "fn_sha": "f577788d4501"
+    },
+    "app/services/jobs.py::_heartbeat::db.scalar(update(Job).where(Job.id == lj.id, Job.status == JobStatus.RUN": {
+      "reason": "at most settings.jobs_concurrency (default 2) jobs running in THIS process; each UPDATE is fenced by its own locked_at token, so a lost row is detected per job",
+      "fn_sha": "35c3b5af21bb"
+    },
+    "app/services/jobs.py::_write::db.execute(text(f\"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT}'\"))": {
+      "reason": "retry loop of ONE fenced status write: at most 3 attempts on a database error (a lock timeout ...); while the database is unavailable (pool timeout, refused or lost connection: app.db db_unavailable) further attempts with back-off (0.5 s doubling to WRITE_RETRY_MAX_PAUSE = 15 s) for at most WRITE_RETRY_SECONDS (120 s), then given up (the stale-job reclaim runs the job again)",
+      "fn_sha": "a7f175bad118"
+    },
+    "app/services/jobs.py::_write::db.scalar(update(Job).where(Job.id == lj.id, Job.status == JobStatus.RUN": {
+      "reason": "retry loop of ONE fenced status write: at most 3 attempts on a database error (a lock timeout ...); while the database is unavailable (pool timeout, refused or lost connection: app.db db_unavailable) further attempts with back-off (0.5 s doubling to WRITE_RETRY_MAX_PAUSE = 15 s) for at most WRITE_RETRY_SECONDS (120 s), then given up (the stale-job reclaim runs the job again)",
+      "fn_sha": "a7f175bad118"
+    },
+    "app/services/jobs.py::apply_exit_policy::db.execute(stmt.values(status=status, attempts=case((Job.status == JobSt": {
+      "reason": "fixed list: two exit policies (pause, cancel), one set-based UPDATE each",
+      "fn_sha": "412e1924ad19"
+    },
+    "app/services/jobs.py::dispatch_due_jobs::start_due_jobs()": {
+      "reason": "worker dispatch loop: refills free execution slots for a 2-second window, one claim statement per batch of due jobs (each job is then its own unit of work)",
+      "fn_sha": "53b225eb4f63"
+    },
+    "app/services/jobs.py::run_due_jobs::_spawn(c)": {
+      "reason": "the job runner: ONE claim statement per batch (at most `limit` jobs), then each claimed job runs as its own task and unit of work (its own session and fenced status writes) - work items, not rows of one query",
+      "fn_sha": "a43fb64c8eac"
+    },
+    "app/services/jobs.py::start_due_jobs::_spawn(c)": {
+      "reason": "the job runner: ONE claim statement for the free execution slots (settings.jobs_concurrency), then each claimed job runs as its own task and unit of work - work items, not rows of one query",
+      "fn_sha": "d41d53741f43"
+    },
+    "app/services/member_notices.py::send_member_notice::notify_many(s, ids, title, body, category=NotificationCategory.SYSTEM, s": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (MEMBERS_BATCH members, one notify_many per chunk) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "3617c3a6225f"
+    },
+    "app/services/member_notices.py::send_member_notice::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "3617c3a6225f"
+    },
+    "app/services/member_notices.py::send_member_notice::s.execute(select(Subscription.customer_id).join(Plan, Plan.id == Subscri": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (MEMBERS_BATCH members, one notify_many per chunk) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "3617c3a6225f"
+    },
+    "app/services/member_notices.py::send_member_notice::s.execute(select(func.pg_advisory_xact_lock(lock_key)))": {
+      "reason": "chunk loop: ONE advisory-lock statement per chunk (MEMBERS_BATCH members) in the chunk's own short transaction - it serialises the 'already notified?' check and the insert of the same notice across runs at once (a retry, two workers); never a statement per member",
+      "fn_sha": "3617c3a6225f"
+    },
+    "app/services/notify.py::notify_bulk::_notify_chunk(db, pending[start:start + NOTIFY_CHUNK], allow_deleted=all": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (NOTIFY_CHUNK (500) recipients per multi-row INSERT) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "17cd833642fb"
+    },
+    "app/services/payroll.py::_covered_ranges::db.execute(stmt)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (employee ids in IN lists of ID_LIST_CHUNK (1000)) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "28907aab53a5"
+    },
+    "app/services/payroll.py::_settlement_ends::db.execute(select(SalaryStatement.employee_id, func.max(SalaryStatement.": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (employee ids in IN lists of ID_LIST_CHUNK (1000)) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "e130953c5064"
+    },
+    "app/services/payroll.py::explain_statement::db.commit()": {
+      "reason": "bounded rounds: at most EXPLAIN_ROUNDS (2) explanations of ONE statement while its numbers change during the AI call",
+      "fn_sha": "55459544b419"
+    },
+    "app/services/payroll.py::explain_statement::db.commit()#2": {
+      "reason": "bounded rounds: at most EXPLAIN_ROUNDS (2) explanations of ONE statement while its numbers change during the AI call",
+      "fn_sha": "55459544b419"
+    },
+    "app/services/payroll.py::explain_statement::db.execute(select(SalaryStatement).where(SalaryStatement.id == statement": {
+      "reason": "bounded rounds: at most EXPLAIN_ROUNDS (2) explanations of ONE statement while its numbers change during the AI call",
+      "fn_sha": "55459544b419"
+    },
+    "app/services/payroll.py::explain_statement::db.get(SalaryStatement, statement_id, populate_existing=True)": {
+      "reason": "bounded rounds: at most EXPLAIN_ROUNDS (2) explanations of ONE statement while its numbers change during the AI call",
+      "fn_sha": "55459544b419"
+    },
+    "app/services/payroll.py::generate_statements::db.execute(stmt)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (multi-row INSERTs of STATEMENT_INSERT_ROWS (500) statements) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "dbbbbbb7f9f2"
+    },
+    "app/services/payroll.py::queue_explanations_for::db.execute(pg_insert(Job).values([{'kind': EXPLAIN_JOB, 'payload': {'sta": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (multi-row INSERTs of EXPLAIN_INSERT_ROWS (500) jobs) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "59d8ec978be3"
+    },
+    "app/services/payroll.py::run_monthly_generation::_generate_gym_month(gym_id, year, month, due_on)": {
+      "reason": "one short transaction per gym by design (a gym's month commits or rolls back on its own); gyms are picked in keyset chunks of GEN_GYM_BATCH and the work inside a gym is set-based (tests/test_no_n_plus_one_jobs.py measures both)",
+      "fn_sha": "9bed2967f706"
+    },
+    "app/services/payroll.py::run_monthly_generation::db.execute(select(Gym.id).where(payroll_gym_clause(), Gym.id > last_id, ": {
+      "reason": "one short transaction per gym by design (a gym's month commits or rolls back on its own); gyms are picked in keyset chunks of GEN_GYM_BATCH and the work inside a gym is set-based (tests/test_no_n_plus_one_jobs.py measures both)",
+      "fn_sha": "9bed2967f706"
+    },
+    "app/services/payroll.py::run_monthly_generation::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "9bed2967f706"
+    },
+    "app/services/payroll.py::run_owner_generation::audit(s, owner, 'payroll.generate', 'gym', gym_id, gym_id=gym_id, detail": {
+      "reason": "one short transaction per gym of ONE owner by design (at most gyms_per_owner = 20): the gym's statements, audit row and the job's progress commit together, so a retried run resumes after the last gym done; the work inside a gym is set-based",
+      "fn_sha": "09db4e5afd82"
+    },
+    "app/services/payroll.py::run_owner_generation::generate_statements(s, gym, year, month, queue_explanations=False)": {
+      "reason": "one short transaction per gym of ONE owner by design (at most gyms_per_owner = 20): the gym's statements, audit row and the job's progress commit together, so a retried run resumes after the last gym done; the work inside a gym is set-based",
+      "fn_sha": "09db4e5afd82"
+    },
+    "app/services/payroll.py::run_owner_generation::queue_explanations_for(s, explain)": {
+      "reason": "one short transaction per gym of ONE owner by design (at most gyms_per_owner = 20): the gym's statements, audit row and the job's progress commit together, so a retried run resumes after the last gym done; the work inside a gym is set-based",
+      "fn_sha": "09db4e5afd82"
+    },
+    "app/services/payroll.py::run_owner_generation::s.execute(update(Job).where(Job.id == job_id).values(progress=round(len(": {
+      "reason": "one short transaction per gym of ONE owner by design (at most gyms_per_owner = 20): the gym's statements, audit row and the job's progress commit together, so a retried run resumes after the last gym done; the work inside a gym is set-based",
+      "fn_sha": "09db4e5afd82"
+    },
+    "app/services/payroll.py::run_owner_generation::s.get(Gym, gym_id)": {
+      "reason": "one short transaction per gym of ONE owner by design (at most gyms_per_owner = 20): the gym's statements, audit row and the job's progress commit together, so a retried run resumes after the last gym done; the work inside a gym is set-based",
+      "fn_sha": "09db4e5afd82"
+    },
+    "app/services/payroll.py::send_salary_reminders::notify_bulk(s, notes)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (SALARY_REMINDER_BATCH statements: claim, load, one notify_bulk, one stamp) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "26d367d720d5"
+    },
+    "app/services/payroll.py::send_salary_reminders::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "26d367d720d5"
+    },
+    "app/services/payroll.py::send_salary_reminders::s.execute(select(SalaryStatement, Gym.owner_id).join(Gym, Gym.id == Sala": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (SALARY_REMINDER_BATCH statements: claim, load, one notify_bulk, one stamp) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "26d367d720d5"
+    },
+    "app/services/payroll.py::send_salary_reminders::s.execute(select(SalaryStatement.id).where(*due).order_by(SalaryStatemen": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (SALARY_REMINDER_BATCH statements: claim, load, one notify_bulk, one stamp) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "26d367d720d5"
+    },
+    "app/services/payroll.py::send_salary_reminders::s.execute(update(SalaryStatement).where(SalaryStatement.id.in_(ids)).val": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (SALARY_REMINDER_BATCH statements: claim, load, one notify_bulk, one stamp) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "26d367d720d5"
+    },
+    "app/services/payroll.py::verify_payment_proof::_proof_in_review(db, statement_id, lock=False)": {
+      "reason": "bounded rounds: at most PROOF_ROUNDS (3) reads of ONE statement's proof while it is replaced during the OCR/AI check",
+      "fn_sha": "62553c322af3"
+    },
+    "app/services/payroll.py::verify_payment_proof::_proof_in_review(db, statement_id, lock=True)": {
+      "reason": "bounded rounds: at most PROOF_ROUNDS (3) reads of ONE statement's proof while it is replaced during the OCR/AI check",
+      "fn_sha": "62553c322af3"
+    },
+    "app/services/payroll.py::verify_payment_proof::_settle_proof(db, st, tx, gym, read, today=today)": {
+      "reason": "bounded rounds: at most PROOF_ROUNDS (3) reads of ONE statement's proof while it is replaced during the OCR/AI check",
+      "fn_sha": "62553c322af3"
+    },
+    "app/services/payroll.py::verify_payment_proof::db.commit()": {
+      "reason": "bounded rounds: at most PROOF_ROUNDS (3) reads of ONE statement's proof while it is replaced during the OCR/AI check",
+      "fn_sha": "62553c322af3"
+    },
+    "app/services/payroll.py::verify_payment_proof::db.commit()#2": {
+      "reason": "bounded rounds: at most PROOF_ROUNDS (3) reads of ONE statement's proof while it is replaced during the OCR/AI check",
+      "fn_sha": "62553c322af3"
+    },
+    "app/services/presence.py::Presence._sweep::self.retry_deferred()": {
+      "reason": "the deferred-step sweeper: ONE round (retry_deferred) per back-off interval - RETRY_FIRST_SECONDS (5 s) doubling to RETRY_MAX_SECONDS (60 s) while the database stays unavailable - and only while presence steps are pending; a retry loop with sleeps, not a query per row",
+      "fn_sha": "0a0ef7d35ec8"
+    },
+    "app/services/presence.py::Presence.refresh_leases::self._arrive(uid, resume=False, lease=False)": {
+      "reason": "self-healing of the rare user another process declared away while their socket is still connected here: one _arrive per such user (serialised under that user's lock with on_left); the lease refresh of every connected user is ONE Redis pipeline",
+      "fn_sha": "329e656833f8"
+    },
+    "app/services/presence.py::Presence.retry_deferred::self._run_deferred(user_id, entry)": {
+      "reason": "one round of the presence steps an unavailable database deferred: at most RETRY_ROUND_MAX (100) users, each its own unit of work under that user's lock (resume their paused jobs / apply their exit policies / judge their ended sessions, on the state of now - not rows of one query); the round stops at the first step the database still cannot run, so an outage gets one probe per round",
+      "fn_sha": "1b10a59dd817"
+    },
+    "app/services/remembered_accounts.py::remember::db.execute(delete(ra).where(ra.id.in_(surplus)).execution_options(synchr": {
+      "reason": "fixed list: two caps (per device, per account), one bounded DELETE each",
+      "fn_sha": "779208acab72"
+    },
+    "app/services/retention.py::_purge::db.execute(delete(model).where(model.id.in_(doomed)).returning(col))": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (retention_batch rows per DELETE ... LIMIT ... SKIP LOCKED) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "ac838b558351"
+    },
+    "app/services/retention.py::_purge::long_statement(db)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (retention_batch rows per DELETE ... LIMIT ... SKIP LOCKED) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "ac838b558351"
+    },
+    "app/services/retention.py::run_retention::_purge(rule, now - timedelta(days=days), batch=batch, deadline=deadline,": {
+      "reason": "fixed list: one batched purge per retention rule (app/services/retention.py rules())",
+      "fn_sha": "e6b56d00c451"
+    },
+    "app/services/retention.py::trim_notifications::db.execute(delete(Notification).where(Notification.id.in_(doomed)))": {
+      "reason": "chunk loop: each iteration is ONE set-based DELETE for the whole chunk of TRIM_USERS people (a LATERAL per person keeps each one's newest notifications_kept and removes at most TRIM_ROWS beyond them) in its own short transaction, never a statement per person or row",
+      "fn_sha": "253646c58eb9"
+    },
+    "app/services/retention.py::trim_notifications::db.execute(select(Notification.user_id).where(Notification.user_id > aft": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (TRIM_USERS people per transaction found by one GROUP BY, trimmed by one set-based DELETE) in its own short transaction (app/services/batching.py), never a statement per person or row",
+      "fn_sha": "253646c58eb9"
+    },
+    "app/services/retention.py::trim_notifications::long_statement(db)": {
+      "reason": "chunk loop: one SET LOCAL statement_timeout per chunk transaction (TRIM_USERS people per chunk), never per person or row",
+      "fn_sha": "253646c58eb9"
+    },
+    "app/services/security_triage.py::_periodic_triage::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "b2d632896f3b"
+    },
+    "app/services/security_triage.py::_periodic_triage::run_triage(s, ai_timeout=PERIODIC_AI_TIMEOUT, limit=BATCH_LIMIT, lock=Fa": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (at most PERIODIC_MAX_BATCHES batches of BATCH_LIMIT events, one AI call per batch) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "b2d632896f3b"
+    },
+    "app/services/security_triage.py::expire_stale_events::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "f46489ea03b2"
+    },
+    "app/services/security_triage.py::expire_stale_events::s.execute(update(SecurityEvent).where(SecurityEvent.id.in_(doomed)).valu": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (EXPIRE_BATCH events per UPDATE) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "f46489ea03b2"
+    },
+    "app/services/shop.py::backfill_product_ratings::reconcile_ratings_chunk(s, after_id=last_id, limit=batch)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (RATINGS_BATCH products per reconcile statement) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "7b181a171deb"
+    },
+    "app/services/shop.py::backfill_product_ratings::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "7b181a171deb"
+    },
+    "app/services/shop.py::new_order_number::db.scalar(select(exists().where(ShopOrder.order_number == candidate)))": {
+      "reason": "retry loop: at most 20 random order numbers until one is free (a collision is rare)",
+      "fn_sha": "bed1ddb17487"
+    },
+    "app/services/shop.py::run_low_stock_digests::low_stock_digest_chunk(db, after_owner_id=cursor, now=now)": {
+      "reason": "chunk loop: each iteration is ONE bounded chunk of LOW_STOCK_CHUNK owners - one aggregate SELECT, one SELECT of the owners and one notify_bulk - in its own short transaction, never a statement per owner or product",
+      "fn_sha": "714dcd59efa2"
+    },
+    "app/services/shop.py::send_low_stock_digests::low_stock_digest_chunk(db, after_owner_id=cursor, now=now)": {
+      "reason": "chunk loop: each iteration is ONE bounded chunk of LOW_STOCK_CHUNK owners - one aggregate SELECT, one SELECT of the owners and one notify_bulk - never a statement per owner or product",
+      "fn_sha": "e72baeb09d02"
+    },
+    "app/services/shop_payments.py::expire_unpaid_orders::_expire_one(order)": {
+      "reason": "per order by design: each unpaid (Cashfree) order is verified with the payment gateway BEFORE its own short transaction - no transaction waits on HTTP; candidates come in keyset chunks of 50 and the run has a time budget",
+      "fn_sha": "b6d20c8fe5ca"
+    },
+    "app/services/shop_payments.py::expire_unpaid_orders::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "b6d20c8fe5ca"
+    },
+    "app/services/shop_payments.py::expire_unpaid_orders::s.execute(select(ShopOrder).where(ShopOrder.status.in_(UNPAID_STATUSES),": {
+      "reason": "per order by design: each unpaid (Cashfree) order is verified with the payment gateway BEFORE its own short transaction - no transaction waits on HTTP; candidates come in keyset chunks of 50 and the run has a time budget",
+      "fn_sha": "b6d20c8fe5ca"
+    },
+    "app/services/staffing.py::verify_certifications::db.commit()": {
+      "reason": "bounded rounds: at most CERT_ROUNDS (3) OCR/AI passes of ONE employment while its documents change",
+      "fn_sha": "8a96aeeafb03"
+    },
+    "app/services/staffing.py::verify_certifications::load_employee_for_activation(db, employee_id, lock=True)": {
+      "reason": "bounded rounds: at most CERT_ROUNDS (3) OCR/AI passes of ONE employment while its documents change",
+      "fn_sha": "8a96aeeafb03"
+    },
+    "app/services/tasks.py::send_task_reminders::notify_bulk(s, notes)": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (REMINDER_BATCH reminders: claim, one notify_bulk, one stamp) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "90b63561f7e0"
+    },
+    "app/services/tasks.py::send_task_reminders::run.next()": {
+      "reason": "the chunk loop's own condition: Chunks.next() (app/services/batching.py) sends ONE statement per run - keep_lock_alive on the first chunk only - never one per chunk or per row",
+      "fn_sha": "90b63561f7e0"
+    },
+    "app/services/tasks.py::send_task_reminders::s.execute(select(Task, User).join(User, User.id == Task.user_id).where(T": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (REMINDER_BATCH reminders: claim, one notify_bulk, one stamp) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "90b63561f7e0"
+    },
+    "app/services/tasks.py::send_task_reminders::s.execute(update(Task).where(Task.id.in_([t.id for t, _ in rows])).value": {
+      "reason": "chunk loop: each iteration is ONE bounded, set-based statement for a whole chunk (REMINDER_BATCH reminders: claim, one notify_bulk, one stamp) in its own short transaction (app/services/batching.py), never a statement per row",
+      "fn_sha": "90b63561f7e0"
+    },
+    "app/services/trust_safety.py::_suspend_other_employments::audit(db, None, 'staff.suspend', 'employee', emp.id, gym_id=emp.gym_id, ": {
+      "reason": "audit() only adds the row to the session (no statement of its own): one row per suspended employment (at most SUSPEND_OTHER_LIMIT = 50) in ONE batched INSERT at the next flush - as long as nothing in the loop flushes (the per-owner notify in this loop must become notify_bulk)",
+      "fn_sha": "e377ca3c910c"
+    },
+    "app/services/trust_safety.py::ban_recent_ips::_other_accounts_on(db, ip, user.id, since, s.shared_ip_threshold + 1)": {
+      "reason": "at most MAX_BANNED_IPS (5) recent addresses of ONE banned account, each its own ban decision",
+      "fn_sha": "d935ac9c77c4"
+    },
+    "app/services/trust_safety.py::ban_recent_ips::audit(db, actor, 'trust.ip_ban', 'ip_ban', ip_ban.id, request=request, d": {
+      "reason": "at most MAX_BANNED_IPS (5) recent addresses of ONE banned account, each its own ban decision",
+      "fn_sha": "d935ac9c77c4"
+    },
+    "app/services/trust_safety.py::ban_recent_ips::db.flush()": {
+      "reason": "at most MAX_BANNED_IPS (5) recent addresses of ONE banned account, each its own ban decision",
+      "fn_sha": "d935ac9c77c4"
+    },
+    "app/services/trust_safety.py::ban_recent_ips::db.scalar(select(func.count(IpBan.id)).where(IpBan.ip == ip, IpBan.creat": {
+      "reason": "at most MAX_BANNED_IPS (5) recent addresses of ONE banned account, each its own ban decision",
+      "fn_sha": "d935ac9c77c4"
+    },
+    "app/services/trust_safety.py::lift_account_ban::audit(db, actor, 'security.ban_lift', 'ip_ban', ip_bans[0].id, request=r": {
+      "reason": "the addresses banned with ONE account (at most MAX_BANNED_IPS = 5), each re-checked and audited when the ban is lifted",
+      "fn_sha": "11877b619f72"
+    },
+    "app/services/trust_safety.py::lift_account_ban::db.execute(select(IpBan.banned_until, IpBan.severity).where(IpBan.ip == ": {
+      "reason": "the addresses banned with ONE account (at most MAX_BANNED_IPS = 5), each re-checked and audited when the ban is lifted",
+      "fn_sha": "11877b619f72"
+    },
+    "app/services/trust_safety.py::lock_person::db.execute(select(func.pg_advisory_xact_lock(key)))": {
+      "reason": "ordered lock acquisition: one pg_advisory_xact_lock per key of ONE person (account + ID-number hashes, at most 31) in sorted order, so two trust decisions can never deadlock",
+      "fn_sha": "5879bc673723"
+    }
+  }
+}

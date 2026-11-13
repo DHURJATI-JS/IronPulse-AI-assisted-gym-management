@@ -1,0 +1,42 @@
+{% extends "auth/_center.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "auth/_macros.html" as am with context %}
+{% block title %}Activate your account{% endblock %}
+{% block card %}
+{% if state != "ok" %}
+  {% call am.token_problem(state, what="invitation link") %}Ask your gym to send you a new invitation.{% endcall %}
+{% else %}
+{% set e = errors or {} %}
+<div class="card p-7 sm:p-10">
+  <div class="flex items-center gap-4">
+    {{ ui.avatar(invitee.photo_key, invitee.full_name, "size-14", "text-lg") }}
+    <div class="min-w-0">
+      <p class="eyebrow">You're invited</p>
+      <p class="truncate text-lg font-semibold">{{ invitee.full_name }}</p>
+      <p class="truncate text-sm muted">{{ invitee.email }}</p>
+    </div>
+  </div>
+  <h1 class="mt-8 text-[28px] font-semibold leading-tight tracking-tight">Activate your account</h1>
+  <p class="mt-2 text-[15px] leading-relaxed muted">
+    {% if registrar %}{{ registrar }} registered you at {{ app.name }}.{% else %}Your gym registered you at {{ app.name }}.{% endif %}
+    Choose a password to finish - your details, plans and coaching are already waiting.
+  </p>
+  {% if user and user.id != invitee.id %}
+    <div class="mt-6">{{ ui.alert("You're currently signed in as " ~ user.email ~ ". Activating this invitation signs you in as " ~ invitee.full_name ~ " instead.", "warning") }}</div>
+  {% endif %}
+  {% if e %}<div class="mt-6">{{ ui.form_errors(e) }}</div>{% endif %}
+  <form method="post" action="/auth/invite" class="mt-8 space-y-5">
+    {{ ui.csrf() }}
+    <input type="hidden" name="token" value="{{ token }}">
+    <input type="hidden" name="timezone" value="" data-tz-hidden data-component="tz-hidden">
+    <input type="hidden" value="{{ invitee.email }}" data-personal-email>
+    <input type="hidden" value="{{ invitee.full_name }}" data-personal-name>
+    {{ am.password_input("password", "Password", autocomplete="new-password", error=e.password, strength=True,
+                         help="At least 10 characters, mixing three of: lowercase, uppercase, digits, symbols.") }}
+    {{ am.password_input("password_confirm", "Confirm password", autocomplete="new-password", error=e.password_confirm, match="password") }}
+    {{ am.terms_checkbox(form.accept_terms, e.accept_terms) }}
+    <button type="submit" class="btn btn-primary btn-lg w-full" data-busy-label="Activating…">Activate my account {{ icon("arrow-right", "size-4") }}</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

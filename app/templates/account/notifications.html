@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+{% call ui.page_header("Notifications", "Everything we've sent you - each one was also e-mailed to " ~ user.email ~ ".", eyebrow="Account") %}
+  <form method="post" action="/account/notifications/read-all" data-notif-read-all data-no-busy {% if not unread_count %}hidden{% endif %}>
+    {{ ui.csrf() }}
+    <button type="submit" class="btn btn-secondary">{{ icon("check-circle", "size-4") }} Mark all as read</button>
+  </form>
+{% endcall %}
+{% include "account/_nav.html" %}
+
+<div data-component="notif-list">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div class="tabs" role="tablist" aria-label="Filter notifications">
+      <a href="/account/notifications" class="tab {{ 'tab-active' if filter == 'all' }}" role="tab" aria-selected="{{ 'true' if filter == 'all' else 'false' }}">All <span class="ml-1 tabular-nums muted">{{ total_all }}</span></a>
+      <a href="/account/notifications?filter=unread" class="tab {{ 'tab-active' if filter == 'unread' }}" role="tab" aria-selected="{{ 'true' if filter == 'unread' else 'false' }}">Unread <span class="ml-1 tabular-nums muted" data-unread-total>{{ unread_count }}</span></a>
+    </div>
+    {% if paged %}<a href="{{ newest_url }}" class="text-sm font-semibold text-accent hover:underline">{{ icon("arrow-left", "inline size-3.5 -mt-0.5") }} Back to the newest</a>{% endif %}
+  </div>
+
+  {% if items %}
+  <ul class="space-y-3">
+    {% for n in items %}
+    {% set tone = {"success": "green", "warning": "amber", "danger": "red"}.get(n.severity.value, "blue") %}
+    <li class="notif-item card-flat flex gap-4 animate-fade-up" data-notif data-unread="{{ '0' if n.read_at else '1' }}">
+      <span class="grid size-11 shrink-0 place-items-center rounded-2xl badge-{{ tone }}">{{ icon(category_icons.get(n.category.value, "bell"), "size-5") }}</span>
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <p class="font-semibold">{{ n.title }}</p>
+          {% if not n.read_at %}<span class="badge badge-blue" data-new-badge>New</span>{% endif %}
+          <span class="text-xs muted">{{ n.category | humanize }}</span>
+        </div>
+        <p class="mt-1 whitespace-pre-line break-words text-sm leading-relaxed muted">{{ n.body }}</p>
+        <div class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+          <time datetime="{{ n.created_at.isoformat() }}" class="muted" title="{{ n.created_at | dt }}">{{ n.created_at | dt }} · {{ n.created_at | timeago }}</time>
+          {% if n.link and n.link.startswith("/") and not n.link.startswith("//") %}
+            <a href="{{ n.link }}" class="inline-flex items-center gap-1 font-semibold text-accent hover:underline">Open {{ icon("arrow-right", "size-3.5") }}</a>
+          {% endif %}
+          {% if not n.read_at %}
+          <form method="post" action="/account/notifications/{{ n.id }}/read" data-notif-read data-no-busy data-id="{{ n.id }}">
+            {{ ui.csrf() }}
+            {% if cursor.before %}<input type="hidden" name="before" value="{{ cursor.before }}">{% elif cursor.after %}<input type="hidden" name="after" value="{{ cursor.after }}">{% endif %}<input type="hidden" name="filter" value="{{ filter }}">
+            <button type="submit" class="font-semibold text-zinc-600 hover:text-ink dark:text-zinc-300 dark:hover:text-white">Mark as read</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% if newer_url or older_url %}
+  <nav class="mt-8 flex items-center justify-between gap-3" aria-label="Pagination" data-pager>
+    {% if newer_url %}<a href="{{ newer_url }}" class="btn btn-secondary btn-sm" rel="prev">{{ icon("arrow-left", "size-4") }} Newer</a>{% else %}<span></span>{% endif %}
+    <span class="text-sm tabular-nums muted">{{ items | length }} shown · newest first</span>
+    {% if older_url %}<a href="{{ older_url }}" class="btn btn-secondary btn-sm" rel="next">Older {{ icon("arrow-right", "size-4") }}</a>{% else %}<span></span>{% endif %}
+  </nav>
+  {% endif %}
+  {% else %}
+    {% if paged %}
+      {{ ui.empty("Nothing more here", "There are no more notifications in this direction.", ico="bell", action_label="Back to the newest", action_href=newest_url) }}
+    {% elif filter == "unread" %}
+      {{ ui.empty("You're all caught up", "No unread notifications. New ones appear in the Dynamic Island at the top of the screen and arrive by e-mail too.", ico="check-circle", action_label="Show all notifications", action_href="/account/notifications") }}
+    {% else %}
+      {{ ui.empty("No notifications yet", "Payment receipts, safety alerts, chat messages and account changes will show up here - and in your inbox.", ico="bell") }}
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

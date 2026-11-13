@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}Forgot username{% endblock %}
+{% block content %}
+<div class="mx-auto max-w-md py-6 animate-fade-up">
+  <div class="card !p-8">
+    <span class="grid size-12 place-items-center rounded-2xl bg-accent/12 text-accent">{{ icon("user", "size-6") }}</span>
+    <h1 class="mt-5 text-2xl font-semibold tracking-tight">Forgot your username?</h1>
+    <p class="mt-2 text-sm muted">Enter the e-mail address or phone number on your account. We'll e-mail you your username and member ID - you can sign in with either (or your e-mail or phone).</p>
+    {% if sent %}
+      <div class="alert alert-success mt-6">{{ icon("check-circle", "size-5 shrink-0") }}<p>If an account matches that e-mail address or phone number, we've e-mailed its username and member ID. Check your inbox (and spam folder).</p></div>
+      <a href="/auth/login" class="btn btn-primary mt-6 w-full">{{ icon("login", "size-4") }} Back to sign in</a>
+    {% else %}
+      <form method="post" action="/auth/forgot-username" class="mt-6 grid gap-5">
+        {{ ui.csrf() }}
+        {{ ui.field("contact", "E-mail or phone number", value=contact, required=True, error=error, autocomplete="username", attrs='maxlength="254" autofocus') }}
+        <button class="btn btn-primary w-full">{{ icon("send", "size-4") }} E-mail my sign-in details</button>
+      </form>
+      <div class="mt-6 flex flex-wrap justify-between gap-2 text-sm">
+        <a href="/auth/login" class="font-medium text-accent hover:underline">Back to sign in</a>
+        <a href="/auth/forgot" class="font-medium text-accent hover:underline">Forgot password?</a>
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

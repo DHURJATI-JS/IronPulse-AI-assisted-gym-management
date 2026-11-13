@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "checkout/_plan.html" as pl with context %}
+{% block title %}My memberships{% endblock %}
+{% block content %}
+{% call ui.page_header("My memberships", subtitle="Your plans, dates, trainers and payments in one place. Every plan includes the pre-recorded video library.", eyebrow="Membership") %}
+  <a href="/gyms" class="btn btn-primary btn-sm">{{ icon("search", "size-4") }}Find a gym</a>
+{% endcall %}
+
+{% if slots %}<div class="mb-6">{% include "customer/_gym_slots.html" %}</div>{% endif %}
+
+{% if not active and not pending and not history %}
+  {{ ui.empty("No memberships yet", "Pick a gym near you to start training - online, in the gym, or both. Every plan includes the pre-recorded video library.", "sparkles", "Browse gyms", "/gyms") }}
+{% else %}
+
+  {% if active %}
+  <section class="animate-fade-up" aria-labelledby="active-title">
+    <h2 id="active-title" class="section-title mb-4">Active</h2>
+    <div class="grid gap-5 lg:grid-cols-2">
+      {% for s in active %}
+        {% set m = meta[s.id] %}
+        <article id="sub-{{ s.id }}" class="card card-hover flex flex-col">
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0">
+              <p class="eyebrow truncate">{{ s.gym.name }}</p>
+              <h3 class="mt-1 text-xl font-semibold leading-snug">{{ s.plan.name }}</h3>
+              <div class="mt-2 flex flex-wrap items-center gap-1.5">{{ pl.sub_status(s.status) }}{% if m.upcoming %}<span class="badge badge-blue">Starts {{ s.starts_on | date }}</span>{% endif %}</div>
+            </div>
+            <div class="shrink-0 text-right">
+              <p class="text-lg font-semibold tabular-nums">{{ s.price | money(s.currency) }}</p>
+              <p class="text-xs muted">{{ s.plan.duration_days }} days</p>
+            </div>
+          </div>
+
+          <div class="mt-6">
+            <div class="flex items-center justify-between text-xs muted">
+              <span>{{ s.starts_on | date }}</span>
+              <span class="font-semibold {{ 'text-[#b45309] dark:text-[#fbbf24]' if m.days_left <= 3 else 'text-ink dark:text-white' }}">{{ m.days_left }} day{{ 's' if m.days_left != 1 }} left</span>
+              <span>{{ s.ends_on | date }}</span>
+            </div>
+            <progress class="ip-progress mt-2" value="{{ m.elapsed }}" max="{{ m.total }}" aria-label="Membership progress">{{ m.elapsed }} of {{ m.total }} days</progress>
+          </div>
+
+          <div class="mt-6 grid gap-4 sm:grid-cols-2">
+            {{ pl.features(s.plan, "muted") }}
+            <dl class="space-y-3 text-sm">
+              {% if s.branch %}
+              <div>
+                <dt class="text-xs font-semibold uppercase tracking-wider muted">Branch</dt>
+                <dd class="mt-0.5 font-medium">{{ s.branch.name }}<span class="block text-xs font-normal muted">{{ s.branch.city }}</span></dd>
+              </div>
+              {% endif %}
+              {% if s.plan.includes_trainer %}
+              <div>
+                <dt class="text-xs font-semibold uppercase tracking-wider muted">Trainer</dt>
+                <dd class="mt-1">
+                  {% if s.trainer %}
+                    <span class="flex items-center gap-2">{{ ui.avatar(s.trainer.photo_key, s.trainer.display_name, "size-8", "text-xs") }}<span class="font-medium">{{ s.trainer.display_name }}</span></span>
+                  {% else %}
+                    <span class="text-sm muted">Being assigned by the gym</span>
+                  {% endif %}
+                </dd>
+              </div>
+              {% endif %}
+            </dl>
+          </div>
+
+          <div class="mt-auto flex flex-wrap items-center gap-2 pt-6">
+            <a href="/subscribe/{{ s.gym.slug }}?plan={{ s.plan.code }}" class="btn btn-secondary btn-sm">{{ icon("refresh", "size-4") }}Renew</a>
+            <a href="/chat" class="btn btn-ghost btn-sm">{{ icon("chat", "size-4") }}Message the gym</a>
+            <span class="ml-auto">{{ ui.confirm_button("/me/subscriptions/" ~ s.id ~ "/cancel", "Cancel", "Cancel " ~ s.plan.name ~ "? Your access ends now and cancellations are not refunded.", "ghost", "sm", "x") }}</span>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+    <p class="mt-3 text-xs muted">Cancelling ends access immediately. Memberships are not refunded after activation.</p>
+  </section>
+  {% endif %}
+
+  {% if pending %}
+  <section class="mt-12 animate-fade-up" aria-labelledby="pending-title">
+    <h2 id="pending-title" class="section-title mb-4">In progress</h2>
+    <div class="grid gap-4 md:grid-cols-2">
+      {% for s in pending %}
+        <article id="sub-{{ s.id }}" class="card-flat flex flex-col gap-4 sm:flex-row sm:items-center">
+          <span class="grid size-11 shrink-0 place-items-center rounded-2xl bg-warn/15 text-[#b45309] dark:text-[#fbbf24]">{{ icon("key" if s.status.value == 'pending_otp' else "credit-card", "size-5") }}</span>
+          <div class="min-w-0 flex-1">
+            <p class="truncate font-semibold">{{ s.plan.name }} <span class="font-normal muted">· {{ s.gym.name }}</span></p>
+            <p class="text-sm muted">{% if s.status.value == 'pending_otp' %}Waiting for the desk check{% if s.branch %} at {{ s.branch.name }}{% endif %}{% else %}Ready to pay {{ s.price | money(s.currency) }}{% endif %}</p>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            <a href="/checkout/{{ s.id }}" class="btn btn-primary btn-sm">Continue</a>
+            {{ ui.confirm_button("/me/subscriptions/" ~ s.id ~ "/cancel", "Discard", "Discard this unfinished purchase?", "ghost", "sm") }}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if history %}
+  <section class="mt-12 animate-fade-up" aria-labelledby="history-title">
+    <h2 id="history-title" class="section-title mb-4">History</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th scope="col">Plan</th><th scope="col">Gym</th><th scope="col" class="hidden sm:table-cell">Dates</th><th scope="col">Status</th><th scope="col" class="text-right">Price</th></tr></thead>
+        <tbody>
+          {% for s in history %}
+          <tr id="sub-{{ s.id }}">
+            <td class="font-medium">{{ s.plan.name }}</td>
+            <td class="muted">{{ s.gym.name }}</td>
+            <td class="hidden whitespace-nowrap muted sm:table-cell">{% if s.starts_on %}{{ s.starts_on | date }} - {{ s.ends_on | date }}{% else %}{{ s.created_at | dt("%d %b %Y") }}{% endif %}</td>
+            <td>{{ pl.sub_status(s.status) }}</td>
+            <td class="text-right tabular-nums">{{ s.price | money(s.currency) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+{% endif %}
+{% endblock %}

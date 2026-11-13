@@ -1,0 +1,43 @@
+# Keep the image small and free of secrets/local state (build context = the project folder)
+
+# secrets - never copy them into an image
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# virtual environments & caches
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# runtime data (uploads, encrypted ID scans, mail spool, logs, demo credentials)
+var/
+*.log
+
+# local tools / build caches
+.tools/
+.build/
+docker/data/
+node_modules/
+
+# VCS, editors, OS files
+.git/
+.gitignore
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# not needed inside the app image
+tests/

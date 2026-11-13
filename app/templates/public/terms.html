@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "public/_macros.html" as pub with context %}
+{% block title %}Terms &amp; disclaimer{% endblock %}
+{% block description %}IronPulse terms and conditions and full disclaimer: a student-grade project; the owner, the developer and the AI are not responsible for injuries, health outcomes, advice, purchases, payments or data loss.{% endblock %}
+{% block content %}
+<div class="relative isolate">
+  <div class="pub-page-glow" aria-hidden="true"></div>
+
+  <header class="mx-auto mb-10 max-w-3xl text-center animate-fade-up">
+    <p class="eyebrow mb-2">Legal</p>
+    <h1 class="pub-h2 sm:!text-5xl">Terms &amp; Conditions</h1>
+    <p class="mt-3 text-sm muted">Last updated {{ updated }} · Please read the disclaimer first.</p>
+  </header>
+
+  {# ================================================================= prominent disclaimer #}
+  <section id="disclaimer" class="pub-callout mx-auto max-w-4xl scroll-mt-24" aria-labelledby="disclaimer-title" role="note">
+    <div class="flex items-start gap-4">
+      <span class="grid size-12 shrink-0 place-items-center rounded-2xl bg-warn/20 text-[#b45309] dark:text-[#fbbf24]">{{ icon("alert", "size-6") }}</span>
+      <div class="min-w-0">
+        <h2 id="disclaimer-title" class="text-xl font-semibold tracking-tight">Disclaimer - please read</h2>
+        <p class="mt-2 leading-relaxed"><strong>IronPulse is just a student-grade project.</strong> It is provided “as is”, without warranties of any kind. <strong>The gym owner, the developer and the AI are NOT responsible for anything</strong> that happens when you use it, including but not limited to:</p>
+        <ul class="mt-3 grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
+          {% for item in ["injuries, accidents or illness", "health outcomes of any workout, diet or plan",
+                          "advice, answers or suggestions produced by the AI", "instructions from the live voice coach",
+                          "protective-gear suggestions", "products bought in gym shops, incl. supplements",
+                          "identity, document or branch verification decisions", "payroll, tax, gratuity or salary calculations",
+                          "payments, refunds or failed transactions", "data loss, corruption or leaks",
+                          "outages, bugs or unavailable AI providers", "decisions made by gyms, trainers or staff"] %}
+          <li class="flex items-start gap-2">{{ icon("x-circle", "mt-0.5 size-4 shrink-0") }}<span>Not responsible for {{ item }}</span></li>
+          {% endfor %}
+        </ul>
+        <p class="mt-4 text-sm leading-relaxed"><strong>AI can make mistakes.</strong> Nothing on IronPulse is medical, legal or financial advice. Always consult a qualified professional (doctor, physiotherapist, dietitian, lawyer, accountant) before acting. <strong>In an emergency, contact your local emergency services immediately</strong> (for example 112 in India and the EU, 911 in the US and Canada, 999 in the UK and UAE, 000 in Australia) - do not rely on this app.</p>
+      </div>
+    </div>
+  </section>
+
+  <div class="mx-auto mt-12 grid max-w-6xl gap-10 lg:grid-cols-[230px_minmax(0,1fr)]">
+    <aside>{{ pub.toc([
+        ("disclaimer", "Disclaimer"), ("about", "About the service"), ("accounts", "Accounts & sign-in"), ("minors", "Minors & guardians"),
+        ("health", "Health & safety"), ("ai", "AI features"), ("voice", "Live voice coach"), ("gear", "Protective gear"),
+        ("verification", "Verification & IDs"), ("memberships", "Memberships & the 30 km rule"), ("shop", "Gym shop"),
+        ("payments", "Payments, refunds & test mode"), ("staff", "Staff, payroll & tax"), ("chat", "Chat & notifications"),
+        ("conduct", "Acceptable use"), ("content", "Your content"), ("cookies", "Cookies & sessions"),
+        ("deletion", "Account deletion"), ("liability", "Limitation of liability"), ("changes", "Changes & contact")]) }}</aside>
+
+    <article class="prose-ip pub-legal min-w-0 !max-w-3xl">
+      <section id="about">
+        <h2>1. About the service</h2>
+        <p>IronPulse is a gym-management web application built as a <strong>student-grade project</strong>. It lets gym owners list and verify branches, sell memberships and products, manage staff and payroll, and lets members find gyms, follow AI-assisted workout plans, train with a live voice coach and chat with trainers. By creating an account or using the site you agree to these Terms. If you don't agree, please don't use IronPulse.</p>
+        <p>Gyms listed on IronPulse are independent businesses. Each gym owner is solely responsible for their premises, equipment, staff, prices, classes, shop products and the services they provide. IronPulse does not operate any gym or shop.</p>
+      </section>
+
+      <section id="accounts">
+        <h2>2. Accounts &amp; sign-in</h2>
+        <ul>
+          <li>You must give accurate information and keep your password secret. You're responsible for activity on your account.</li>
+          <li>One person, one account: an e-mail address, a phone number and a username can each belong to only one account.</li>
+          <li>You can sign in with your e-mail, your <strong>@username</strong>, your phone number or your <strong>member ID</strong> (for example IP-000123), plus your password. Forgot something? Use “Forgot password” or “Forgot username” on the sign-in page - we e-mail the details only to the address on the account.</li>
+          <li>Every account except the platform administrator must upload a government ID card. Gym owners and staff must also provide a clear photo of themselves. Staff are approved only after they create and link their own account.</li>
+          <li>We may suspend or close accounts that break these Terms, that appear fraudulent, or that put others at risk.</li>
+        </ul>
+      </section>
+
+      <section id="minors">
+        <h2>3. Minors &amp; guardians</h2>
+        <p>Users under 18 <strong>need the consent of a parent or legal guardian</strong>, whose contact details are required at sign-up. The guardian receives a copy of every notification and e-mail sent to the minor. Guardians are responsible for supervising the minor's training, purchases and use of IronPulse. Products marked 18+ (for example some supplements) cannot be bought by minors.</p>
+      </section>
+
+      <section id="health">
+        <h2>4. Health &amp; safety</h2>
+        <p>Exercise carries a risk of injury. <strong>Consult a doctor before starting any training programme</strong>, especially if you have a health condition, an injury, are pregnant or take medication. Stop immediately and seek medical help if you feel pain, dizziness, chest discomfort or shortness of breath.</p>
+        <p>IronPulse can flag unusual entries - for example a sudden change in the weight or height you log, or symptoms you report in a wellness check or to the voice coach - and may pause your gym activities until a gym admin reviews them. IronPulse does not measure your heart rate or blood pressure. These checks are simple rules and AI estimates: they can miss problems and they can raise false alarms. They are <strong>not a diagnosis</strong> and do not replace a healthcare professional. <strong>In an emergency, call your local emergency services.</strong></p>
+      </section>
+
+      <section id="ai">
+        <h2>5. AI features</h2>
+        <ul>
+          <li><strong>AI is available only to signed-in users.</strong> Guests can browse, but AI answers, plans and advice require an account.</li>
+          <li><strong>AI can make mistakes.</strong> Answers, workout plans, plan and product advice, summaries and suggestions are <strong>for information only</strong> and may be wrong, incomplete or unsuitable for you. Always double-check important information.</li>
+          <li>Models are tried in order - Gemma via a gateway, Gemma in a local Docker container, then Claude - and when all are unavailable the app tells you. Non-AI features (pre-recorded videos, chat, bookings, rule-based safety checks) keep working.</li>
+          <li>Safety- and money-related AI output is re-checked by deterministic rules, but you remain responsible for your decisions. To answer quickly, identical questions may get a recently cached answer.</li>
+          <li>Text and images you send to AI features may be processed by those providers to produce an answer. Don't include information you don't want processed.</li>
+        </ul>
+      </section>
+
+      <section id="voice">
+        <h2>6. Live voice coach</h2>
+        <ul>
+          <li>The live coach talks with you during a workout. <strong>Speech recognition is done by your browser's speech service</strong> (for example Google in Chrome or Apple in Safari) under that provider's terms. IronPulse never records or stores your audio. You can turn the microphone off at any time and type instead.</li>
+          <li>The coach's voice is generated by a self-hosted text-to-speech engine (Kokoro) or, if that is unavailable, by your device's built-in voice.</li>
+          <li>You can ask the coach to pause, quit, change the exercise or the intensity. If you report chest pain, trouble breathing, fainting or similar symptoms, the session stops immediately, emergency guidance is shown, your gym activities may be paused and your gym (and guardian, for minors) may be notified. <strong>The coach is not a medical service - call emergency services if you feel unwell.</strong></li>
+          <li>The animated face and its emotions are a visual aid; they don't reflect any assessment of you.</li>
+        </ul>
+      </section>
+
+      <section id="gear">
+        <h2>7. Protective gear suggestions</h2>
+        <p>Based on the conditions you record, IronPulse may suggest protective gear - for example a back support strap or lifting belt for back problems, gloves for hand, grip or skin problems, or wrist wraps and knee sleeves. These are <strong>general suggestions, not medical prescriptions</strong>. Some gear isn't suitable for every condition (for example lifting belts with a hernia or during pregnancy). Ask your doctor or physiotherapist, and follow the manufacturer's instructions.</p>
+      </section>
+
+      <section id="verification">
+        <h2>8. Verification &amp; ID cards</h2>
+        <p>Branches, staff documents and ID cards are checked automatically by several OCR engines and AI, with manual review when needed. A “verified” badge means the documents passed these checks at that time - it is not a guarantee of safety, quality, licensing or legal compliance. ID card images are <strong>encrypted at rest</strong> and shown only through authorised pages; ID numbers are stored masked. Branches are listed only after verification and with at least {{ min_photos }} photos.</p>
+      </section>
+
+      <section id="memberships">
+        <h2>9. Memberships &amp; the {{ offline_km }} km rule</h2>
+        <ul>
+          <li>Gyms can offer up to 12 plan types (offline, online or combo, each optionally with a trainer and/or the AI coach). Pre-recorded videos are included in every plan. Gym owners can disable plans or change prices at any time; existing memberships keep the price you paid.</li>
+          <li>Offline and combo plans are only sold when a published branch is within <strong>{{ offline_km }} km</strong> of you (by GPS, or your city as a fallback). If you're farther away, please visit the gym owner directly for offline registration.</li>
+          <li>Offline purchases are completed <strong>at the branch desk</strong>: a one-time code ({{ otp_minutes }} minutes, limited attempts) is sent to the gym owner and entered by you. When you share GPS we also check you are within {{ presence_km }} km of the branch.</li>
+          <li>Membership refunds, freezes and cancellations are set by each gym. Contact the gym owner about them.</li>
+        </ul>
+      </section>
+
+      <section id="shop">
+        <h2>10. Gym shop</h2>
+        <ul>
+          <li>Products (supplements such as whey or creatine, apparel, bags, watches, accessories and equipment) are sold by the <strong>individual gym</strong>, which is responsible for the product, its description, price, tax, stock, pickup or delivery.</li>
+          <li><strong>Supplements are not medicines.</strong> Read the label and allergen information, and consult a doctor before using them - especially if you are pregnant, under 18, or have kidney, liver, heart or blood-pressure conditions. Allergen and ingredient information comes from the gym and may be incomplete.</li>
+          <li>Personalised warnings (for example matching your recorded allergies or conditions) are automated and may miss risks. Products marked 18+ cannot be bought by minors.</li>
+          <li>You can cancel an order before the gym starts processing it. After pickup or delivery you can request a refund or return within 7 days; the gym approves or declines it. Approved refunds go back to the original payment method (or are simulated in test mode). Shipping and processing times are estimates.</li>
+          <li>Reviews can be posted only by verified purchasers and may be moderated by the gym.</li>
+        </ul>
+      </section>
+
+      <section id="payments">
+        <h2>11. Payments, refunds &amp; test mode</h2>
+        <p>Online payments and refunds are processed by a third-party payment gateway (Cashfree). When gateway keys are not configured, <strong>payments run in TEST MODE</strong>: transactions are simulated, clearly labelled and no real money moves. {% if app.payments_test_mode %}<strong>This installation is currently in TEST MODE.</strong>{% endif %} The owner, the developer and the AI are not responsible for failed, duplicated, delayed or disputed payments or refunds; resolve them with the gym and the payment provider. Every incoming and outgoing transaction is logged for the gym's records.</p>
+      </section>
+
+      <section id="staff">
+        <h2>12. Staff, payroll &amp; tax</h2>
+        <p>Salaries are calculated by the days worked. Payroll, gratuity, tax-withholding and settlement figures are <strong>estimates</strong> based on simplified rules for each country and may be wrong or out of date. They are not tax or legal advice. Employers must verify every amount with a qualified accountant and remain solely responsible for paying staff correctly and on time (with proof of payment), and for complying with employment and international-payment law. Employees can be removed only after their salary to date has been settled.</p>
+        <p><strong>Staff conduct, removal and bans.</strong> A gym ends an employment by choosing a reason from a fixed list, and the reason decides what happens next:</p>
+        <ul>
+          <li><strong>Reasons that let you rejoin</strong> - a position change, a contract that ended, resignation, the role no longer being needed (restructuring) or relocation. You may be added again later, by the same gym or any other. A position (role or job title) is never changed in place: the old employment ends as a position change and you are invited to the new one, with the checks that role needs.</li>
+          <li><strong>Conduct violations</strong> - a behavioural issue, a policy violation, repeated no-shows or unprofessional conduct with members. The gym must describe what happened in a short note; the gym owner's gyms can never add you again, and a record is kept for the IronPulse platform team. Such removals by two different gym businesses within 12 months disable your IronPulse account automatically.</li>
+          <li><strong>Severe violations</strong> - harassment, violence or threats, theft or fraud, sexual misconduct, or endangering members' safety. Your IronPulse account is disabled at once, the public network addresses you used in the last 30 days are blocked for 30 days (an address shared by many people, such as a gym's Wi-Fi, is never blocked automatically) and the platform team is alerted.</li>
+        </ul>
+        <p>A disabled account can't sign in, every device is signed out and its e-mail address, phone number and ID can't be used for a new account. Removal reasons and notes are seen only by the gym that wrote them and the platform team - never by other gyms, which are told only that they can't add the person. If you believe a removal or a ban is wrong, reply to the e-mail you received: the platform team reviews it and can lift the ban.</p>
+      </section>
+
+      <section id="chat">
+        <h2>13. Live chat &amp; notifications</h2>
+        <ul>
+          <li>Members can chat live with a gym's staff and admin team. <strong>Gym admins can see every conversation of their gym</strong> to keep people safe. Misconduct reports are reviewed by the gym admin, who must reply with a reason or an apology.</li>
+          <li>Every notification - including changes to your account - is also sent by e-mail (and to the guardian of a minor). Don't share passwords, card numbers or ID numbers in chat.</li>
+        </ul>
+      </section>
+
+      <section id="conduct">
+        <h2>14. Acceptable use</h2>
+        <ul>
+          <li>No harassment, hate, threats, spam or illegal content in chats, reports, reviews or profiles.</li>
+          <li>No attempts to break, probe, scrape or overload the service. Attack patterns and repeated abuse are blocked automatically and lead to temporary (2-24 hour) or, for repeat offenders without a membership, permanent IP bans.</li>
+          <li>No fake documents, fake identities, fake reviews, fake locations or fraudulent payments.</li>
+        </ul>
+      </section>
+
+      <section id="content">
+        <h2>15. Your content</h2>
+        <p>You keep ownership of what you upload (photos, documents, messages, reviews). You give IronPulse the permission needed to store, process and display it to run the service - for example showing a gym's branch photos publicly, or a trainer's photo and profile on their gym page. Don't upload content you don't have the right to share. Owner and trainer profiles are public; member profiles are visible only to the member, their gym's staff and the platform administrator.</p>
+      </section>
+
+      <section id="cookies">
+        <h2>16. Cookies &amp; sessions</h2>
+        <p>IronPulse uses only <strong>essential cookies</strong>: a session cookie (to keep you signed in), a security cookie that protects forms against cross-site attacks, and a short-lived cookie for on-screen messages. Your light/dark theme choice is stored in your browser. Sessions are stored server-side (in Redis and PostgreSQL) and expire after a week; changing your password signs you out everywhere. There are no advertising or tracking cookies.</p>
+      </section>
+
+      <section id="deletion">
+        <h2>17. Account deletion</h2>
+        <p>You can delete your account at any time. Deleted accounts are <strong>kept for {{ retention_days }} days and then permanently erased</strong>. During those {{ retention_days }} days your username stays reserved and your name appears as “Deleted user” in shared history such as chats. Financial records (payments, refunds, payroll) are kept in anonymised form where the law requires it.</p>
+        <p><strong>One person, one account - forever.</strong> IronPulse allows one account per person. When an account is deleted (by you or by an administrator) or disabled for a conduct violation, its e-mail address, phone number and ID number(s) can <strong>never be used to create a new account</strong> - not even after the {{ retention_days }} days. To enforce this, IronPulse keeps only a keyed hash of each (a one-way fingerprint computed with a secret key held by the platform), never the e-mail, number or ID itself: the hash can tell that the same identifier is used again, but can't be turned back into it, and without the secret key nobody can test guesses against it. These fingerprints are kept indefinitely so the rule keeps working; they contain no other personal data. The deletion page asks you to confirm that you understand this.</p>
+      </section>
+
+      <section id="liability">
+        <h2>18. Limitation of liability</h2>
+        <p>To the fullest extent permitted by law, <strong>the gym owners, the developer and the AI are not responsible or liable</strong> for any direct, indirect, incidental or consequential damages arising from your use of IronPulse - including injuries, health outcomes, reliance on AI advice or voice-coach instructions, protective-gear or product use, verification decisions, payroll/tax/gratuity calculations, purchases, payments, refunds, data loss and outages. Your use of the service is entirely at your own risk.</p>
+      </section>
+
+      <section id="changes">
+        <h2>19. Changes &amp; contact</h2>
+        <p>We may update these Terms; the date at the top shows the latest version. Continuing to use IronPulse after a change means you accept it. Questions? Contact the platform administrator at <a href="mailto:{{ contact }}">{{ contact }}</a>, or read our <a href="/privacy">privacy notice</a>.</p>
+      </section>
+    </article>
+  </div>
+</div>
+{% endblock %}

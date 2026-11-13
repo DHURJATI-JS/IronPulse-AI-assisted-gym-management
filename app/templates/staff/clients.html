@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_macros.html" as sm with context %}
+{% block title %}My clients{% endblock %}
+{% block content %}
+{{ ui.page_header("My clients", "Members whose plan includes you as their trainer. Check health notes before every session.", eyebrow="Coaching", back="/staff") }}
+
+{% if not items %}
+  {% if is_trainer %}
+    {{ ui.empty("No clients assigned yet", "Your gym admin assigns members with a trainer-included plan to you. You'll get a notification when it happens.", "users", "Back to the portal", "/staff") }}
+  {% else %}
+    {{ ui.empty("Clients are for trainers", "Your role doesn't include personal clients. Your schedule and chat are in the staff portal.", "users", "Back to the portal", "/staff") }}
+  {% endif %}
+{% else %}
+  <ul class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    {% for item in items %}
+    {% set c = item.customer %}{% set p = item.profile %}
+    <li class="animate-fade-up">
+      <a href="/staff/clients/{{ c.id }}" class="card card-hover group flex h-full flex-col gap-4 !p-5">
+        <div class="flex items-start gap-3">
+          {{ ui.avatar(c.photo_key, c.display_name, "size-12", "text-base") }}
+          <div class="min-w-0 flex-1">
+            <p class="truncate font-semibold group-hover:text-accent">{{ c.display_name }}</p>
+            <p class="truncate text-xs muted">{{ item.plan_name or "Trainer plan" }}{% if multi_gym %} · {{ item.emp.gym.name }}{% endif %}</p>
+          </div>
+          {{ sm.mode_chip(item.link.mode.value) }}
+        </div>
+        <div class="mt-auto flex flex-wrap items-center gap-1.5 text-xs">
+          {% if p %}
+            <span class="chip">{{ icon("bolt", "size-3.5") }}{{ p.goal | humanize }}</span>
+            <span class="chip">{{ icon("trending-up", "size-3.5") }}{{ p.fitness_level | humanize }}</span>
+          {% endif %}
+          {% if c.id in private %}<span class="badge badge-zinc" title="The member chose not to share health details - ask before training">{{ icon("lock", "size-3.5") }}Health details private</span>
+          {% elif flags.get(c.id) %}<span class="badge badge-amber">{{ icon("alert", "size-3.5") }}{{ flags.get(c.id) }} health note{{ 's' if flags.get(c.id) != 1 }}</span>{% endif %}
+          {% if p and p.activity_suspended %}<span class="badge badge-red">{{ icon("x-circle", "size-3.5") }}Activity paused</span>{% endif %}
+        </div>
+        {% if item.ends_on %}<p class="text-[11px] muted">Plan active until {{ item.ends_on | date }}</p>{% endif %}
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {{ ui.pager(page, params={}, path="/staff/clients", noun="clients") }}
+{% endif %}
+{% endblock %}

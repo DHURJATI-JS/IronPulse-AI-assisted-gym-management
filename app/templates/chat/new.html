@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% block title %}New message{% endblock %}
+{% block content %}
+{% call ui.page_header("New message", "Ask your trainer about your plan or message the front desk about memberships, lockers, billing - anything. Replies arrive live.", eyebrow="Live chat", back="/chat") %}{% endcall %}
+
+{% if not targets %}
+  <div class="card mx-auto flex max-w-2xl flex-col items-center px-6 py-14 text-center animate-fade-up">
+    <span class="grid size-14 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("chat", "size-7") }}</span>
+    <h2 class="mt-4 text-lg font-semibold">Chat opens with an active membership</h2>
+    <p class="mt-1 max-w-md text-sm muted">Once you're a member of a gym you can message its trainers and admin team here. Already a member? Your plan may have expired.</p>
+    <div class="mt-6 flex flex-wrap justify-center gap-2">
+      <a href="/gyms" class="btn btn-primary">{{ icon("map-pin", "size-4") }} Find a gym</a>
+      <a href="/me/subscriptions" class="btn btn-secondary">{{ icon("receipt", "size-4") }} My memberships</a>
+    </div>
+  </div>
+{% else %}
+<form method="post" action="/chat/new" class="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] animate-fade-up" novalidate>
+  {{ ui.csrf() }}
+  <div class="min-w-0 space-y-6">
+    {{ ui.form_errors(errors.values() | list if errors else None) }}
+    <fieldset class="card">
+      <legend class="sr-only">Who would you like to message?</legend>
+      <div class="mb-5 flex items-center gap-3">
+        <span class="grid size-10 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("users", "size-5") }}</span>
+        <div>
+          <h2 class="section-title">Who would you like to message?</h2>
+          <p class="text-sm muted">Trainers and staff of the gyms where you have an active membership.</p>
+        </div>
+      </div>
+      <div class="space-y-6">
+        {% for t in targets %}
+        <div>
+          {% if targets | length > 1 %}<p class="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider muted">{{ icon("building", "size-3.5") }} {{ t.gym.name }}</p>{% endif %}
+          <div class="grid gap-2 sm:grid-cols-2">
+            {% set value = t.gym.id ~ ':team' %}
+            <label class="flex cursor-pointer items-center gap-3 rounded-2xl p-3 ring-1 ring-black/[0.07] transition hover:bg-zinc-900/[0.03] has-[:checked]:bg-accent/[0.06] has-[:checked]:ring-2 has-[:checked]:ring-accent dark:ring-white/10 dark:hover:bg-white/[0.04]">
+              <input type="radio" name="target" value="{{ value }}" class="sr-only" {{ 'checked' if selected == value }} required>
+              <span class="grid size-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-accent to-indigo text-white">{{ icon("users", "size-5") }}</span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate font-semibold">{{ t.gym.name }} team</span>
+                <span class="block truncate text-xs muted">Front desk, memberships, billing</span>
+                {% if t.existing.get(None) %}<a href="/chat/{{ t.existing.get(None) }}" class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">Open conversation {{ icon("arrow-right", "size-3") }}</a>{% endif %}
+              </span>
+            </label>
+            {% for e in t.employees %}
+            {% set value = t.gym.id ~ ':' ~ e.id %}
+            <label class="flex cursor-pointer items-center gap-3 rounded-2xl p-3 ring-1 ring-black/[0.07] transition hover:bg-zinc-900/[0.03] has-[:checked]:bg-accent/[0.06] has-[:checked]:ring-2 has-[:checked]:ring-accent dark:ring-white/10 dark:hover:bg-white/[0.04]">
+              <input type="radio" name="target" value="{{ value }}" class="sr-only" {{ 'checked' if selected == value }}>
+              {{ ui.avatar(e.photo_key, e.full_name, "size-11", "text-sm") }}
+              <span class="min-w-0 flex-1">
+                <span class="flex items-center gap-1.5">
+                  <span class="truncate font-semibold">{{ e.full_name }}</span>
+                  {% if e.id in t.trainer_ids %}<span class="badge badge-violet shrink-0">Your trainer</span>{% endif %}
+                </span>
+                <span class="block truncate text-xs muted">{{ e.role_title or (e.role.value | humanize) }}</span>
+                {% if t.existing.get(e.id) %}<a href="/chat/{{ t.existing.get(e.id) }}" class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">Open conversation {{ icon("arrow-right", "size-3") }}</a>{% endif %}
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% if errors.target %}<p class="field-error mt-3">{{ errors.target }}</p>{% endif %}
+    </fieldset>
+
+    <div class="card">
+      {{ ui.textarea("body", "Your message", value=body, required=True, rows=5, error=errors.get("body"),
+                     placeholder="Hi! Could you help me with…", attrs='maxlength="' ~ max_body ~ '" data-component="char-count" data-max="' ~ max_body ~ '"',
+                     help="Up to " ~ ("{:,}".format(max_body)) ~ " characters. Please don't share passwords or card numbers.") }}
+      <div class="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+        <a href="/chat" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-primary">{{ icon("send", "size-4") }} Send message</button>
+      </div>
+    </div>
+  </div>
+
+  <aside class="space-y-4">
+    <div class="card-muted">
+      <p class="flex items-center gap-2 font-semibold">{{ icon("shield", "size-4 text-accent") }} Private &amp; respectful</p>
+      <ul class="mt-3 space-y-2 text-sm muted">
+        <li>Only you, the person you message and your gym's admin team can read the conversation.</li>
+        <li>You'll get an e-mail when someone replies while you're away (at most one every 15 minutes).</li>
+        <li>Something went wrong with a staff member? <a href="/reports/new" class="font-medium text-accent hover:underline">Report it privately</a>.</li>
+      </ul>
+    </div>
+  </aside>
+</form>
+{% endif %}
+{% endblock %}

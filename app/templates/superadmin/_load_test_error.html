@@ -1,0 +1,19 @@
+{#- A run that cannot be shown: summary.json unusable (unreadable, too large, not JSON, NaN/Infinity, not schema
+    version 1, times out of range) or - rarely - data the page failed to display (DISPLAY_ERROR). -#}
+<section class="card animate-fade-up" aria-labelledby="lt-error-title" data-lt-error>
+  <div class="flex items-start gap-3">
+    <span class="sa-check-icon sa-check-fail">{{ icon("x-circle", "size-4", label="Error") }}</span>
+    <div class="min-w-0 flex-1">
+      <h2 id="lt-error-title" class="sa-card-title">This run could not be {{ "displayed" if run.error == display_error else "read" }}</h2>
+      <p class="sa-card-sub break-all">{{ results_path }}/{{ run.run_id }}/summary.json{% if run.modified %} · changed {{ run.modified | dt("%d %b %Y, %H:%M %Z") }}{% endif %}</p>
+      <p class="sa-pre mt-4 [overflow-wrap:anywhere]">{{ run.error }}</p>
+      <p class="mt-4 text-sm leading-relaxed muted">
+        The page reads summary.json schema version {{ schema_version }} (docs/load-test-page.md). Run the kit's analysis
+        step for this run again (loadtest/README.md); if the run is still in progress, reload when it has finished.
+      </p>
+      {% if newest_readable %}
+      <a href="{{ page_url(newest_readable.run_id) }}" class="btn btn-secondary btn-sm mt-5 max-w-full">{{ icon("arrow-right", "size-4") }}<span class="min-w-0 truncate">Open the newest readable run · {{ newest_readable.run_id }}</span></a>
+      {% endif %}
+    </div>
+  </div>
+</section>

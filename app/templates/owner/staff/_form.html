@@ -1,0 +1,132 @@
+{#- Staff profile fields shared by "Add staff" and the profile editor.
+    Context: S, values, errors, verified_branches, gym; optional: employee (editing), linked (bool) -#}
+{% import "_ui.html" as ui with context %}
+{% import "owner/staff/_macros.html" as sm with context %}
+
+{% macro section(title, body, ico) %}
+<section class="grid gap-5 border-t border-black/[0.06] pt-8 first:border-t-0 first:pt-0 lg:grid-cols-[17rem_minmax(0,1fr)] lg:gap-10 dark:border-white/[0.08]">
+  <div class="flex items-start gap-3 lg:block">
+    <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-accent/10 text-accent lg:mb-3">{{ icon(ico, "size-5") }}</span>
+    <div>
+      <h2 class="section-title">{{ title }}</h2>
+      <p class="mt-1 text-sm muted">{{ body }}</p>
+    </div>
+  </div>
+  <div class="card space-y-5">{{ caller() }}</div>
+</section>
+{% endmacro %}
+
+{#- position_locked: the profile editor - a position (role / job title) is changed only through "Change position".
+    email_help: the note under a locked invite e-mail. -#}
+{% macro staff_fields(editing=False, linked=False, employee=None, position_locked=False, email_help=None) %}
+{% set role_options = S.ROLE_LABELS.items() | list %}
+{% set type_options = S.EMPLOYMENT_TYPE_LABELS.items() | list %}
+<div class="space-y-8">
+  {% call section("The person", "Who you're hiring. Staff can live anywhere in the world - payroll follows their country.", "user") %}
+    <div class="flex flex-col gap-5 sm:flex-row sm:items-center" data-component="photo-preview">
+      <span class="staff-photo size-24 shrink-0 text-2xl !bg-none !bg-zinc-100 !text-zinc-400 dark:!bg-white/[0.06]">
+        {% if employee and employee.photo_key %}
+          <img src="{{ media_url(employee.photo_key) }}" alt="{{ employee.full_name }}" data-preview>
+        {% else %}
+          <img alt="" class="hidden" data-preview>
+          <span data-placeholder>{{ icon("camera", "size-8") }}</span>
+        {% endif %}
+      </span>
+      <div class="min-w-0 flex-1">
+        {{ ui.file("photo", "Staff photo" if not editing else "Replace staff photo", accept="image/jpeg,image/png,image/webp",
+                   required=not editing, error=errors.photo,
+                   help="A clear, recent photo of their face (JPG, PNG or WEBP, up to " ~ app.max_upload_mb ~ " MB). Staff photos are compulsory and shown to members when the profile is public.") }}
+      </div>
+    </div>
+    <div class="fieldset">
+      {{ ui.field("full_name", "Full name", value=values.full_name, required=True, error=errors.full_name, autocomplete="off", attrs='maxlength="120"') }}
+      {% if linked %}
+        <div>
+          <label class="label" for="f-invite_email">Invite e-mail</label>
+          <input id="f-invite_email" class="input opacity-70" value="{{ values.invite_email }}" disabled>
+          {% if errors.invite_email %}<p class="field-error">{{ errors.invite_email }}</p>{% else %}<p class="help">{{ email_help or "Locked - the account is already linked." }}</p>{% endif %}
+        </div>
+      {% else %}
+        {{ ui.field("invite_email", "Invite e-mail", type="email", value=values.invite_email, required=True, error=errors.invite_email,
+                    autocomplete="off", attrs='maxlength="254"',
+                    help="They'll get a 7-day link to create or link their own IronPulse staff account." if not editing else "Changing it sends a fresh invitation to the new address (old links stop working).") }}
+      {% endif %}
+      {{ ui.field("phone", "Phone", type="tel", value=values.phone, error=errors.phone, autocomplete="off", placeholder="+91 98765 43210", attrs='maxlength="32"', help="Optional. Include the country code if outside the payroll country.") }}
+    </div>
+  {% endcall %}
+
+  {% call section("Role & work", "What they do and where. Branch work is only possible at verified branches.", "briefcase") %}
+    <div class="fieldset">
+      {% if position_locked and employee %}
+      <div class="sm:col-span-2 rounded-2xl bg-zinc-100/70 p-4 text-sm dark:bg-white/[0.04]">
+        <p class="text-xs font-semibold uppercase tracking-wider muted">Position</p>
+        <p class="font-semibold">{{ employee.role_title or S.ROLE_LABELS[employee.role.value] }}{% if employee.role_title %} <span class="font-normal muted">· {{ S.ROLE_LABELS[employee.role.value] }}</span>{% endif %}</p>
+        <p class="mt-1 muted">Positions aren't edited in place. <a href="/owner/staff/{{ employee.id }}/change-position" class="font-medium text-accent hover:underline">Change position</a> ends this employment (they can always rejoin) and re-adds them in the new role.</p>
+        {% if errors.role %}<p class="field-error">{{ errors.role }}</p>{% endif %}
+      </div>
+      {% else %}
+      {{ ui.select("role", "Role", role_options, value=values.role, required=True, error=errors.role) }}
+      {{ ui.field("role_title", "Job title", value=values.role_title, error=errors.role_title, placeholder="e.g. Head coach, Front-desk lead", attrs='maxlength="80"', help="Optional custom title - required when the role is Other.") }}
+      {% endif %}
+      {{ ui.select("employment_type", "Employment type", type_options, value=values.employment_type, required=True, error=errors.employment_type) }}
+      {{ ui.field("hire_date", "Hire date", type="date", value=values.hire_date, required=True, error=errors.hire_date) }}
+    </div>
+    <fieldset>
+      <legend class="label">Work mode <span class="text-bad">*</span></legend>
+      <div class="grid gap-3 sm:grid-cols-3">
+        {% for mode in ("online", "offline", "both") %}
+          {% set blocked = mode != "online" and verified_branches == 0 %}
+          <label class="relative block {{ 'cursor-not-allowed opacity-50' if blocked else 'cursor-pointer' }}">
+            <input type="radio" name="work_mode" value="{{ mode }}" class="peer sr-only" {{ 'checked' if values.work_mode == mode }} {{ 'disabled' if blocked }} required>
+            <span class="flex h-full flex-col gap-1 rounded-2xl bg-zinc-100/80 p-4 ring-1 ring-transparent transition duration-200 hover:bg-zinc-200/60 peer-checked:bg-accent/10 peer-checked:ring-2 peer-checked:ring-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent/60 dark:bg-white/[0.05] dark:hover:bg-white/[0.08] dark:peer-checked:bg-accent/15">
+              <span class="flex items-center gap-2 text-sm font-semibold">{{ icon(S.WORK_MODE_ICONS[mode], "size-4") }} {{ S.WORK_MODE_LABELS[mode] }}</span>
+              <span class="text-xs muted">{{ S.WORK_MODE_HELP[mode] }}</span>
+            </span>
+          </label>
+        {% endfor %}
+      </div>
+      {% if errors.work_mode %}<p class="field-error">{{ errors.work_mode }}</p>
+      {% elif verified_branches == 0 %}<p class="help">{{ icon("info", "size-3.5 inline -mt-0.5") }} {{ gym.name }} has no verified branch yet, so new staff can only work online. Branch work unlocks once a branch passes verification.</p>
+      {% else %}<p class="help">{{ verified_branches }} verified branch{{ 'es' if verified_branches != 1 }} available for on-site shifts.</p>{% endif %}
+    </fieldset>
+    <div class="pt-1">
+      {{ ui.checkbox("is_public", "Show on the public gym page", checked=values.is_public, help="Members see the photo, title, bio and specialties. Salary, documents and contact details are never public.") }}
+    </div>
+  {% endcall %}
+
+  {% call section("Payroll", "Salary is paid monthly in the employee's currency. Country-specific rules apply in Payroll.", "banknotes") %}
+    <div class="grid gap-5 sm:grid-cols-3" data-component="currency-default" data-map="{{ S.country_currency_map() | jsonattr }}">
+      {{ ui.select("country_code", "Payroll country", S.COUNTRY_OPTIONS, value=values.country_code, required=True, error=errors.country_code, cls="sm:col-span-3", attrs='data-country') }}
+      <div>
+        <label class="label" for="f-currency">Currency <span class="text-bad">*</span></label>
+        <input id="f-currency" name="currency" class="input uppercase {{ 'input-error' if errors.currency }}" value="{{ values.currency }}" maxlength="3" list="ip-currencies" autocomplete="off" required data-currency>
+        <datalist id="ip-currencies">{% for c in S.CURRENCIES %}<option value="{{ c }}"></option>{% endfor %}</datalist>
+        {% if errors.currency %}<p class="field-error">{{ errors.currency }}</p>{% else %}<p class="help">ISO code, defaults from the country.</p>{% endif %}
+      </div>
+      {{ ui.field("monthly_salary", "Monthly salary", value=values.monthly_salary, required=True, error=errors.monthly_salary, placeholder="35000", attrs='inputmode="decimal" autocomplete="off"', cls="sm:col-span-2", help="Gross amount per month, e.g. 35000 or 35000.50.") }}
+    </div>
+  {% endcall %}
+
+  {% call section("Profile", "Shown on the public gym page when enabled - and to members picking a trainer.", "sparkles") %}
+    {{ ui.textarea("bio", "Bio", value=values.bio, error=errors.bio, rows=4, placeholder="Two or three sentences about their coaching style and background.", attrs='maxlength="2000"') }}
+    <div class="fieldset">
+      {{ ui.field("specialties", "Specialties", value=values.specialties, error=errors.specialties, placeholder="Strength, Mobility, Calisthenics", help="Comma separated, up to 12.") }}
+      {{ ui.field("years_experience", "Years of experience", type="number", value=values.years_experience, error=errors.years_experience, attrs='min="0" max="70" inputmode="numeric"') }}
+    </div>
+    {{ ui.textarea("certifications", "Certifications", value=values.certifications, error=errors.certifications, rows=3, placeholder="e.g. ACE Certified Personal Trainer (2021), CPR & First Aid (2024)", attrs='maxlength="2000"', help="Free text. Upload the actual certificates as documents.") }}
+  {% endcall %}
+</div>
+{% endmacro %}
+
+{% macro document_fields() %}
+{% call section("Documents", "Optional, encrypted at rest and visible only to you. Trainers need at least one certification before they can be approved.", "document") %}
+  <div class="grid gap-5 sm:grid-cols-2">
+    <div class="sm:col-span-2" data-trainer-hint>
+      {{ ui.file("certification_files", "Certifications", accept="application/pdf,image/jpeg,image/png,image/webp", multiple=True, error=errors.certification_files,
+                 help="PDF or photo. OCR checks that the name on the certificate matches the trainer.") }}
+    </div>
+    {{ ui.file("resume_file", "Résumé / CV", accept="application/pdf,image/jpeg,image/png,image/webp", error=errors.resume_file) }}
+    {{ ui.file("contract_file", "Signed contract", accept="application/pdf,image/jpeg,image/png,image/webp", error=errors.contract_file) }}
+  </div>
+{% endcall %}
+{% endmacro %}

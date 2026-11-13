@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% import "owner/shop/_macros.html" as os with context %}
+{% block title %}Reviews · Shop{% endblock %}
+{% block content %}
+{% call ui.page_header("Reviews", subtitle="Only verified purchasers can review. Hide reviews that break your rules - hidden reviews don't count towards ratings.", eyebrow="Shop") %}{% endcall %}
+{{ os.tabs("reviews") }}
+
+<nav class="shop-chip-row mb-6" aria-label="Filter reviews">
+  {% for key, label in [("", "All"), ("low", "1-2 stars"), ("hidden", "Hidden")] %}
+    <a href="/owner/shop/reviews{{ '?show=' ~ key if key }}" class="shop-chip" {% if show == key %}aria-current="true"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
+
+{% if rows %}
+  <ul class="grid gap-4">
+    {% for r, pid, pname, pslug, gym_name in rows %}
+      <li class="card-flat {{ 'opacity-60' if r.is_hidden }}">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div class="min-w-0">
+            <a href="/shop/p/{{ pid }}/{{ pslug }}#reviews" class="text-sm font-semibold text-accent hover:underline">{{ pname }}</a>
+            <p class="text-xs muted">{{ gym_name }} · {{ r.user.display_name }} · {{ r.created_at | timeago }}</p>
+            <div class="mt-2">{{ shop.stars(r.rating, "size-4") }}</div>
+            {% if r.title %}<p class="mt-1 font-semibold">{{ r.title }}</p>{% endif %}
+            {% if r.body %}<p class="mt-1 whitespace-pre-line text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{{ r.body }}</p>{% endif %}
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            {% if r.is_hidden %}<span class="badge badge-zinc">Hidden</span>{% endif %}
+            <form method="post" action="/owner/shop/reviews/{{ r.id }}/toggle">{{ ui.csrf() }}<button type="submit" class="btn btn-secondary btn-sm">{{ icon("eye", "size-4") }}{{ "Unhide" if r.is_hidden else "Hide" }}</button></form>
+          </div>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+  {{ ui.pager(p, params={"show": show}, path="/owner/shop/reviews", noun="reviews") }}
+{% else %}
+  {{ ui.empty("No reviews here", "Reviews from members who completed an order appear here.", "star") }}
+{% endif %}
+{% endblock %}

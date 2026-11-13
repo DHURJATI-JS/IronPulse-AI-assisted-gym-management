@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% block title %}{{ ip }} · Security{% endblock %}
+{% block content %}
+{% set subtitle = ("First seen " ~ (stats.first | dt) ~ " · last seen " ~ (stats.last | timeago)) if total else "No security events were recorded for this address." %}
+{% call sa.header(ip, subtitle, section, sections, counts, back="/superadmin/security") %}
+  {% if current %}
+    {{ ui.confirm_button("/superadmin/bans/" ~ current.id ~ "/lift", "Lift ban", "Lift every active ban on " ~ ip ~ "? The address can use the site again immediately.", variant="success", size="sm", ico="check", extra_fields={"next": "/superadmin/security/ip/" ~ ip}) }}
+  {% elif not is_self %}
+    <a href="#ban-form" class="btn btn-danger btn-sm">{{ icon("lock", "size-4") }} Ban this address</a>
+  {% endif %}
+  <a href="/superadmin/security?ip={{ ip | urlencode }}" class="btn btn-secondary btn-sm">{{ icon("search", "size-4") }} Filter events</a>
+{% endcall %}
+
+{# ------------------------------------------------------------------ state #}
+<div class="mb-6 grid gap-2 animate-fade-up">
+  {% if current %}
+    {% set until = "permanently" if current.banned_until is none else "until " ~ (current.banned_until | dt) %}
+    <div class="alert alert-danger" role="status">
+      {{ icon("lock", "size-5 shrink-0") }}
+      <div class="min-w-0">
+        <p class="font-semibold">Banned {{ until }} · {{ sa.source_badge(current.created_by) }}</p>
+        <p class="mt-0.5 break-words">{{ current.reason }}</p>
+        <p class="mt-1 text-xs opacity-80">{{ 'Enforced by the security gate right now.' if registry else 'Not in the gate yet - the worker syncs bans every 30 seconds.' }}</p>
+      </div>
+    </div>
+  {% elif registry %}
+    {{ ui.alert("The gate is blocking this address provisionally (" ~ registry.reason ~ "). The worker records the final ban within seconds.", "warning", "Provisional block") }}
+  {% else %}
+    <p class="flex items-center gap-2 rounded-2xl bg-ok/10 px-4 py-3 text-sm font-medium text-[#166534] dark:text-[#86efac]">{{ icon("check-circle", "size-5") }} Not banned - requests from this address are allowed.</p>
+  {% endif %}
+  {% if whitelisted %}{{ ui.alert("This address is in RATE_LIMIT_WHITELIST: it skips rate limits and automatic bans below severity 5. Manual bans still apply.", "info") }}{% endif %}
+  {% if is_self %}{{ ui.alert("This is the address you are browsing from right now - you can't ban yourself.", "warning") }}{% endif %}
+</div>
+
+<section aria-label="Summary" class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+  {{ sa.mini("Events", ("{:,}".format(total) ~ "+") if total_capped else total, ("latest " ~ "{:,}".format(scan_cap) ~ " counted") if total_capped else "all time") }}
+  {{ sa.mini("Blocked", stats.blocked or 0, "requests stopped by the gate", "red" if stats.blocked else None) }}
+  {{ sa.mini("Highest severity", (stats.sev or 0) ~ " / 5", "worst single event", "red" if (stats.sev or 0) >= 4 else ("amber" if (stats.sev or 0) == 3 else None)) }}
+  {{ sa.mini("Awaiting triage", stats.pending or 0, "not reviewed by the AI yet", "amber" if stats.pending else None) }}
+</section>
+
+<div class="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
+  {# ------------------------------------------------------------------ events #}
+  <section class="min-w-0 xl:col-span-2" aria-labelledby="ev-title">
+    <h2 id="ev-title" class="section-title mb-3">Events from {{ ip }}</h2>
+    {% if events %}
+    <div class="table-wrap !overflow-visible">
+      <ul class="sa-list">
+        {% for e in events %}
+        {% set v = verdict_of.get(e.id) %}
+        <li class="sa-row md:grid-cols-[8.5rem_minmax(0,1fr)_auto] md:items-center">
+          <div>
+            <p class="text-sm font-medium tabular-nums">{{ e.created_at | dt("%d %b, %H:%M:%S") }}</p>
+            <p class="text-xs muted">{{ e.created_at | timeago }}</p>
+          </div>
+          <div class="min-w-0">
+            <p class="flex min-w-0 items-center gap-2"><span class="badge badge-zinc shrink-0">{{ category_labels.get(e.category.value, e.category.value) }}</span><span class="truncate text-sm" title="{{ e.detail or '' }}">{{ e.detail or '—' }}</span></p>
+            <p class="mt-1 truncate font-mono text-[12px] text-zinc-700 dark:text-zinc-200" title="{{ e.method }} {{ e.path }}"><span class="font-semibold">{{ e.method }}</span> {{ e.path }}</p>
+            <p class="mt-0.5 truncate text-xs muted" title="{{ e.user_agent or '' }}">{% if e.user_id and people.get(e.user_id) %}{{ people[e.user_id].display_name }} · {% endif %}{{ e.user_agent or "No user agent" }}</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5 md:justify-end">
+            {{ sa.severity(e.severity) }}
+            {% if e.action != 'logged' %}<span class="badge badge-{{ 'red' if e.action == 'banned' else 'amber' }}">{{ e.action | humanize }}</span>{% endif %}
+            {% if v %}{{ sa.verdict_badge(v) }}{% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {{ sa.window_nav(newer_url, older_url, newest_url, events | length, "events") }}
+    {% else %}
+      {{ ui.empty("No events for this address", "Nothing suspicious was logged. You can still ban it manually if you need to.", "shield") }}
+    {% endif %}
+  </section>
+
+  {# ------------------------------------------------------------------ side #}
+  <aside class="grid min-w-0 content-start gap-6" aria-label="Address details">
+    {% if categories %}
+    <section class="card" aria-labelledby="cat-title">
+      <h2 id="cat-title" class="sa-card-title">What it tried</h2>
+      {% set cat_max = categories | map(attribute=1) | max %}
+      <ul class="mt-4 grid gap-3">
+        {% for c, n in categories %}
+        <li>
+          <div class="mb-1.5 flex items-baseline justify-between gap-3 text-sm"><span class="font-medium">{{ category_labels.get(c.value, c.value) }}</span><span class="tabular-nums muted">{{ n }}</span></div>
+          <div class="sa-hbar" role="presentation" data-component="sa-bars"><span data-pct="{{ ((n / cat_max * 100) if cat_max else 0) | round(1) }}"></span></div>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    <section class="card" aria-labelledby="verdict-title">
+      <div class="sa-card-head">
+        <h2 id="verdict-title" class="sa-card-title">Triage verdicts</h2>
+        {{ ui.ai_chip(disclaimer=False) }}
+      </div>
+      {% if verdicts %}
+        <div class="mt-4 grid gap-2.5">
+          {% for v in verdicts %}
+            {{ sa.verdict_block(v) }}
+            <p class="-mt-1 px-1 text-[11px] muted">{{ v.events }} event{{ 's' if v.events != 1 }} · {{ v.seen_at | timeago }}</p>
+          {% endfor %}
+        </div>
+        {{ ui.ai_disclaimer() }}
+      {% else %}
+        <p class="mt-3 text-sm muted">No verdicts yet{% if stats.pending %} - {{ stats.pending }} event{{ 's' if stats.pending != 1 }} wait for the next triage run{% endif %}.</p>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="bans-title">
+      <h2 id="bans-title" class="sa-card-title">Ban history</h2>
+      {% if bans %}
+      <ul class="mt-4 grid gap-3">
+        {% for b in bans %}
+        <li class="rounded-2xl bg-zinc-50 p-3 ring-1 ring-black/[0.04] dark:bg-white/[0.03] dark:ring-white/[0.06]">
+          <div class="flex flex-wrap items-center gap-1.5">{{ sa.ban_badge(b, now) }}{{ sa.source_badge(b.created_by) }}{% if ban_bucket and b.ip == ban_bucket %}<span class="badge badge-zinc" title="The gate bans an internet IPv6 client by its /64">{{ b.ip }}</span>{% endif %}<span class="ml-auto">{{ sa.severity(b.severity) }}</span></div>
+          <p class="mt-2 text-sm break-words">{{ b.reason }}</p>
+          <p class="mt-1 text-xs muted">Offence {{ b.offense_count }}{{ ' · subscriber' if b.had_subscription }} · {{ b.created_at | dt }}{% if b.lifted_at %} · lifted {{ b.lifted_at | timeago }}{% if b.lifted_by_id and people.get(b.lifted_by_id) %} by {{ people[b.lifted_by_id].display_name }}{% elif not b.lifted_by_id %} automatically{% endif %}{% endif %}</p>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+        <p class="mt-3 text-sm muted">This address has never been banned.</p>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="acc-title">
+      <h2 id="acc-title" class="sa-card-title">Accounts seen</h2>
+      <p class="sa-card-sub">Last sign-in from this address, or signed in while an event was logged</p>
+      {% if accounts %}
+      <ul class="mt-4 grid gap-2">
+        {% for u in accounts %}
+        <li>
+          <a href="/superadmin/users?q={{ (u.email or '') | urlencode }}&state=all" class="flex items-center gap-3 rounded-2xl p-2 transition hover:bg-zinc-50 dark:hover:bg-white/[0.04]">
+            {{ ui.avatar(u.photo_key, u.display_name, "size-9", "text-xs") }}
+            <span class="min-w-0 flex-1"><span class="block truncate text-sm font-medium">{{ u.display_name }}</span><span class="block truncate text-xs muted">{{ u.email }}</span></span>
+            <span class="badge badge-{{ {'superadmin': 'violet', 'owner': 'blue', 'staff': 'amber', 'customer': 'green'}[u.role.value] }}">{{ u.role.value | humanize }}</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+        <p class="mt-3 text-sm muted">No signed-in account is linked to this address.</p>
+      {% endif %}
+    </section>
+
+    {% if not current and not is_self %}
+    <section id="ban-form" class="card scroll-mt-24" aria-labelledby="ban-title">
+      <h2 id="ban-title" class="sa-card-title">Ban this address</h2>
+      <p class="sa-card-sub">Takes effect immediately and replaces any automatic decision.</p>
+      <form method="post" action="/superadmin/bans" class="mt-4 grid gap-4" novalidate>
+        {{ ui.csrf() }}
+        <input type="hidden" name="ip" value="{{ ip }}">
+        <input type="hidden" name="next" value="/superadmin/security/ip/{{ ip }}">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="label" for="f-duration">Duration</label>
+            <select id="f-duration" name="duration" class="input">{% for key, label, td in durations %}<option value="{{ key }}" {{ 'selected' if key == form.duration }}>{{ label }}</option>{% endfor %}</select>
+          </div>
+          {{ ui.select("severity", "Severity", [("1", "1 · low"), ("2", "2"), ("3", "3 · medium"), ("4", "4"), ("5", "5 · critical")], value=form.severity) }}
+        </div>
+        {{ ui.field("reason", "Reason", value=form.reason, required=True, placeholder="e.g. Repeated SQL injection probes", attrs='maxlength="300" minlength="5"') }}
+        <button type="submit" class="btn btn-danger">{{ icon("lock", "size-4") }} Ban {{ ip }}</button>
+      </form>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

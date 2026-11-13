@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "shop/_macros.html" as shop with context %}
+{% import "owner/shop/_macros.html" as os with context %}
+{% block title %}Order {{ order.order_number }} · Shop{% endblock %}
+{% block content %}
+{% set cur = order.currency %}
+{% set st = order.status.value %}
+{% call ui.page_header("Order " ~ order.order_number, subtitle=(order.gym.name if order.gym else "Store") ~ " · placed " ~ (order.created_at | dt), eyebrow="Shop order", back="/owner/shop/orders") %}
+  {{ shop.order_status(order.status) }}
+  {% if order.paid_at %}<a href="/shop/orders/{{ order.id }}/receipt" class="btn btn-secondary btn-sm">{{ icon("receipt", "size-4") }}Receipt</a>{% endif %}
+{% endcall %}
+{{ os.tabs("orders") }}
+
+{% if flagged %}
+  <div class="mb-6">{{ ui.alert("The payment provider reported an amount that doesn't match this order's total, so it was NOT fulfilled. Check the payment in your Cashfree dashboard and refund it there if needed. Details are in the internal notes.", "danger", "Payment needs review") }}</div>
+{% endif %}
+
+<div class="grid gap-6 lg:grid-cols-[1fr_380px]">
+  <div class="grid content-start gap-6">
+    {# ------------------------------------------------ next steps #}
+    {% if st in ("paid", "processing", "ready_for_pickup", "shipped") %}
+      <section class="card" aria-labelledby="next-title">
+        <h2 id="next-title" class="section-title">Next step</h2>
+        <div class="mt-4 grid gap-3">
+          {% if st == "paid" %}
+            <form method="post" action="/owner/shop/orders/{{ order.id }}/status" class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-zinc-100/80 p-4 dark:bg-white/[0.04]">
+              {{ ui.csrf() }}<input type="hidden" name="action" value="processing">
+              <div><p class="text-sm font-semibold">Start preparing</p><p class="text-xs muted">The customer can no longer cancel online after this.</p></div>
+              <button type="submit" class="btn btn-primary btn-sm">{{ icon("refresh", "size-4") }}Mark processing</button>
+            </form>
+          {% endif %}
+          {% if st in ("paid", "processing") and order.fulfillment == "pickup" %}
+            <form method="post" action="/owner/shop/orders/{{ order.id }}/status" class="grid gap-3 rounded-2xl bg-zinc-100/80 p-4 dark:bg-white/[0.04]">
+              {{ ui.csrf() }}<input type="hidden" name="action" value="ready">
+              <p class="text-sm font-semibold">Ready for pickup{% if order.pickup_branch %} at {{ order.pickup_branch.name }}{% endif %}</p>
+              <div class="flex flex-col gap-2 sm:flex-row">
+                <label for="ready-note" class="sr-only">Note for the customer</label>
+                <input id="ready-note" name="note" maxlength="300" class="input" placeholder="Optional note, e.g. collect from the front desk after 5 pm">
+                <button type="submit" class="btn btn-primary shrink-0">{{ icon("map-pin", "size-4") }}Notify customer</button>
+              </div>
+            </form>
+          {% endif %}
+          {% if st in ("paid", "processing") and order.fulfillment == "delivery" %}
+            <form method="post" action="/owner/shop/orders/{{ order.id }}/status" class="grid gap-3 rounded-2xl bg-zinc-100/80 p-4 dark:bg-white/[0.04]">
+              {{ ui.csrf() }}<input type="hidden" name="action" value="shipped">
+              <p class="text-sm font-semibold">Mark as shipped</p>
+              <div class="flex flex-col gap-2 sm:flex-row">
+                <label for="ship-note" class="sr-only">Tracking note</label>
+                <input id="ship-note" name="note" maxlength="300" class="input" placeholder="Courier + tracking number">
+                <button type="submit" class="btn btn-primary shrink-0">{{ shop.svg("truck", "size-4") }}Shipped</button>
+              </div>
+            </form>
+          {% endif %}
+          {% if st in ("ready_for_pickup", "shipped") %}
+            <form method="post" action="/owner/shop/orders/{{ order.id }}/status" class="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-zinc-100/80 p-4 dark:bg-white/[0.04]">
+              {{ ui.csrf() }}<input type="hidden" name="action" value="completed">
+              <div><p class="text-sm font-semibold">{{ "Picked up?" if order.fulfillment == "pickup" else "Delivered?" }}</p><p class="text-xs muted">Completing opens the 7-day refund window and reviews.</p></div>
+              <button type="submit" class="btn btn-success btn-sm">{{ icon("check", "size-4") }}Mark completed</button>
+            </form>
+          {% endif %}
+        </div>
+      </section>
+    {% endif %}
+
+    {# ------------------------------------------------ refunds #}
+    <section id="refunds" class="card scroll-mt-24" aria-labelledby="ref-title">
+      <h2 id="ref-title" class="section-title">Refunds</h2>
+      {% for r in open_refunds %}
+        <div class="mt-4 rounded-[22px] bg-warn/[0.08] p-4 ring-1 ring-warn/25">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <p class="font-semibold">Requested {{ r.created_at | timeago }} · {{ r.amount | money(cur) }}</p>
+            {{ shop.refund_status(r.status) }}
+          </div>
+          <p class="mt-1 text-sm">“{{ r.reason }}”</p>
+          <form method="post" action="/owner/shop/refunds/{{ r.id }}/approve" class="mt-4 grid gap-3" data-component="shop-refund-calc" data-currency="{{ cur }}">
+            {{ ui.csrf() }}
+            {% for entry in r.items %}
+              {% set it = items_by_id.get(entry.order_item_id) %}
+              {% if it %}
+                <div class="flex items-center justify-between gap-3 rounded-2xl bg-white/80 px-4 py-2.5 dark:bg-black/20">
+                  <label for="ap-{{ r.id }}-{{ it.id }}" class="min-w-0 text-sm"><span class="font-medium">{{ it.product_name }}</span><span class="block text-xs muted">requested {{ entry.quantity }} · {{ left[it.id] }} refundable</span></label>
+                  <input id="ap-{{ r.id }}-{{ it.id }}" type="number" name="qty_{{ it.id }}" value="{{ [entry.quantity, left[it.id]] | min }}" min="0" max="{{ left[it.id] }}" class="input !w-20 !py-2 text-center" data-unit="{{ unit_amounts[it.id] }}">
+                </div>
+              {% endif %}
+            {% endfor %}
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="restock" value="1" class="checkbox" checked>Put returned units back in stock</label>
+            <label for="ap-note-{{ r.id }}" class="sr-only">Note</label>
+            <input id="ap-note-{{ r.id }}" name="note" maxlength="1000" class="input" placeholder="Optional note for the customer">
+            <div class="flex flex-wrap items-center gap-2">
+              <button type="submit" class="btn btn-success btn-sm">{{ icon("check", "size-4") }}Approve refund</button>
+              <button type="submit" name="full" value="1" class="btn btn-secondary btn-sm">Refund everything left</button>
+              <span class="text-sm muted tabular-nums" data-refund-total aria-live="polite"></span>
+            </div>
+          </form>
+          <form method="post" action="/owner/shop/refunds/{{ r.id }}/reject" class="mt-3 grid gap-2 border-t border-black/[0.06] pt-3 dark:border-white/[0.08]">
+            {{ ui.csrf() }}
+            <label for="rj-{{ r.id }}" class="label !mb-0">Decline with a reason</label>
+            <textarea id="rj-{{ r.id }}" name="note" rows="2" minlength="10" maxlength="1000" required class="input" placeholder="At least 10 characters - the customer sees this"></textarea>
+            <button type="submit" class="btn btn-danger btn-sm w-fit">{{ icon("x", "size-4") }}Decline</button>
+          </form>
+        </div>
+      {% endfor %}
+      {% set done = order.refunds | rejectattr("status.value", "equalto", "requested") | list %}
+      {% if done %}
+        <ul class="mt-4 grid gap-2">
+          {% for r in done | sort(attribute="id") %}
+            <li class="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-zinc-100/80 px-4 py-3 text-sm dark:bg-white/[0.04]">
+              <span class="min-w-0"><span class="font-semibold tabular-nums">{{ r.amount | money(cur) }}</span> · {{ r.reason[:80] }}{% if r.decision_note %}<span class="block text-xs muted">{{ r.decision_note[:160] }}</span>{% endif %}</span>
+              <span class="flex items-center gap-2">{% if r.restock and r.status.value == "completed" %}<span class="text-xs muted">restocked</span>{% endif %}{{ shop.refund_status(r.status) }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+      {% if not open_refunds and not done %}<p class="mt-3 text-sm muted">No refunds on this order.</p>{% endif %}
+
+      {% if can_issue %}
+        <details class="mt-5 rounded-[22px] ring-1 ring-black/[0.06] dark:ring-white/[0.08]">
+          <summary class="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-accent">{{ icon("receipt", "inline size-4") }} Issue a refund</summary>
+          <form method="post" action="/owner/shop/orders/{{ order.id }}/refund" class="grid gap-3 px-4 pb-4" data-component="shop-refund-calc" data-currency="{{ cur }}">
+            {{ ui.csrf() }}
+            {% for it in items if left[it.id] > 0 %}
+              <div class="flex items-center justify-between gap-3">
+                <label for="ir-{{ it.id }}" class="min-w-0 text-sm"><span class="font-medium">{{ it.product_name }}</span><span class="block text-xs muted">{{ left[it.id] }} refundable · {{ unit_amounts[it.id] | money(cur) }} each</span></label>
+                <input id="ir-{{ it.id }}" type="number" name="qty_{{ it.id }}" value="0" min="0" max="{{ left[it.id] }}" class="input !w-20 !py-2 text-center" data-unit="{{ unit_amounts[it.id] }}">
+              </div>
+            {% endfor %}
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="restock" value="1" class="checkbox">Put these units back in stock</label>
+            <label for="ir-reason" class="sr-only">Reason</label>
+            <input id="ir-reason" name="reason" minlength="10" maxlength="1000" required class="input" placeholder="Reason (customer sees it, at least 10 characters)">
+            <div class="flex items-center gap-3"><button type="submit" class="btn btn-dark btn-sm">Refund</button><span class="text-sm muted tabular-nums" data-refund-total aria-live="polite"></span></div>
+          </form>
+        </details>
+      {% endif %}
+    </section>
+
+    {# ------------------------------------------------ items #}
+    <section class="card !p-0 overflow-hidden" aria-labelledby="items-title">
+      <h2 id="items-title" class="section-title px-6 pt-6">Items</h2>
+      <ul class="mt-3 divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+        {% for it in items %}
+          <li class="flex items-center gap-4 px-6 py-4">
+            {{ shop.thumb(covers.get(it.product_id), it.product_name) }}
+            <div class="min-w-0 flex-1">
+              <p class="font-medium leading-snug">{% if it.product_id %}<a href="/owner/shop/products/{{ it.product_id }}" class="hover:text-accent">{{ it.product_name }}</a>{% else %}{{ it.product_name }}{% endif %}</p>
+              <p class="text-sm muted tabular-nums">{{ it.quantity }} × {{ it.unit_price | money(cur) }} · {{ '%g' | format(it.tax_rate | float) }}% tax</p>
+              {% if it.refunded_quantity %}<span class="badge badge-violet mt-1">{{ it.refunded_quantity }} refunded</span>{% endif %}
+            </div>
+            <p class="font-semibold tabular-nums">{{ it.line_total | money(cur) }}</p>
+          </li>
+        {% endfor %}
+      </ul>
+      <div class="border-t border-black/[0.05] px-6 py-5 dark:border-white/[0.06]">
+        <div class="shop-line"><span class="muted">Subtotal</span><span class="tabular-nums">{{ order.subtotal | money(cur) }}</span></div>
+        {% if order.discount_total | float > 0 %}<div class="shop-line"><span class="muted">Discount {{ order.coupon_code or "" }}</span><span class="tabular-nums">−{{ order.discount_total | money(cur) }}</span></div>{% endif %}
+        {% for rate, amount in quote.tax_by_rate() %}<div class="shop-line"><span class="muted">Tax @ {{ '%g' | format(rate | float) }}%</span><span class="tabular-nums">{{ amount | money(cur) }}</span></div>{% endfor %}
+        <div class="shop-line"><span class="muted">{{ "Delivery" if order.fulfillment == "delivery" else "Pickup" }}</span><span class="tabular-nums">{{ order.shipping_fee | money(cur) }}</span></div>
+        <div class="shop-total mt-2"><span>Total</span><span>{{ order.total | money(cur) }}</span></div>
+        {% if order.refunded_total | float > 0 %}<div class="shop-line text-[#1f8c3a] dark:text-[#4ade80]"><span>Refunded</span><span class="tabular-nums">−{{ order.refunded_total | money(cur) }}</span></div>{% endif %}
+      </div>
+    </section>
+  </div>
+
+  {# ------------------------------------------------ side #}
+  <aside class="grid h-fit gap-6">
+    <section class="card" aria-labelledby="cust-title">
+      <h2 id="cust-title" class="section-title">Customer</h2>
+      <div class="mt-4 flex items-center gap-3">
+        {% if order.customer %}{{ ui.avatar(order.customer.photo_key, order.customer.display_name, "size-11") }}{% endif %}
+        <div class="min-w-0">
+          <p class="truncate font-semibold">{{ order.customer.display_name if order.customer else order.customer_label.split(' <')[0] }}</p>
+          {% if order.customer and not order.customer.is_deleted %}
+            {% if order.customer.email %}<a href="mailto:{{ order.customer.email }}" class="block truncate text-sm text-accent hover:underline">{{ order.customer.email }}</a>{% endif %}
+            {% if order.customer.phone %}<a href="tel:{{ order.customer.phone | replace(' ', '') }}" class="block text-sm text-accent hover:underline">{{ order.customer.phone }}</a>{% endif %}
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="ful-title">
+      <h2 id="ful-title" class="section-title">{{ "Pickup" if order.fulfillment == "pickup" else "Delivery address" }}</h2>
+      {% if order.fulfillment == "pickup" and order.pickup_branch %}
+        <p class="mt-3 text-sm"><span class="font-semibold">{{ order.pickup_branch.name }}</span><br><span class="muted">{{ order.pickup_branch.address_line1 }}, {{ order.pickup_branch.city }}</span></p>
+      {% elif order.shipping_address %}
+        {% set a = order.shipping_address %}
+        <address class="mt-3 text-sm not-italic leading-relaxed"><span class="font-semibold">{{ a.name }}</span><br>{{ a.line1 }}<br>{{ a.city }} {{ a.postal_code }}<br><a href="tel:{{ a.phone | replace(' ', '') }}" class="text-accent hover:underline">{{ a.phone }}</a></address>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="pay-title">
+      <h2 id="pay-title" class="section-title">Payment</h2>
+      <dl class="mt-3 grid gap-2 text-sm">
+        <div class="flex justify-between gap-3"><dt class="muted">Provider</dt><dd>{{ {"cashfree": "Cashfree", "test": "Test gateway (simulated)"}.get(order.payment_provider, "-") }}</dd></div>
+        <div class="flex justify-between gap-3"><dt class="muted">Paid</dt><dd>{{ order.paid_at | dt if order.paid_at else "Not paid" }}</dd></div>
+        {% if order.coupon_code %}<div class="flex justify-between gap-3"><dt class="muted">Coupon</dt><dd class="font-mono">{{ order.coupon_code }}</dd></div>{% endif %}
+      </dl>
+      {% if txs %}
+        <h3 class="mt-5 text-xs font-semibold uppercase tracking-wider muted">Ledger</h3>
+        <ul class="mt-2 grid gap-2 text-sm">
+          {% for t in txs %}
+            <li class="flex items-center justify-between gap-3"><span class="min-w-0 truncate">{{ "Sale" if t.category.value == "shop_sale" else "Refund" }}<span class="block truncate text-xs muted">{{ t.provider_payment_id or t.provider_reference or t.provider_order_id or "" }}</span></span><span class="shrink-0 font-semibold tabular-nums {{ 'text-[#1f8c3a] dark:text-[#4ade80]' if t.direction.value == 'incoming' else 'text-[#d1281e] dark:text-[#ff6b61]' }}">{{ '+' if t.direction.value == 'incoming' else '−' }}{{ t.amount | money(t.currency) }}</span></li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="time-title">
+      <h2 id="time-title" class="section-title">Timeline</h2>
+      <ol class="shop-steps mt-4">
+        {% for s in timeline %}
+          <li class="shop-step" data-done="{{ 1 if s.done else 0 }}" data-tone="{{ s.tone }}">
+            <span class="shop-step-dot">{{ icon("check" if s.done else "clock", "size-4") }}</span>
+            <div class="pt-1"><p class="text-sm font-semibold {{ '' if s.done else 'muted' }}">{{ s.label }}</p>{% if s.at %}<p class="text-xs muted">{{ s.at | dt }}</p>{% endif %}{% if s.note %}<p class="text-xs">{{ s.note }}</p>{% endif %}</div>
+          </li>
+        {% endfor %}
+      </ol>
+      {% if order.notes %}
+        <h3 class="mt-5 text-xs font-semibold uppercase tracking-wider muted">Internal notes</h3>
+        <p class="mt-1 whitespace-pre-line text-xs leading-relaxed">{{ order.notes }}</p>
+      {% endif %}
+    </section>
+
+    {% if can_cancel %}
+      <section class="card-muted" aria-labelledby="cancel-title">
+        <h2 id="cancel-title" class="text-sm font-semibold">Cancel order</h2>
+        <p class="mt-1 text-xs muted">{{ "Paid orders are fully refunded and the stock is restored." if order.paid_at else "Unpaid - nothing to refund." }}</p>
+        <form method="post" action="/owner/shop/orders/{{ order.id }}/cancel" class="mt-3 grid gap-2" data-confirm="Cancel order {{ order.order_number }}{{ ' and refund ' ~ ((order.total - order.refunded_total) | money(cur)) if order.paid_at }}?">
+          {{ ui.csrf() }}
+          <label for="cx-reason" class="sr-only">Reason</label>
+          <input id="cx-reason" name="reason" maxlength="300" class="input" placeholder="Reason (shared with the customer)">
+          <button type="submit" class="btn btn-danger btn-sm w-fit">{{ icon("x", "size-4") }}Cancel{{ " & refund" if order.paid_at }}</button>
+        </form>
+      </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "calendar/_macros.html" as cal with context %}
+{% block title %}Calendar · {{ view.label }}{% endblock %}
+{% block content %}
+{% set role = user.role.value %}
+{% set back = "/calendar?month=" ~ view.key ~ "&day=" ~ view.selected.iso %}
+{% call ui.page_header(view.label, "Your tasks and reminders" ~ (", membership renewals" if role == "customer" else "") ~ (" and weekly shifts" if role == "staff" else "") ~ " - times in " ~ view.tz ~ ".", eyebrow="Calendar") %}
+  <div class="flex items-center gap-0.5 rounded-full bg-zinc-900/[0.05] p-1 dark:bg-white/[0.06]">
+    <a href="/calendar?month={{ view.prev_key }}" class="btn btn-ghost btn-icon !size-9" aria-label="Previous month" rel="prev">{{ icon("arrow-left", "size-4") }}</a>
+    <a href="/calendar" class="btn btn-ghost btn-sm {{ '!bg-white !text-ink shadow-sm dark:!bg-white/15 dark:!text-white' if view.is_current }}">Today</a>
+    <a href="/calendar?month={{ view.next_key }}" class="btn btn-ghost btn-icon !size-9" aria-label="Next month" rel="next">{{ icon("arrow-right", "size-4") }}</a>
+  </div>
+  <a href="/tasks" class="btn btn-secondary">{{ icon("check-circle", "size-4") }} All tasks</a>
+{% endcall %}
+
+{% set counts = view.counts() %}
+<div class="mb-5 flex flex-wrap gap-2 animate-fade-up" aria-label="This month">
+  {% for kind, one, many, tone in [("task", "to-do", "to-dos", "blue"), ("reminder", "reminder", "reminders", "violet"), ("event", "event", "events", "green"), ("workout", "workout", "workouts", "amber"), ("renewal", "renewal", "renewals", "amber"), ("shift", "shift", "shifts", "green")] %}
+    {% if counts.get(kind) %}<span class="chip"><span class="dot dot-{{ tone }}"></span>{{ counts.get(kind) }} {{ one if counts.get(kind) == 1 else many }}</span>{% endif %}
+  {% endfor %}
+  {% if not counts %}<span class="chip">{{ icon("calendar", "size-3.5") }} Nothing scheduled this month yet</span>{% endif %}
+</div>
+
+<div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]" data-component="calendar"
+     data-days="{{ view.days_json() | jsonattr }}" data-selected="{{ view.selected.iso }}" data-month="{{ view.key }}" data-today="{{ view.today.isoformat() }}">
+  <section class="card min-w-0 overflow-hidden !p-0 animate-fade-up" aria-label="{{ view.label }}">
+    <div class="cal-grid px-1 pt-1 sm:px-2" aria-hidden="true">
+      {% for wd in ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] %}<div class="cal-head">{{ wd }}</div>{% endfor %}
+    </div>
+    <div class="cal-grid px-1 pb-1 sm:px-2 sm:pb-2">
+      {% for week in view.weeks %}
+        {% for d in week %}
+          <a href="/calendar?month={{ view.key }}&day={{ d.iso }}" class="cal-cell rounded-xl" data-day="{{ d.iso }}"
+             data-out="{{ '0' if d.in_month else '1' }}" data-selected="{{ '1' if d.iso == view.selected.iso else '0' }}"
+             {% if d.is_today %}aria-current="date"{% endif %}
+             aria-label="{{ d.day.strftime('%A %d %B') }}{% if d.count %}, {{ d.count }} item{{ 's' if d.count != 1 }}{% endif %}">
+            <span class="cal-num">{{ d.day.day }}</span>
+            {% for it in d.items[:3] %}
+              <span class="cal-pill tone-{{ it.tone }}" data-done="{{ '1' if it.done else '0' }}" title="{{ (it.time ~ ' · ') if it.time }}{{ it.title }}">{{ it.title }}</span>
+            {% endfor %}
+            {% if d.count > 3 %}<span class="hidden px-1 text-[11px] font-medium muted sm:block" data-cell-more>+{{ d.count - 3 }} more</span>{% endif %}
+            {% if d.items %}
+              <span class="mt-auto flex flex-wrap gap-0.5 px-0.5 sm:hidden">{% for it in d.items[:4] %}<span class="cal-dot dot-{{ it.tone }}"></span>{% endfor %}</span>
+            {% endif %}
+          </a>
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </section>
+
+  <aside class="min-w-0 space-y-6">
+    <section class="card animate-fade-up" data-day-panel aria-live="polite">
+      <p class="eyebrow" data-day-eyebrow>{{ "Today" if view.selected.is_today else view.selected.day.strftime("%A") }}</p>
+      <h2 class="mt-1 text-xl font-semibold tracking-tight" data-day-title>{{ view.selected.day.strftime("%d %B %Y") }}</h2>
+      <ul class="mt-4 space-y-2" data-day-items>
+        {% for it in view.selected.items %}
+          {{ cal.day_item(it, back) }}
+        {% else %}
+          <li class="rounded-2xl border border-dashed border-black/10 px-4 py-6 text-center text-sm muted dark:border-white/10" data-day-empty>Nothing planned for this day.</li>
+        {% endfor %}
+        {% if view.selected.more %}{{ cal.day_item(view.selected.more_item(), back) }}{% endif %}
+      </ul>
+    </section>
+
+    <section class="card animate-fade-up">
+      <div class="mb-4 flex items-center gap-3">
+        <span class="grid size-10 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("plus", "size-5") }}</span>
+        <div>
+          <h2 class="section-title">Quick add</h2>
+          <p class="text-xs muted" data-quick-add-day>For {{ view.selected.day.strftime("%a %d %b") }}</p>
+        </div>
+      </div>
+      {{ cal.task_form({}, {}, back, kinds, compact=True, day=view.selected.iso) }}
+    </section>
+
+    <section class="card-flat animate-fade-up">
+      <p class="text-sm font-semibold">Legend</p>
+      <div class="mt-3 flex flex-wrap gap-2 text-xs">
+        <span class="chip"><span class="dot dot-blue"></span>To-do</span>
+        <span class="chip"><span class="dot dot-violet"></span>Reminder</span>
+        <span class="chip"><span class="dot dot-green"></span>Event{{ " / shift" if role == "staff" }}</span>
+        <span class="chip"><span class="dot dot-amber"></span>Workout{{ " / renewal" if role == "customer" }}</span>
+      </div>
+      <p class="mt-3 text-xs muted">Tip: ask the assistant “remind me to stretch at 7pm” - it lands here automatically.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

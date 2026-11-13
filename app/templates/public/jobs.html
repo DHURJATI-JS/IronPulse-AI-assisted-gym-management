@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "public/_macros.html" as pub with context %}
+{% block title %}Jobs{% endblock %}
+{% block description %}Open trainer, front-desk and staff positions at IronPulse gyms - search by role or see the jobs within {{ max_km }} km of you.{% endblock %}
+{% block content %}
+<div class="relative isolate">
+  <div class="pub-page-glow" aria-hidden="true"></div>
+
+  <header class="mx-auto mb-8 max-w-3xl text-center animate-fade-up">
+    <p class="eyebrow mb-2">Careers</p>
+    <h1 class="pub-h2 sm:!text-5xl">Work with great gyms</h1>
+    <p class="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed muted">Trainers, front desk, nutrition, operations - positions posted directly by gym owners. Your enquiry goes straight to them.</p>
+    {% if enquiry_block %}<div class="mx-auto mt-5 max-w-xl text-left" data-enquiry-blocked>{{ ui.alert(enquiry_block, "info") }}</div>{% endif %}
+  </header>
+
+  {# ---------------------------------------------------------------- search panel
+     The whole form is a geo-form: "Use my location" (foundation geolocate) fills lat/lon and submits the search with
+     every filter kept. The browser only supplies coordinates - distances, the radius filter and the order come from
+     the server (no distance-sort here). #}
+  <form method="get" action="/jobs" role="search" aria-label="Search jobs" class="glass mx-auto max-w-4xl rounded-[28px] p-3 shadow-xl shadow-black/[0.04] ring-1 ring-black/[0.06] animate-fade-up sm:p-4 dark:ring-white/[0.08]" data-component="geo-form">
+    <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px_160px] lg:grid-cols-[minmax(0,1fr)_170px_170px_auto]">
+      <div class="relative min-w-0">
+        <label for="job-q" class="sr-only">Search by title, location or gym</label>
+        <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400">{{ icon("search", "size-4") }}</span>
+        <input id="job-q" type="search" name="q" value="{{ q }}" maxlength="100" placeholder="Title, city or gym" class="input !pl-11">
+      </div>
+      <div>
+        <label for="job-role" class="sr-only">Role</label>
+        <select id="job-role" name="role" class="input" data-autosubmit>
+          <option value="">Any role</option>
+          {% for v, l in roles %}<option value="{{ v }}" {{ 'selected' if v == role }}>{{ l }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="job-type" class="sr-only">Employment type</label>
+        <select id="job-type" name="type" class="input" data-autosubmit>
+          <option value="">Any type</option>
+          {% for v, l in types %}<option value="{{ v }}" {{ 'selected' if v == etype }}>{{ l }}</option>{% endfor %}
+        </select>
+      </div>
+      <input type="hidden" name="lat" value="{{ loc.lat if loc.source == 'query' else '' }}">
+      <input type="hidden" name="lon" value="{{ loc.lon if loc.source == 'query' else '' }}">
+      {{ pub.hidden_fields(search_keep) }}
+      <div class="flex gap-2 md:col-span-3 md:justify-end lg:col-span-1">
+        <button type="button" class="btn btn-secondary flex-auto whitespace-nowrap md:flex-none" data-component="geolocate" title="Show the jobs within {{ max_km }} km of where you are">Use my location</button>
+        <button type="submit" class="btn btn-primary flex-auto md:flex-none">{{ icon("search", "size-4") }} Search</button>
+      </div>
+    </div>
+  </form>
+
+  {# ---------------------------------------------------------------- location line + near-me options (once a location is known) #}
+  <div class="mx-auto mt-6 max-w-4xl">
+    {% if search.located %}
+      <p class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm muted">
+        <span class="inline-flex min-w-0 items-center gap-1.5">{{ icon("map-pin", "size-4 shrink-0 text-accent") }}<span data-location-line>{{ location_line }}</span></span>
+        {% if loc.source == 'query' %}<span aria-hidden="true">·</span><a href="{{ clear_location }}" class="font-semibold text-accent hover:underline">Clear location</a>{% endif %}
+      </p>
+      <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3">
+        <nav class="tabs" aria-label="Jobs to show">
+          {% for value, label, href in view_links %}
+            <a href="{{ href }}" class="tab {{ 'tab-active' if search.view == value }}"{% if search.view == value %} aria-current="page"{% endif %}>{{ label }}</a>
+          {% endfor %}
+        </nav>
+        {% if search.near %}
+          <nav class="tabs" aria-label="Distance from you">
+            {% for r in radius_links %}
+              <a href="{{ r.href }}" class="tab !px-3 {{ 'tab-active' if r.active }}"{% if r.active %} aria-current="true"{% endif %}>{{ r.label }} km</a>
+            {% endfor %}
+          </nav>
+          {# unticked sends only the hidden remote=0 (remote jobs hidden); ticked adds remote=1, which wins #}
+          <form method="get" action="/jobs" aria-label="Remote jobs">
+            {{ pub.hidden_fields(remote_keep) }}
+            <input type="hidden" name="remote" value="0">
+            <label class="flex cursor-pointer items-center gap-2 text-sm">
+              <input type="checkbox" name="remote" value="1" class="checkbox"{{ ' checked' if search.remote }} data-autosubmit>
+              Include remote jobs
+            </label>
+            <noscript><button type="submit" class="btn btn-secondary btn-sm mt-2">Apply</button></noscript>
+          </form>
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="text-sm muted">Newest first · tap <span class="font-semibold text-ink dark:text-white">Use my location</span> to see the jobs within {{ max_km }} km of you</p>
+    {% endif %}
+  </div>
+
+  {# ---------------------------------------------------------------- results #}
+  <section class="mx-auto mt-8 max-w-4xl" aria-label="Open positions">
+    {% if search.near %}
+      {% set onsite = result.onsite_jobs %}
+      {% set remote_rows = result.remote_jobs %}
+      {% if result.nearby %}
+        <div class="mb-4 flex items-center justify-between gap-3 text-sm muted">
+          <p aria-live="polite">{{ result.nearby }} job{{ 's' if result.nearby != 1 }} within {{ radius }} km{% if result.remote_count %} · {{ result.remote_count }} remote{% endif %}</p>
+          {% if filtered %}<a href="{{ clear_filters }}" class="shrink-0 font-semibold text-accent hover:underline">Clear filters</a>{% endif %}
+        </div>
+      {% else %}
+        {% set nothing_near = "Nothing matches your search that close to you." if filtered else "No open position is that close to you yet." %}
+        {% if result.total %}
+          <div class="alert alert-info mb-6" role="status">
+            {{ icon("map-pin", "size-5 shrink-0") }}
+            <div class="flex-1">
+              <p class="font-semibold">No jobs within {{ radius }} km of you</p>
+              <p class="mt-0.5">{{ nothing_near }} The remote positions below work from anywhere.</p>
+              <p class="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                {% if widen_link %}<a href="{{ widen_link }}" class="font-semibold underline underline-offset-2">Search within {{ max_km }} km</a>{% endif %}
+                <a href="{{ all_link }}" class="font-semibold underline underline-offset-2">Show all jobs</a>
+              </p>
+            </div>
+          </div>
+        {% else %}
+          <div class="card flex flex-col items-center px-6 py-14 text-center" role="status">
+            <span class="grid size-14 place-items-center rounded-2xl bg-accent/10 text-accent">{{ icon("map-pin", "size-7") }}</span>
+            <h2 class="mt-4 text-lg font-semibold">No jobs within {{ radius }} km of you</h2>
+            <p class="mt-1 max-w-md text-sm muted">{{ nothing_near }}{% if not search.remote %} Remote jobs are hidden.{% endif %}</p>
+            <div class="mt-6 flex flex-wrap justify-center gap-2">
+              {% if widen_link %}<a href="{{ widen_link }}" class="btn btn-primary">Search within {{ max_km }} km</a>{% endif %}
+              <a href="{{ all_link }}" class="btn {{ 'btn-secondary' if widen_link else 'btn-primary' }}">Show all jobs</a>
+            </div>
+          </div>
+        {% endif %}
+      {% endif %}
+      {% if onsite %}
+        <h2 class="sr-only">Jobs within {{ radius }} km of you</h2>
+        <ul class="grid gap-4">
+          {% for jv in onsite %}<li>{{ pub.job_card(jv, "h3", card_qs) }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+      {% if remote_rows %}
+        <div{% if onsite %} class="mt-10"{% endif %}>
+          <h2 id="remote-jobs" class="section-title flex items-center gap-2 text-xl">{{ icon("globe", "size-5 text-[#9333ea] dark:text-[#d8a4ff]") }}Remote positions</h2>
+          <p class="mb-4 mt-1 text-sm muted">Work from anywhere - no distance applies.</p>
+          <ul class="grid gap-4" aria-labelledby="remote-jobs">
+            {% for jv in remote_rows %}<li>{{ pub.job_card(jv, "h3", card_qs) }}</li>{% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+      {{ pub.pager(pager, "positions") }}
+    {% elif jobs %}
+      <div class="mb-4 flex items-center justify-between gap-3 text-sm muted">
+        <p aria-live="polite">{{ result.total }} open position{{ 's' if result.total != 1 }}</p>
+        {% if filtered %}<a href="{{ clear_filters }}" class="shrink-0 font-semibold text-accent hover:underline">Clear filters</a>{% endif %}
+      </div>
+      <ul class="grid gap-4">
+        {% for jv in jobs %}<li>{{ pub.job_card(jv, "h2", card_qs) }}</li>{% endfor %}
+      </ul>
+      {{ pub.pager(pager, "positions") }}
+    {% elif filtered %}
+      {{ ui.empty("No positions match those filters", "Try a broader search or a different role.", "search", "Show all positions", clear_filters) }}
+    {% else %}
+      {{ ui.empty("No open positions right now", "Gym owners post roles here when they're hiring. The “Enquire for jobs” badge in the top bar lights up as soon as a position opens.", "briefcase", "Browse gyms", "/gyms") }}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

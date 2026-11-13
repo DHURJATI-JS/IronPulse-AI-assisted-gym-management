@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 456 128" width="456" height="128" role="img" aria-labelledby="title">
+  <title id="title">IronPulse</title>
+  <defs>
+    <!-- the app's own mark (app/static/img/favicon.svg), scaled 1.5x -->
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a84ff"/>
+      <stop offset=".55" stop-color="#5e5ce6"/>
+      <stop offset="1" stop-color="#bf5af2"/>
+    </linearGradient>
+    <!-- wordmark: the same brand gradient; every stop is >= 3.5:1 on white and on GitHub's dark background -->
+    <linearGradient id="word" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0a84ff"/>
+      <stop offset=".55" stop-color="#5e5ce6"/>
+      <stop offset="1" stop-color="#bf5af2"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="96" height="96" rx="24" fill="url(#mark)"/>
+  <polyline points="31 67 49 67 58 43 70 85 79 61 97 61" fill="none" stroke="#fff" stroke-width="7.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="136" y="86" fill="url(#word)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="60" font-weight="700" letter-spacing="-1">IronPulse</text>
+</svg>

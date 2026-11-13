@@ -1,0 +1,62 @@
+{#- Plan display helpers (WP-D). Import WITH CONTEXT:
+      {% import "checkout/_plan.html" as pl with context %}
+-#}
+
+{% macro mode_badge(plan) -%}
+{% set m = plan.mode.value %}
+{% if m == 'offline' %}<span class="badge badge-blue">{{ icon("dumbbell", "size-3.5") }}In the gym</span>
+{% elif m == 'online' %}<span class="badge badge-violet">{{ icon("globe", "size-3.5") }}Online</span>
+{% else %}<span class="badge badge-green">{{ icon("layers", "size-3.5") }}Gym + online</span>{% endif %}
+{%- endmacro %}
+
+{% macro mode_label(plan) -%}
+{{ {'offline': 'In the gym', 'online': 'Online', 'combo': 'Gym + online'}.get(plan.mode.value, plan.mode.value | humanize) }}
+{%- endmacro %}
+
+{% macro features(plan, cls="") %}
+<ul class="space-y-1.5 text-sm {{ cls }}">
+  {% if plan.mode.value in ('offline', 'combo') %}
+  <li class="flex items-start gap-2">{{ icon("check", "mt-0.5 size-4 shrink-0 text-ok") }}<span>Gym floor at your branch</span></li>
+  {% endif %}
+  {% if plan.mode.value in ('online', 'combo') %}
+  <li class="flex items-start gap-2">{{ icon("check", "mt-0.5 size-4 shrink-0 text-ok") }}<span>Online training from anywhere</span></li>
+  {% endif %}
+  {% if plan.includes_trainer %}
+  <li class="flex items-start gap-2">{{ icon("check", "mt-0.5 size-4 shrink-0 text-ok") }}<span>Personal trainer</span></li>
+  {% endif %}
+  {% if plan.includes_ai %}
+  <li class="flex items-start gap-2">{{ icon("check", "mt-0.5 size-4 shrink-0 text-ok") }}<span>AI coach that respects your health</span></li>
+  {% endif %}
+  <li class="flex items-start gap-2">{{ icon("check", "mt-0.5 size-4 shrink-0 text-ok") }}<span>Pre-recorded video library</span></li>
+</ul>
+{% endmacro %}
+
+{% macro chips(plan) -%}
+<span class="flex flex-wrap gap-1.5">
+  {{ mode_badge(plan) }}
+  {% if plan.includes_trainer %}<span class="chip">{{ icon("user", "size-3.5") }}Trainer</span>{% endif %}
+  {% if plan.includes_ai %}<span class="chip">{{ icon("sparkles", "size-3.5") }}AI coach</span>{% endif %}
+  <span class="chip">{{ icon("play", "size-3.5") }}Videos</span>
+</span>
+{%- endmacro %}
+
+{#- steps: list of labels; current: 0-based index of the active step -#}
+{% macro stepper(steps, current) %}
+<ol class="stepper" aria-label="Checkout progress">
+  {% for label in steps %}
+    {% set state = 'done' if loop.index0 < current else ('current' if loop.index0 == current else 'todo') %}
+    <li class="stepper-item" data-state="{{ state }}" {% if state == 'current' %}aria-current="step"{% endif %}>
+      <span class="stepper-dot">{% if state == 'done' %}{{ icon("check", "size-3.5") }}{% else %}{{ loop.index }}{% endif %}</span>
+      <span class="stepper-label">{{ label }}</span>
+    </li>
+  {% endfor %}
+</ol>
+{% endmacro %}
+
+{#- subscription status badge with customer-friendly labels -#}
+{% macro sub_status(status) -%}
+{% set v = status.value if status.value is defined else (status | string) %}
+{% set labels = {'pending_otp': 'Desk check', 'pending_payment': 'Awaiting payment', 'active': 'Active', 'expired': 'Expired',
+                 'cancelled': 'Cancelled', 'suspended': 'Suspended', 'failed': 'Failed'} %}
+<span class="badge badge-{{ status | tone }}"><span class="dot bg-current opacity-70"></span>{{ labels.get(v, status | humanize) }}</span>
+{%- endmacro %}

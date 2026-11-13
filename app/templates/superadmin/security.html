@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% block title %}Security centre{% endblock %}
+{% block content %}
+{% call sa.header("Security centre", "Every request the security gate flagged - attack signatures, scanners, rate-limit abuse - with AI triage verdicts and one-click drill-down per address.", section, sections, counts) %}
+  <form method="post" action="/superadmin/security/triage" data-component="sa-busy">
+    {{ ui.csrf() }}
+    <button type="submit" class="btn btn-primary btn-sm" data-busy-label="Triage running…">{{ icon("sparkles", "size-4") }} Run AI triage now{% if counts.security %} <span class="rounded-full bg-white/25 px-1.5 text-[11px] tabular-nums">{{ sa.num(counts.security) }}</span>{% endif %}</button>
+  </form>
+  <a href="/superadmin/bans" class="btn btn-secondary btn-sm">{{ icon("lock", "size-4") }} Bans</a>
+{% endcall %}
+
+{# ------------------------------------------------------------------ filters #}
+<form method="get" action="/superadmin/security" class="card-flat mb-6 animate-fade-up" aria-label="Filter security events">
+  <div class="grid grid-cols-2 gap-3 md:grid-cols-[repeat(6,minmax(0,1fr))_auto] md:items-end">
+    {{ ui.select("range", "Time range", windows, value=("" if f.window == "7d" else f.window), empty="Last 7 days", error=f.errors.range) }}
+    {{ ui.select("category", "Category", categories, value=f.category, empty="All categories", error=f.errors.category, cls="md:col-span-1") }}
+    {{ ui.select("min_severity", "Min. severity", [("1", "1 · noise"), ("2", "2 · low"), ("3", "3 · medium"), ("4", "4 · high"), ("5", "5 · critical")], value=(f.min_severity or ''), empty="Any", error=f.errors.min_severity) }}
+    {{ ui.select("triage", "Triage", [("pending", "Awaiting triage"), ("reviewed", "Reviewed")], value=f.triage, empty="Any", error=f.errors.triage) }}
+    {{ ui.field("ip", "IP address", value=f.ip or '', error=f.errors.ip, placeholder="203.0.113.7 or 203.0.113.", attrs='maxlength="45" spellcheck="false" autocomplete="off" inputmode="text"', cls="col-span-2 md:col-span-1") }}
+    {{ ui.field("day", "Day", type="date", value=(f.day.isoformat() if f.day else f.day_raw), error=f.errors.day, cls="col-span-2 md:col-span-1") }}
+    <div class="col-span-2 flex gap-2 md:col-span-1">
+      <button type="submit" class="btn btn-dark flex-1 md:flex-none">{{ icon("search", "size-4") }} Apply</button>
+      {% if f.active or f.errors %}<a href="/superadmin/security" class="btn btn-secondary" aria-label="Reset filters">{{ icon("x", "size-4") }}</a>{% endif %}
+    </div>
+  </div>
+</form>
+
+{% if facets %}
+<nav class="no-scrollbar -mx-1 mb-6 flex gap-2 overflow-x-auto px-1 pb-1" aria-label="Categories">
+  <a href="{{ facet_all }}" class="chip shrink-0 {{ 'ring-2 ring-accent/50' if not f.category }}">All</a>
+  {% for value, label, n, url in facets %}
+  <a href="{{ url }}" class="chip shrink-0 {{ 'ring-2 ring-accent/50' if f.category == value }}" {% if f.category == value %}aria-current="true"{% endif %}>{{ label }} <span class="tabular-nums muted">{{ n }}</span></a>
+  {% endfor %}
+</nav>
+{% if facets_sampled %}<p class="-mt-4 mb-6 text-xs muted">Category counts cover the latest {{ "{:,}".format(scan_cap) }} matching events.</p>{% endif %}
+{% endif %}
+
+<div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+  {# ------------------------------------------------------------------ events #}
+  <section class="min-w-0 xl:col-span-2" aria-labelledby="events-title">
+    <div class="mb-3 flex items-end justify-between gap-3">
+      <h2 id="events-title" class="section-title">Events</h2>
+      <p class="text-sm muted tabular-nums">{{ sa.num(total + (1 if total_capped else 0)) }} match{{ 'es' if total != 1 }} · {{ f.window_label | lower if not f.day else f.window_label }}</p>
+    </div>
+    {% if events %}
+    <div class="table-wrap !overflow-visible">
+      <div class="sa-row-head sa-cols-events" aria-hidden="true"><span>When</span><span>Source</span><span>Request</span><span>Severity</span></div>
+      <ul class="sa-list">
+        {% for e in events %}
+        {% set v = verdict_of.get(e.id) %}
+        <li class="sa-row sa-cols-events">
+          <div class="flex items-baseline gap-2 md:block">
+            <p class="text-sm font-medium tabular-nums">{{ e.created_at | dt("%d %b, %H:%M:%S") }}</p>
+            <p class="text-xs muted">{{ e.created_at | timeago }}</p>
+          </div>
+          <div class="flex min-w-0 flex-wrap items-center gap-1.5 md:block md:space-y-1">
+            {{ sa.ip_link(e.ip) }}
+            <span class="badge badge-zinc">{{ category_labels.get(e.category.value, e.category.value) }}</span>
+          </div>
+          <div class="min-w-0">
+            <p class="truncate font-mono text-[12px] text-zinc-700 dark:text-zinc-200" title="{{ e.method }} {{ e.path }}"><span class="font-semibold">{{ e.method }}</span> {{ e.path }}</p>
+            {% if e.detail %}<p class="mt-0.5 truncate text-sm" title="{{ e.detail }}">{{ e.detail }}</p>{% endif %}
+            <p class="mt-0.5 truncate text-xs muted" title="{{ e.user_agent or '' }}">
+              {% if e.user_id and users.get(e.user_id) %}{{ icon("user", "inline size-3 -mt-0.5") }} <a href="/superadmin/users?q={{ (users[e.user_id].email or "") | urlencode }}&state=all" class="hover:text-accent">{{ users[e.user_id].display_name }}</a> · {% endif %}{{ e.user_agent or "No user agent" }}
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5 md:justify-end">
+            {{ sa.severity(e.severity) }}
+            {% if e.action != 'logged' %}<span class="badge badge-{{ 'red' if e.action == 'banned' else 'amber' }}">{{ e.action | humanize }}</span>{% endif %}
+            {% if v %}{{ sa.verdict_badge(v) }}{% elif not e.ai_reviewed and e.severity >= 2 %}<span class="badge badge-zinc">{{ icon("clock", "size-3.5") }}Triage</span>{% endif %}
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {{ sa.window_nav(newer_url, older_url, newest_url, events | length, "events") }}
+    {% elif f.active %}
+      {{ ui.empty("No events match these filters", "Try a wider date, a lower severity or another category.", "search", "Reset filters", "/superadmin/security") }}
+    {% else %}
+      {{ ui.empty("No security events yet", "The gate records attack signatures, scanners, probes and rate-limit abuse here. A quiet log is a good log.", "shield") }}
+    {% endif %}
+  </section>
+
+  {# ------------------------------------------------------------------ side panel #}
+  <aside class="grid min-w-0 content-start gap-6" aria-label="Triage and top addresses">
+    <section class="card" aria-labelledby="triage-title">
+      <div class="sa-card-head">
+        <div>
+          <h2 id="triage-title" class="sa-card-title">AI triage</h2>
+          <p class="sa-card-sub">{{ sa.num(counts.security) }} event{{ 's' if counts.security != 1 }} (severity 2+) waiting · runs every 5 minutes</p>
+        </div>
+        {{ ui.ai_chip(disclaimer=False) }}
+      </div>
+      {% if verdicts %}
+        <div class="mt-4 grid gap-2.5">
+          {% for v in verdicts %}{{ sa.verdict_block(v, v.ip) }}{% endfor %}
+        </div>
+      {% else %}
+        <div class="mt-4">{{ sa.inline_empty("No verdicts yet", "Run the triage to let the AI review recent events per address.", "sparkles") }}</div>
+      {% endif %}
+      {% if verdicts or verdict_of %}{{ ui.ai_disclaimer("Ban changes are re-checked against the ban policy before they apply.") }}{% endif %}
+      <details class="mt-4 rounded-2xl bg-zinc-100/70 px-4 py-3 text-sm dark:bg-white/[0.04]">
+        <summary class="cursor-pointer font-medium">How triage decides</summary>
+        <ul class="mt-2 grid list-disc gap-1 pl-5 text-xs leading-relaxed muted">
+          <li>The AI recommends; deterministic code applies the ban policy.</li>
+          <li>Members with an active subscription: at most 24 h. Repeat offenders without one: permanent.</li>
+          <li>The AI may lift only automatic, temporary bans with severity ≤ 3 and a benign verdict.</li>
+          <li>Bans placed by a super-admin are never changed by triage.</li>
+          <li>AI offline: 3+ distinct severity 4-5 signatures from one address escalate; the rest wait for the AI.</li>
+        </ul>
+      </details>
+    </section>
+
+    <section class="card" aria-labelledby="top-title">
+      <h2 id="top-title" class="sa-card-title">Top addresses</h2>
+      <p class="sa-card-sub">{{ 'For the current filters' if f.active else f.window_label }}{% if top_sampled %} · from the latest {{ "{:,}".format(scan_cap) }} events{% endif %}</p>
+      {% if top_ips %}
+      <ul class="mt-4 grid gap-3">
+        {% for r in top_ips %}
+        <li>
+          <div class="mb-1.5 flex items-center gap-2 text-sm">
+            {{ sa.ip_link(r.ip, "min-w-0") }}
+            {% if r.ip in whitelist %}<span class="badge badge-blue">Whitelisted</span>{% endif %}
+            <span class="ml-auto">{{ sa.severity(r.sev) }}</span>
+            <span class="w-8 text-right font-semibold tabular-nums">{{ r.n }}</span>
+          </div>
+          <div class="sa-hbar" role="presentation" data-component="sa-bars"><span data-pct="{{ ((r.n / top_max * 100) if top_max else 0) | round(1) }}"></span></div>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+        <p class="mt-4 text-sm muted">Nothing to rank yet.</p>
+      {% endif %}
+    </section>
+  </aside>
+</div>
+{% endblock %}

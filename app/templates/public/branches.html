@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "public/_macros.html" as pub with context %}
+{#- Every published branch of a gym, one page at a time (routers.public.gym_branches; `page` is an
+    app.core.pagination.Page of BranchCards' branches, `cards` the cards of this page) -#}
+{% block title %}{{ gym.name }} locations{% endblock %}
+{% block description %}All {{ page.total }} verified {{ gym.name }} locations on IronPulse: addresses, opening hours and photos.{% endblock %}
+{% block content %}
+<div class="relative isolate">
+  <div class="pub-page-glow" aria-hidden="true"></div>
+
+  <nav class="mb-6 flex min-w-0 items-center gap-1.5 text-sm muted" aria-label="Breadcrumb">
+    <a href="/gyms" class="shrink-0 hover:text-ink dark:hover:text-white">Gyms</a>{{ icon("chevron-right", "size-3.5 shrink-0") }}
+    <a href="/gyms/{{ gym.slug }}{{ loc.qs }}" class="truncate hover:text-ink dark:hover:text-white">{{ gym.name }}</a>{{ icon("chevron-right", "size-3.5 shrink-0") }}
+    <span class="truncate font-medium text-ink dark:text-white" aria-current="page">Locations</span>
+  </nav>
+
+  <header class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between animate-fade-up">
+    <div class="min-w-0">
+      <p class="eyebrow mb-1.5">{{ gym.name }}</p>
+      <h1 class="text-3xl font-semibold tracking-tight sm:text-[40px] sm:leading-tight">All locations</h1>
+      <p class="mt-2 text-[15px] muted" aria-live="polite">{{ page.total }} verified {{ 'branch' if page.total == 1 else 'branches' }}{% if loc.has_coords %} · nearest first{% endif %}{% if page.pages > 1 %} · showing {{ page.first }}–{{ page.last }}{% endif %}</p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      {% if not loc.has_coords %}{{ pub.locate_form("Sort by distance", "secondary", "sm", "") }}{% endif %}
+      <a href="/gyms/{{ gym.slug }}{{ loc.qs }}#plans" class="btn btn-primary btn-sm">{{ icon("sparkles", "size-4") }} See plans</a>
+    </div>
+  </header>
+
+  <section aria-label="{{ gym.name }} locations">
+    <div class="grid gap-4">
+      {% for bc in cards %}{{ pub.branch_card(bc, gym) }}{% endfor %}
+    </div>
+    {{ ui.pager(page, noun="locations", label=gym.name ~ " locations pages") }}
+  </section>
+</div>
+{% endblock %}

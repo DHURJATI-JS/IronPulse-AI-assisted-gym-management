@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "owner/finance/_macros.html" as fin with context %}
+{% block title %}Finance{% endblock %}
+{% block content %}
+{% call ui.page_header("Money in & out", "Membership income, salaries and every other payment across " ~ (gym.name if gym else "all your gyms") ~ " - in one ledger.", eyebrow="Finance") %}
+  {{ fin.gym_filter(gyms, gym, "/owner/finance") }}
+  <a href="/owner/finance/transactions.csv{{ qs }}" class="btn btn-secondary">{{ icon("download", "size-4") }}<span>Export CSV</span></a>
+  <a href="/owner/payroll" class="btn btn-primary">{{ icon("banknotes", "size-4") }} Run payroll</a>
+{% endcall %}
+{{ fin.finance_nav("overview") }}
+
+{% if not gyms %}
+  {{ ui.empty("No gyms yet", "Create your first gym to start receiving membership payments and running payroll.", "building", "Create a gym", "/owner/gyms/new") }}
+{% else %}
+
+{# ------------------------------------------------------------------ KPIs (this month) #}
+<section class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4 animate-fade-up" aria-label="This month">
+  {{ fin.kpi("Income · " ~ kpi.month, kpi.income, kpi.income_delta or "Completed incoming payments", "trending-up", "green", "/owner/finance/transactions?direction=incoming&status=success") }}
+  {{ fin.kpi("Outgoing · " ~ kpi.month, kpi.outgoing, kpi.outgoing_delta or "Salaries, gratuity and refunds paid", "upload", "amber", "/owner/finance/transactions?direction=outgoing&status=success") }}
+  {{ fin.kpi("Net this month", kpi.net, "Income minus outgoing (" ~ currency ~ ")", "scale", "red" if kpi.net_negative else "blue", None, "fin-negative" if kpi.net_negative else "") }}
+  {% if pending %}
+    {% set pend_hint = (overdue_total ~ " overdue - pay them first") if overdue_total else ("Total " ~ (pending | map(attribute='amount') | join(' + '))) %}
+    {{ fin.kpi("Pending salaries", pending_total ~ (" statement" if pending_total == 1 else " statements"), pend_hint, "clock", "red" if overdue_total else "violet", "/owner/payroll?status=unpaid") }}
+  {% else %}
+    {{ fin.kpi("Pending salaries", "All paid", "Nothing waiting for payment", "check-circle", "green", "/owner/payroll") }}
+  {% endif %}
+</section>
+
+<div class="mt-6 grid gap-6 lg:grid-cols-3">
+  {# ---------------------------------------------------------------- 12-month chart #}
+  <section class="card lg:col-span-2 animate-fade-up" aria-labelledby="chart-title">
+    <div class="flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h2 id="chart-title" class="section-title">Last 12 months</h2>
+        <p class="mt-0.5 text-sm muted">Completed payments in {{ currency }}{% if gym %} · {{ gym.name }}{% endif %}</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <ul class="flex items-center gap-4 text-xs font-medium text-zinc-600 dark:text-zinc-300 fin-chart" aria-label="Legend">
+          <li class="flex items-center gap-1.5"><span class="fin-swatch fin-swatch-in" aria-hidden="true"></span>Income</li>
+          <li class="flex items-center gap-1.5"><span class="fin-swatch fin-swatch-out" aria-hidden="true"></span>Outgoing</li>
+        </ul>
+        {% if currencies | length > 1 %}
+          <div class="tabs" role="group" aria-label="Currency">
+            {% for c in currencies %}
+              <a href="/owner/finance?{{ 'gym=' ~ gym.id ~ '&' if gym }}currency={{ c }}" class="tab !px-3 !py-1 text-xs {{ 'tab-active' if c == currency }}"{% if c == currency %} aria-current="true"{% endif %}>{{ c }}</a>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="fin-chart mt-6" data-component="fin-chart">
+      <div class="relative h-52 pl-12 sm:h-60">
+        <div class="absolute inset-y-0 left-0 w-10 text-right text-[11px] tabular-nums muted" aria-hidden="true">
+          {% set positions = ['bottom-0', 'bottom-1/4', 'bottom-1/2', 'bottom-3/4', 'bottom-full'] %}
+          {% for t in chart.ticks %}<span class="absolute right-0 translate-y-1/2 {{ positions[loop.index0] }}">{{ t.label }}</span>{% endfor %}
+        </div>
+        <svg class="block size-full overflow-visible" viewBox="0 0 {{ chart.w }} {{ chart.h }}" preserveAspectRatio="none"
+             role="img" aria-labelledby="chart-title chart-desc" focusable="false">
+          <desc id="chart-desc">Columns compare completed income and outgoing payments per month in {{ currency }}; the table below lists every value.</desc>
+          {% for t in chart.ticks %}
+            <line x1="0" x2="{{ chart.w }}" y1="{{ t.y }}" y2="{{ t.y }}" class="{{ 'fin-baseline' if loop.first else 'fin-grid' }}" stroke="#d4d4d8" stroke-width="1" vector-effect="non-scaling-stroke"/>
+          {% endfor %}
+          {% for b in chart.bars %}
+            {% if b.in_path %}<path d="{{ b.in_path }}" class="fin-bar-in" fill="#2a78d6"/>{% endif %}
+            {% if b.out_path %}<path d="{{ b.out_path }}" class="fin-bar-out" fill="#eb6834"/>{% endif %}
+          {% endfor %}
+          {% for b in chart.bars %}
+            <rect class="fin-hit" x="{{ b.band_x }}" y="0" width="{{ b.band_w }}" height="{{ chart.h }}" fill="transparent" tabindex="0"
+                  data-label="{{ b.label }}" data-in="{{ b.income_fmt }}" data-out="{{ b.outgoing_fmt }}" data-net="{{ b.net_fmt }}"
+                  aria-label="{{ b.label }}: income {{ b.income_fmt }}, outgoing {{ b.outgoing_fmt }}">
+              <title>{{ b.label }} - income {{ b.income_fmt }}, outgoing {{ b.outgoing_fmt }}, net {{ b.net_fmt }}</title>
+            </rect>
+          {% endfor %}
+        </svg>
+        {% if chart.empty %}
+          <div class="absolute inset-0 grid place-items-center pl-12">
+            <p class="rounded-full bg-white/90 px-4 py-2 text-sm muted shadow-sm ring-1 ring-black/5 dark:bg-zinc-900/90 dark:ring-white/10">No completed payments in the last 12 months yet</p>
+          </div>
+        {% endif %}
+        <div class="fin-tooltip" data-tooltip hidden aria-hidden="true"></div>
+      </div>
+      <div class="mt-2 grid grid-cols-12 pl-12 text-center text-[11px] muted" aria-hidden="true">
+        {% for b in chart.bars %}<span><span class="sm:hidden">{{ b.short[:1] }}</span><span class="hidden sm:inline">{{ b.short }}</span></span>{% endfor %}
+      </div>
+    </div>
+
+    <details class="group mt-5">
+      <summary class="inline-flex cursor-pointer list-none items-center gap-1 text-sm font-medium text-accent">
+        {{ icon("chevron-right", "size-4 transition group-open:rotate-90") }} Show as table
+      </summary>
+      <div class="mt-3 overflow-x-auto">
+        <table class="table text-[13px]">
+          <thead><tr><th scope="col">Month</th><th scope="col" class="text-right">Income</th><th scope="col" class="text-right">Outgoing</th><th scope="col" class="text-right">Net</th></tr></thead>
+          <tbody>
+            {% for m in months | reverse %}
+              <tr>
+                <th scope="row" class="px-5 py-2.5 text-left font-medium">{{ m.label }}</th>
+                <td class="text-right tabular-nums">{{ m.income_fmt }}</td>
+                <td class="text-right tabular-nums">{{ m.outgoing_fmt }}</td>
+                <td class="text-right tabular-nums {{ 'fin-negative' if m.net < 0 }}">{{ m.net_fmt }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </section>
+
+  {# ---------------------------------------------------------------- pending salaries #}
+  <section class="card flex flex-col animate-fade-up" aria-labelledby="pending-title">
+    <div class="flex items-center justify-between gap-3">
+      <div>
+        <h2 id="pending-title" class="section-title">Salaries to pay</h2>
+        <p class="mt-0.5 text-sm muted">{% if pending_total %}{{ pending_total }} waiting{% if overdue_total %} · <span class="fin-negative font-medium">{{ overdue_total }} overdue</span>{% endif %}{% else %}You're all caught up{% endif %}</p>
+      </div>
+      <a href="/owner/payroll?status=unpaid" class="btn btn-ghost btn-sm">View all {{ icon("arrow-right", "size-4") }}</a>
+    </div>
+    {% if pending_items %}
+      <ul class="-mx-2 mt-4 grid gap-1">
+        {% for st in pending_items %}
+          <li>
+            <a href="/owner/payroll/{{ st.id }}" class="flex items-center gap-3 rounded-2xl px-2 py-2.5 transition hover:bg-zinc-900/[0.04] dark:hover:bg-white/[0.05]">
+              {{ ui.avatar(st.employee.photo_key, st.employee.display_name, "size-10") }}
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-medium">{{ st.employee.display_name }}</span>
+                <span class="block truncate text-xs muted">{{ 'Final settlement' if st.is_final_settlement else (st.period_start | date('%B %Y')) }}</span>
+              </span>
+              <span class="flex shrink-0 flex-col items-end gap-1">
+                <span class="text-sm font-semibold tabular-nums">{{ st.net_pay | money(st.currency) }}</span>
+                {{ fin.due_chip(st, today) }}
+              </span>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      {% call fin.empty_inline("No salaries waiting", "Generate the month's statements on the payroll page - every salary is counted by days worked.", "check-circle") %}
+        <a href="/owner/payroll" class="btn btn-secondary btn-sm">{{ icon("banknotes", "size-4") }} Open payroll</a>
+      {% endcall %}
+    {% endif %}
+    <div class="mt-auto pt-4">
+      <div class="card-muted !p-4 text-xs muted">
+        <p class="flex items-start gap-2">{{ icon("shield", "size-4 shrink-0 text-accent") }}<span>Staff can only be removed once every salary up to their last day (and any gratuity) is paid with a verified proof.</span></p>
+      </div>
+    </div>
+  </section>
+</div>
+
+{# ------------------------------------------------------------------ recent transactions #}
+<section class="mt-6 animate-fade-up" aria-labelledby="recent-title">
+  <div class="mb-3 flex items-end justify-between gap-3">
+    <div>
+      <h2 id="recent-title" class="section-title">Recent transactions</h2>
+      <p class="text-sm muted">The latest money movements across {{ gym.name if gym else 'your gyms' }}</p>
+    </div>
+    <a href="/owner/finance/transactions{{ qs }}" class="btn btn-secondary btn-sm">All transactions {{ icon("arrow-right", "size-4") }}</a>
+  </div>
+  {% if recent %}
+    <div class="card !p-2 sm:!p-3">
+      <ul class="divide-y divide-black/[0.05] dark:divide-white/[0.06]">
+        {% for tx in recent %}
+          <li class="flex items-center gap-3 px-2 py-3 sm:px-3">
+            {{ fin.direction_icon(tx) }}
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium">{{ tx.description }}</p>
+              <p class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs muted">
+                <span>{{ (tx.completed_at or tx.created_at) | dt("%d %b, %H:%M") }}</span>
+                {% if tx.gym %}<span class="hidden sm:inline">· {{ tx.gym.name }}</span>{% endif %}
+                <span class="hidden sm:inline">·</span>{{ fin.category_badge(tx.category) }}
+              </p>
+            </div>
+            <div class="flex shrink-0 flex-col items-end gap-1 text-sm">
+              {{ fin.signed_amount(tx) }}
+              {{ ui.status(tx.status) }}
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% else %}
+    {{ ui.empty("No transactions yet", "Membership payments, salaries and payouts will appear here as soon as money moves.", "receipt") }}
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

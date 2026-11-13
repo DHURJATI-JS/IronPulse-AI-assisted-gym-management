@@ -1,0 +1,780 @@
+{
+  "_about": "Clearly fictional IronPulse demo dataset. scripts/seed_demo.py loads it into PostgreSQL through the app's models and services; the app itself never reads this file, so after loading these gyms, accounts and shops exist only as database rows (edit or delete them in the app like any other data). Re-running the loader only adds entries that are missing. Images are generated and labelled DEMO / SPECIMEN.",
+  "version": 2,
+  "email_domain": "demo.ironpulse.local",
+  "member_tasks": [
+    {"title": "Mobility flow - 10 minutes", "kind": "workout", "due_in_hours": 3},
+    {"title": "Drink 2 L of water", "kind": "reminder", "remind_in_hours": 5},
+    {"title": "Log weight & height", "kind": "task", "due_in_hours": 24}
+  ],
+  "default_hours": {"mon_sat": ["06:00", "20:00"], "sun": ["07:00", "14:00"]},
+  "base_features": ["Air conditioning", "Cardio zone", "Free weights", "Machines", "Showers", "Lockers", "Personal training"],
+  "catalogue": {
+    "whey": {
+      "sku": "PF-WHEY-ISO-1KG", "name": "Gold Whey Protein Isolate 1 kg", "brand": "PulseFuel", "category": "supplements",
+      "description": "Fast-absorbing whey isolate with 25 g of protein per scoop and under 1 g of sugar. Mixes smoothly in water or milk - ideal after training.\n\nRich chocolate flavour. 33 servings per tub.",
+      "price": "2999", "mrp": "3499", "tax": "18", "stock": 24, "threshold": 5, "supplement": true, "age_restricted": false,
+      "allergens": ["milk", "soy"], "cautions": ["kidney"],
+      "ingredients": "Whey protein isolate (milk), cocoa powder, natural flavour, soy lecithin, sucralose.",
+      "nutrition": {"serving_size": "1 scoop (30 g)", "calories": 115, "protein_g": 25, "carbs_g": 2, "sugar_g": 0.8, "fat_g": 0.6},
+      "fulfillment": "both", "art": {"shape": "tub", "colors": ["#1d1d1f", "#0a84ff"], "label": "WHEY", "sub": "100% ISOLATE", "images": 3}
+    },
+    "creatine": {
+      "sku": "PF-CREA-250", "name": "Creatine Monohydrate 250 g", "brand": "PulseFuel", "category": "supplements",
+      "description": "Micronised creatine monohydrate for strength and power. Unflavoured - 3 g a day in any drink.",
+      "price": "899", "mrp": "1099", "tax": "18", "stock": 18, "threshold": 5, "supplement": true, "age_restricted": false,
+      "allergens": [], "cautions": ["kidney"], "ingredients": "Creatine monohydrate (micronised).",
+      "nutrition": {"serving_size": "1 scoop (3 g)", "calories": 0},
+      "fulfillment": "both", "art": {"shape": "jar", "colors": ["#f5f5f7", "#30d158"], "label": "CREATINE", "sub": "MONOHYDRATE", "images": 2}
+    },
+    "preworkout": {
+      "sku": "VT-PRE-FP", "name": "Ignite Pre-Workout - Fruit Punch", "brand": "Voltage", "category": "supplements",
+      "description": "Explosive energy and focus with 200 mg caffeine, beta-alanine and citrulline. Take 20 minutes before training. Not for evening workouts.",
+      "price": "1799", "mrp": null, "tax": "18", "stock": 15, "threshold": 4, "supplement": true, "age_restricted": true,
+      "allergens": [], "cautions": ["hypertension", "cardiac", "pregnancy", "minor"],
+      "ingredients": "L-citrulline, beta-alanine, caffeine anhydrous (200 mg), taurine, flavourings, sucralose.",
+      "nutrition": {"serving_size": "1 scoop (12 g)", "calories": 10, "carbs_g": 2, "caffeine_mg": 200},
+      "fulfillment": "both", "art": {"shape": "tub", "colors": ["#bf5af2", "#ff9f0a"], "label": "PRE", "sub": "WORKOUT", "images": 2}
+    },
+    "electrolytes": {
+      "sku": "PF-ELEC-20", "name": "Electrolyte Hydration Mix (20 sachets)", "brand": "PulseFuel", "category": "supplements",
+      "description": "Sodium, potassium and magnesium to replace what you sweat out on long or hot sessions. Light lemon flavour, low sugar. One sachet in 500 ml of water.",
+      "price": "699", "mrp": "799", "tax": "12", "stock": 40, "threshold": 8, "supplement": true, "age_restricted": false,
+      "allergens": [], "cautions": ["kidney", "hypertension"],
+      "ingredients": "Sodium citrate, potassium chloride, magnesium citrate, dextrose, natural lemon flavour, stevia.",
+      "nutrition": {"serving_size": "1 sachet (8 g)", "calories": 20, "carbs_g": 5, "sugar_g": 4},
+      "fulfillment": "both", "art": {"shape": "box", "colors": ["#64d2ff", "#0a84ff"], "label": "HYDRATE", "sub": "20 SACHETS", "images": 2}
+    },
+    "bars": {
+      "sku": "PF-BAR-PB12", "name": "Protein Bar Box - Peanut Butter Crunch (12 x 60 g)", "brand": "PulseFuel", "category": "nutrition",
+      "description": "20 g of protein and 2 g of sugar per bar. A filling snack between meals or after training. Contains peanuts and milk.",
+      "price": "1440", "mrp": "1680", "tax": "12", "stock": 30, "threshold": 6, "supplement": false, "age_restricted": false,
+      "allergens": ["peanuts", "milk", "soy"], "cautions": [],
+      "ingredients": "Milk protein blend, peanut butter (18%), soluble corn fibre, roasted peanuts, cocoa butter, soy lecithin, salt, sucralose.",
+      "nutrition": {"serving_size": "1 bar (60 g)", "calories": 220, "protein_g": 20, "carbs_g": 18, "sugar_g": 2, "fat_g": 8},
+      "fulfillment": "both", "art": {"shape": "box", "colors": ["#ff9f0a", "#1d1d1f"], "label": "PROTEIN", "sub": "PEANUT BUTTER", "images": 2}
+    },
+    "shaker": {
+      "sku": "BG-SHAKER-700", "name": "Leak-proof Shaker Bottle 700 ml", "brand": "Boldgrip", "category": "accessories",
+      "description": "BPA-free shaker with a stainless mixing ball, screw-lock lid and measurement marks. Dishwasher safe.",
+      "price": "399", "mrp": "549", "tax": "12", "stock": 60, "threshold": 10, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": [], "ingredients": null, "nutrition": null,
+      "fulfillment": "both", "art": {"shape": "shaker", "colors": ["#0a84ff", "#1d1d1f"], "label": "", "sub": "", "images": 2}
+    },
+    "bottle": {
+      "sku": "BG-BOTTLE-1L", "name": "Insulated Steel Water Bottle 1 L", "brand": "Boldgrip", "category": "accessories",
+      "description": "Double-wall stainless steel keeps water cold for 24 hours. Leak-proof loop cap, fits most car cup holders.",
+      "price": "1199", "mrp": "1499", "tax": "12", "stock": 35, "threshold": 6, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": [], "ingredients": null, "nutrition": null,
+      "fulfillment": "both", "art": {"shape": "bottle", "colors": ["#30d158", "#1d1d1f"], "label": "", "sub": "", "images": 2}
+    },
+    "duffel": {
+      "sku": "IS-DUFFEL-40", "name": "Everyday Gym Duffel 40 L", "brand": "Ironside", "category": "accessories",
+      "description": "Water-resistant duffel with a ventilated shoe pocket, wet compartment and padded shoulder strap. Fits a full gym kit plus a laptop sleeve.",
+      "price": "2499", "mrp": "2999", "tax": "12", "stock": 12, "threshold": 3, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": [], "ingredients": null, "nutrition": null,
+      "fulfillment": "both", "art": {"shape": "bag", "colors": ["#1d1d1f", "#ff453a"], "label": "", "sub": "", "images": 2}
+    },
+    "watch": {
+      "sku": "PFT-GPS-WATCH", "name": "PulseFit GPS Smartwatch", "brand": "PulseFit", "category": "wearables",
+      "description": "Built-in GPS, sleep tracking, step counting and 100+ workout modes. Up to 10 days of battery, 5 ATM water resistance.",
+      "price": "6999", "mrp": "8999", "tax": "18", "stock": 8, "threshold": 2, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": [], "ingredients": null, "nutrition": null,
+      "fulfillment": "pickup", "art": {"shape": "watch", "colors": ["#1c1c1e", "#30d158"], "label": "", "sub": "", "images": 2}
+    },
+    "hrm": {
+      "sku": "PFT-HRM-BT", "name": "Bluetooth Heart-Rate Chest Strap", "brand": "PulseFit", "category": "wearables",
+      "description": "Chest-strap heart-rate sensor (Bluetooth Low Energy and ANT+). Pairs with phones, watches and gym equipment. Soft, washable strap; the coin-cell battery lasts about a year.",
+      "price": "3999", "mrp": "4499", "tax": "18", "stock": 10, "threshold": 2, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": [], "ingredients": null, "nutrition": null,
+      "fulfillment": "both", "art": {"shape": "hrm", "colors": ["#1c1c1e", "#ff375f"], "label": "", "sub": "", "images": 2}
+    },
+    "bands": {
+      "sku": "IS-BANDS-3", "name": "Resistance Band Set (3 levels)", "brand": "Ironside", "category": "equipment",
+      "description": "Three natural-latex loop bands (light, medium, heavy) for warm-ups, mobility and home workouts.",
+      "price": "799", "mrp": null, "tax": "12", "stock": 25, "threshold": 3, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": ["skin_allergy"], "ingredients": "Natural latex.", "nutrition": null,
+      "fulfillment": "delivery", "art": {"shape": "bands", "colors": ["#ff453a", "#ff9f0a", "#30d158"], "label": "", "sub": "", "images": 1}
+    },
+    "belt": {
+      "sku": "IS-BELT-10MM", "name": "Lever Lifting Belt 10 mm (back support)", "brand": "Ironside", "category": "accessories",
+      "description": "Stiff 10 mm leather belt with a lever buckle for heavy squats and deadlifts. It helps you brace but doesn't replace good technique. Not advised with a hernia, during pregnancy or with uncontrolled blood pressure.",
+      "price": "3499", "mrp": "3999", "tax": "12", "stock": 9, "threshold": 2, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": ["hernia", "pregnancy", "hypertension"], "ingredients": null, "nutrition": null,
+      "fulfillment": "both", "art": {"shape": "belt", "colors": ["#1d1d1f", "#ff453a"], "label": "", "sub": "", "images": 2}
+    },
+    "gloves": {
+      "sku": "BG-GLOVES-WW", "name": "Padded Training Gloves with Wrist Wrap", "brand": "Boldgrip", "category": "accessories",
+      "description": "Breathable gloves with gel palm padding and an integrated wrist wrap. Protects your palms on bars and dumbbells and adds light wrist support.",
+      "price": "899", "mrp": "1199", "tax": "12", "stock": 30, "threshold": 5, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": [], "ingredients": null, "nutrition": null,
+      "fulfillment": "both", "art": {"shape": "gloves", "colors": ["#1d1d1f", "#0a84ff"], "label": "", "sub": "", "images": 2}
+    },
+    "wraps": {
+      "sku": "IS-WRAPS-18", "name": "Wrist Wraps 18 in (pair)", "brand": "Ironside", "category": "accessories",
+      "description": "Medium-stiff wraps with a thumb loop for pressing and handstand work. Wrap firmly for heavy sets and loosen between them.",
+      "price": "599", "mrp": null, "tax": "12", "stock": 26, "threshold": 5, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": [], "ingredients": null, "nutrition": null,
+      "fulfillment": "both", "art": {"shape": "wraps", "colors": ["#ff453a", "#1d1d1f"], "label": "", "sub": "", "images": 1}
+    },
+    "sleeves": {
+      "sku": "IS-SLEEVE-7MM", "name": "7 mm Knee Sleeves (pair)", "brand": "Ironside", "category": "accessories",
+      "description": "Neoprene sleeves that keep knees warm and add light compression on squat days. Not a brace - see a physio for injuries.",
+      "price": "2199", "mrp": "2599", "tax": "12", "stock": 14, "threshold": 3, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": [], "ingredients": null, "nutrition": null,
+      "fulfillment": "both", "art": {"shape": "sleeves", "colors": ["#1d1d1f", "#30d158"], "label": "", "sub": "", "images": 2}
+    },
+    "mat": {
+      "sku": "FL-MAT-6MM", "name": "Non-slip Yoga & Mobility Mat 6 mm", "brand": "Flowform", "category": "equipment",
+      "description": "Cushioned 6 mm mat with a grippy texture on both sides and a carry strap. Latex-free TPE foam, easy to wipe clean.",
+      "price": "1299", "mrp": "1599", "tax": "12", "stock": 20, "threshold": 4, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": [], "ingredients": "TPE foam (latex-free, PVC-free).", "nutrition": null,
+      "fulfillment": "both", "art": {"shape": "mat", "colors": ["#64d2ff", "#5e5ce6"], "label": "", "sub": "", "images": 2}
+    },
+    "roller": {
+      "sku": "FL-ROLLER-45", "name": "High-density Foam Roller 45 cm", "brand": "Flowform", "category": "equipment",
+      "description": "Firm EVA roller for warm-ups and post-workout recovery. Holds its shape after years of use.",
+      "price": "999", "mrp": null, "tax": "12", "stock": 18, "threshold": 4, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": [], "ingredients": null, "nutrition": null,
+      "fulfillment": "both", "art": {"shape": "roller", "colors": ["#ff9f0a", "#1d1d1f"], "label": "", "sub": "", "images": 1}
+    },
+    "rope": {
+      "sku": "BG-ROPE-SPD", "name": "Speed Jump Rope with Ball Bearings", "brand": "Boldgrip", "category": "equipment",
+      "description": "Adjustable coated-steel cable with smooth ball-bearing handles for double-unders and quick conditioning.",
+      "price": "499", "mrp": "699", "tax": "12", "stock": 40, "threshold": 6, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": [], "ingredients": null, "nutrition": null,
+      "fulfillment": "both", "art": {"shape": "rope", "colors": ["#0a84ff", "#1d1d1f"], "label": "", "sub": "", "images": 1}
+    },
+    "tee": {
+      "sku": "IS-TEE-DRY", "name": "Dry-fit Training Tee", "brand": "Ironside", "category": "apparel",
+      "description": "Lightweight, quick-drying tee with flat seams. Regular fit - ask at the desk to swap sizes.",
+      "price": "799", "mrp": "999", "tax": "5", "stock": 50, "threshold": 8, "supplement": false, "age_restricted": false,
+      "allergens": [], "cautions": [], "ingredients": "88% recycled polyester, 12% elastane.", "nutrition": null,
+      "fulfillment": "both", "art": {"shape": "tee", "colors": ["#1d1d1f", "#30d158"], "label": "IRONSIDE", "sub": "", "images": 1}
+    }
+  },
+  "gyms": [
+    {
+      "slug": "forge-and-flow", "name": "Forge & Flow Fitness", "country": "IN", "currency": "INR", "timezone": "Asia/Kolkata",
+      "tagline": "Strength, mobility and recovery - guided by people and AI.",
+      "description": "A premium community gym in Bengaluru and Mysuru with certified coaches, an AI-assisted coaching app, recovery zones and live chat with your trainer. Online, offline or both.",
+      "contact_email": "hello", "contact_phone": "+91 80 4000 1234", "website": "https://example.com",
+      "online": true, "offline": true, "logo": true, "income_history_months": 11,
+      "owner": {"key": "owner", "name": "Riya Kapoor", "dob": "1988-03-12", "phone": "+91 98450 11111", "city": "Bengaluru"},
+      "branches": [
+        {"name": "Indiranagar", "address": "12, 100 Feet Road, HAL 2nd Stage", "city": "Bengaluru", "state": "Karnataka", "postal": "560038",
+         "lat": 12.9716, "lon": 77.6412, "registration": "29ABCDE1234F1Z5", "phone": "+91 80 4000 1234", "verified": true, "photos": 4,
+         "extra_features": ["Sauna", "Women-only hours"]},
+        {"name": "Whitefield", "address": "7, ITPL Main Road", "city": "Bengaluru", "state": "Karnataka", "postal": "560066",
+         "lat": 12.9698, "lon": 77.75, "registration": "29ABCDE1234F1Z5", "phone": "+91 80 4000 1234", "verified": true, "photos": 3,
+         "extra_features": ["Parking", "Functional area"]},
+        {"name": "Mysuru", "address": "44, Kalidasa Road, VV Mohalla", "city": "Mysuru", "state": "Karnataka", "postal": "570002",
+         "lat": 12.2958, "lon": 76.6394, "registration": "29ABCDE1234F1Z5", "phone": "+91 80 4000 1234", "verified": true, "photos": 3},
+        {"name": "Koramangala (opening soon)", "address": "80 Feet Road, 4th Block", "city": "Bengaluru", "state": "Karnataka", "postal": "560034",
+         "lat": 12.9352, "lon": 77.6245, "registration": "29ABCDE1234F1Z5", "phone": "+91 80 4000 1234", "verified": false, "photos": 0,
+         "features": ["Air conditioning", "Free weights"], "documents": ["business_registration"]}
+      ],
+      "staff": [
+        {"key": "kabir", "name": "Kabir Rao", "dob": "1994-06-20", "phone": "+91 98450 33333", "role": "trainer",
+         "title": "Head Coach - Calisthenics", "salary": "65000", "mode": "both", "hire_days": 900,
+         "specialties": ["Calisthenics", "Mobility", "Handstands"], "bio": "Certified strength & conditioning coach. Loves teaching the first pull-up.",
+         "shifts": [{"branch": "Indiranagar", "days": [0, 2, 4], "from": "07:00", "to": "12:00"}, {"online": true, "days": [1, 3], "from": "18:00", "to": "20:00"}]},
+        {"key": "meera", "name": "Meera Iyer", "dob": "1991-01-08", "phone": "+91 98450 44444", "role": "trainer",
+         "title": "Strength Coach", "salary": "58000", "mode": "offline", "hire_days": 900,
+         "specialties": ["Hypertrophy", "Powerlifting", "Women's strength"], "bio": "Former state-level powerlifter; evidence-based hypertrophy programming.",
+         "shifts": [{"branch": "Indiranagar", "days": [1, 3, 5], "from": "14:00", "to": "20:00"}]},
+        {"key": "arjun", "name": "Arjun Nair", "dob": "1996-11-30", "phone": "+91 98450 55555", "role": "trainer",
+         "title": "Conditioning Coach", "salary": "52000", "mode": "both", "hire_days": 500,
+         "specialties": ["HIIT (adapted)", "Fat loss", "Rehab-friendly"], "bio": "Works at Indiranagar mornings and Whitefield evenings (6 h apart, 12 km).",
+         "shifts": [{"branch": "Indiranagar", "days": [0, 2, 4], "from": "06:00", "to": "10:00"}, {"branch": "Whitefield", "days": [0, 2, 4], "from": "16:00", "to": "20:00"}]},
+        {"key": "sana", "name": "Sana Sheikh", "dob": "1999-04-14", "phone": "+91 98450 66666", "role": "receptionist",
+         "title": "Front Desk Lead", "salary": "28000", "mode": "offline", "hire_days": 2100,
+         "shifts": [{"branch": "Indiranagar", "days": [0, 1, 2, 3, 4, 5], "from": "08:00", "to": "16:00"}]},
+        {"key": "lucas", "name": "Lucas Fernandes", "dob": "1990-07-04", "phone": "+351 912 345 678", "role": "software_developer",
+         "title": "Remote App Developer", "salary": "3200", "mode": "online", "hire_days": 420,
+         "country": "PT", "currency": "EUR", "city": "Lisbon", "timezone": "Europe/Lisbon"}
+      ],
+      "members": [
+        {"key": "ishaan", "name": "Ishaan Verma", "dob": "1997-02-25", "phone": "+91 98450 77777", "home": [12.975, 77.64],
+         "goal": "calisthenics", "level": "intermediate", "height": 176.0, "weight": 72.5, "start_weight": 73.6, "trend": -0.05,
+         "conditions": [["condition", "Asthma (exercise-induced)"], ["allergy", "Dust allergy"]],
+         "subscriptions": [{"plan": "online_trainer_ai", "days_ago": 6, "trainer": "kabir"},
+                           {"gym": "harbor-strength", "plan": "online_ai", "days_ago": 20}]},
+        {"key": "rohan", "name": "Rohan Das", "dob": "1979-10-05", "phone": "+91 98450 88888", "home": [12.966, 77.745],
+         "goal": "weight_loss", "level": "beginner", "height": 171.0, "weight": 94.0, "start_weight": 96.2, "trend": -0.12,
+         "conditions": [["condition", "High blood pressure"], ["injury", "Old ACL tear, right knee"], ["medication", "Amlodipine 5 mg"]],
+         "subscriptions": [{"plan": "offline_trainer_ai", "branch": "Whitefield", "days_ago": 12, "trainer": "arjun"}],
+         "alerts": [{"level": "warning", "title": "Quick weight drop noticed",
+                     "message": "Your weight dropped 2.1 kg over 5 days. If this wasn't intentional, consider talking to a doctor.",
+                     "recommendation": "Consult a healthcare professional if unintentional."}]},
+        {"key": "anaya", "name": "Anaya Gupta", "age": 15, "birthday": "05-09", "phone": "+91 98450 99999", "home": [12.9352, 77.6245],
+         "goal": "general_fitness", "level": "beginner", "height": 158.0, "weight": 49.0, "start_weight": 48.6, "trend": 0.02,
+         "conditions": [["allergy", "Peanut allergy"]],
+         "guardian": {"name": "Neha Gupta", "phone": "+91 98450 12345", "email": "neha.guardian", "relation": "Mother"},
+         "subscriptions": [{"plan": "combo", "branch": "Indiranagar", "days_ago": 3}]},
+        {"key": "kavya.menon", "name": "Kavya Menon", "dob": "1994-11-03", "phone": "+91 98450 10101", "home": [12.9784, 77.6408],
+         "goal": "general_fitness", "level": "beginner", "height": 162.0, "weight": 63.5, "start_weight": 62.4, "trend": 0.05,
+         "conditions": [["condition", "Pregnancy - second trimester, cleared by her doctor for light exercise"]],
+         "subscriptions": [{"plan": "online_ai", "days_ago": 10}]},
+        {"key": "aditya.rao", "name": "Aditya Rao", "dob": "1980-02-14", "phone": "+91 98450 10202", "home": [12.9698, 77.6489],
+         "goal": "weight_loss", "level": "beginner", "height": 174.0, "weight": 88.0, "start_weight": 89.6, "trend": -0.08,
+         "conditions": [["condition", "Type 2 diabetes"], ["injury", "Lower back pain (L4-L5 disc bulge, managed)"], ["medication", "Metformin 500 mg"]],
+         "subscriptions": [{"plan": "offline_trainer", "branch": "Indiranagar", "days_ago": 15, "trainer": "meera"}]}
+      ],
+      "chats": [
+        {"member": "ishaan", "staff": "kabir", "subject": "Pull-up progression", "customer_unread": 1, "messages": [
+          {"from": "member", "body": "Hi Kabir! I'm stuck at 2 pull-ups. Any tips?", "minutes_ago": 60},
+          {"from": "staff", "body": "Great start! Your asthma is well controlled, so let's add volume gently.", "minutes_ago": 40},
+          {"from": "staff", "body": "Try 3 x 5 negatives today.", "minutes_ago": 20}]},
+        {"member": "rohan", "staff": null, "subject": "Locker for evening sessions", "messages": [
+          {"from": "member", "body": "Can I get a locker for evenings?", "minutes_ago": 180},
+          {"from": "owner", "body": "Sure - locker 14 is yours.", "minutes_ago": 120}]},
+        {"member": "aditya.rao", "staff": "meera", "subject": "Back-friendly deadlift alternatives", "staff_unread": 1, "messages": [
+          {"from": "member", "body": "Conventional deadlifts flare up my lower back. What can I do instead?", "minutes_ago": 300},
+          {"from": "staff", "body": "Let's use trap-bar deadlifts from blocks and hip thrusts for now - same muscles, far less strain on your L4-L5.", "minutes_ago": 240},
+          {"from": "member", "body": "Thanks! Should I wear a belt for those?", "minutes_ago": 30}]}
+      ],
+      "jobs": [
+        {"title": "Housekeeping Associate", "role": "cleaner", "type": "full_time", "branch": "Indiranagar", "location": "Bengaluru - Indiranagar",
+         "salary": ["16000", "20000"], "requirements": "Reliable, punctual, comfortable with early shifts.",
+         "description": "Keep our training floors spotless and safe.",
+         "enquiries": [{"name": "Pooja S.", "email": "pooja", "phone": "+91 90000 00001",
+                        "message": "I have 3 years of housekeeping experience at a hotel gym. Available for morning shifts."}]},
+        {"title": "Accountant (part-time)", "role": "accountant", "type": "part_time", "location": "Bengaluru",
+         "salary": ["25000", "35000"], "requirements": "B.Com / CA-Inter, GST filing, payroll experience.",
+         "description": "Monthly payroll, GST returns and vendor payments."},
+        {"title": "Full-stack Developer (remote)", "role": "software_developer", "type": "contract", "location": "Remote",
+         "salary": ["2500", "4000"], "currency": "EUR", "requirements": "Python/FastAPI, PostgreSQL, accessibility-minded UI work.",
+         "description": "Help build our member app. International applicants welcome."}
+      ],
+      "misconduct": [
+        {"employee": "sana", "reporter": "rohan", "category": "rude behaviour", "days_ago": 2,
+         "description": "I was spoken to rudely at the front desk when my membership card didn't scan on Monday evening."}
+      ],
+      "notifications": [
+        {"to": "ishaan", "title": "Welcome to Forge & Flow", "body": "Your Online + Trainer + AI plan is active. Kabir is your coach."},
+        {"to": "rohan", "title": "Health check", "body": "We noticed a quick weight drop - see your Health page."},
+        {"to": "owner", "title": "Misconduct report received", "body": "A member reported an issue at the front desk. Please review and respond."},
+        {"to": "owner", "title": "Koramangala branch", "body": "Upload the remaining documents to start AI verification."}
+      ],
+      "shop": {
+        "products": ["whey", "creatine", "preworkout", "electrolytes", "bars", "shaker", "duffel", "watch", "hrm", "bands", "belt", "gloves", "mat"],
+        "stock": {"creatine": 4, "bands": 0},
+        "coupons": [{"code": "WELCOME10", "percent_off": 10, "min_order": "999"},
+                    {"code": "FLOW250", "amount_off": "250", "min_order": "2500", "valid_days": 60, "max_uses": 100}],
+        "orders": [
+          {"ref": "FF-1001", "member": "ishaan", "items": [["whey", 1], ["shaker", 1]], "fulfillment": "delivery", "status": "completed", "days_ago": 18,
+           "address": {"line1": "221, 12th Main, HAL 2nd Stage", "city": "Bengaluru", "postal_code": "560008"},
+           "reviews": [{"product": "whey", "rating": 5, "title": "Mixes really well", "body": "No clumps even in a shaker with water. Chocolate flavour isn't too sweet."},
+                       {"product": "shaker", "rating": 4, "title": "Doesn't leak", "body": "Solid lid. The mixing ball is a bit loud, but it works."}]},
+          {"ref": "FF-1002", "member": "rohan", "items": [["hrm", 1]], "fulfillment": "pickup", "branch": "Whitefield", "status": "completed", "days_ago": 9,
+           "reviews": [{"product": "hrm", "rating": 4, "title": "Comfortable strap", "body": "Paired with my phone in seconds. My trainer uses it to keep my sessions easy."}]},
+          {"ref": "FF-1003", "member": "aditya.rao", "items": [["belt", 1], ["gloves", 1]], "fulfillment": "pickup", "branch": "Indiranagar", "status": "ready_for_pickup", "days_ago": 1},
+          {"ref": "FF-1004", "member": "kavya.menon", "items": [["mat", 1], ["bands", 1]], "fulfillment": "delivery", "status": "partially_refunded", "days_ago": 8,
+           "address": {"line1": "14, 2nd Cross, Domlur Layout", "city": "Bengaluru", "postal_code": "560071"},
+           "refund": {"items": [["bands", 1]], "reason": "Ordered the wrong resistance level - the heavy band is too strong for me right now.", "status": "completed", "restock": false, "days_ago": 3},
+           "reviews": [{"product": "mat", "rating": 5, "title": "Comfy and grippy", "body": "Great for my prenatal mobility routine. No chemical smell."}]}
+        ]
+      }
+    },
+    {
+      "slug": "harbor-strength", "name": "Harbor Strength Studio", "country": "IN", "currency": "INR", "timezone": "Asia/Kolkata",
+      "tagline": "Barbell-first strength coaching by the sea.",
+      "description": "Powerlifting and hypertrophy specialists in Bandra, Mumbai. Online programming available.",
+      "contact_email": "harbor", "online": true, "offline": true, "logo": true,
+      "owner": {"key": "owner2", "name": "Vikram Joshi", "dob": "1983-09-02", "phone": "+91 98200 22222", "city": "Mumbai"},
+      "branches": [
+        {"name": "Bandra West", "address": "21, Hill Road", "city": "Mumbai", "state": "Maharashtra", "postal": "400050",
+         "lat": 19.0596, "lon": 72.8295, "registration": "27ABCDE9876F1Z2", "phone": "+91 22 4000 2121", "verified": true, "photos": 3,
+         "features": ["Air conditioning", "Free weights", "Powerlifting platforms", "Showers"]}
+      ],
+      "staff": [
+        {"key": "farhan.qureshi", "name": "Farhan Qureshi", "dob": "1989-05-17", "phone": "+91 98200 20101", "role": "trainer",
+         "title": "Head Powerlifting Coach", "salary": "60000", "mode": "offline", "hire_days": 700,
+         "specialties": ["Powerlifting", "Technique", "Meet prep"], "bio": "Federation-certified coach who loves a clean, braced deadlift.",
+         "shifts": [{"branch": "Bandra West", "days": [0, 2, 4], "from": "06:00", "to": "12:00"}, {"branch": "Bandra West", "days": [1, 3, 5], "from": "14:00", "to": "20:00"}]},
+        {"key": "tanvi.desai", "name": "Tanvi Desai", "dob": "1994-08-03", "phone": "+91 98200 20202", "role": "trainer",
+         "title": "Online Programming Coach", "salary": "48000", "mode": "online", "hire_days": 380,
+         "specialties": ["Hypertrophy", "Program design", "Heart-safe progressions"], "bio": "Writes progressive, check-in based programmes for busy members.",
+         "shifts": [{"online": true, "days": [0, 1, 2, 3, 4], "from": "18:00", "to": "21:00"}]},
+        {"key": "rhea.pinto", "name": "Rhea Pinto", "dob": "1997-12-01", "phone": "+91 98200 20303", "role": "receptionist",
+         "title": "Front Desk & Memberships", "salary": "24000", "mode": "offline", "hire_days": 600,
+         "shifts": [{"branch": "Bandra West", "days": [0, 1, 2, 3, 4, 5], "from": "07:00", "to": "15:00"}]}
+      ],
+      "members": [
+        {"key": "zoya.merchant", "name": "Zoya Merchant", "dob": "1998-06-30", "phone": "+91 98200 20404", "home": [19.0607, 72.8362],
+         "goal": "bulking", "level": "advanced", "height": 165.0, "weight": 61.0, "start_weight": 60.3, "trend": 0.03,
+         "conditions": [["injury", "Old lower back strain (cleared by physio)"]],
+         "subscriptions": [{"plan": "offline_trainer", "branch": "Bandra West", "days_ago": 25, "trainer": "farhan.qureshi"}]},
+        {"key": "dev.malhotra", "name": "Dev Malhotra", "dob": "1990-09-12", "phone": "+91 98200 20505", "home": [19.0728, 72.8347],
+         "goal": "general_fitness", "level": "intermediate", "height": 180.0, "weight": 84.0, "start_weight": 84.4, "trend": -0.02,
+         "conditions": [["injury", "Patellar tendinopathy, left knee"]],
+         "subscriptions": [{"plan": "offline_trainer", "branch": "Bandra West", "days_ago": 8, "trainer": "farhan.qureshi"}]},
+        {"key": "sameer.khan", "name": "Sameer Khan", "dob": "1972-03-08", "phone": "+91 98200 20606", "home": [19.1197, 72.8468],
+         "goal": "weight_loss", "level": "beginner", "height": 172.0, "weight": 86.0, "start_weight": 87.1, "trend": -0.05,
+         "conditions": [["condition", "Coronary artery disease - stent placed 2023"], ["condition", "High blood pressure"], ["medication", "Aspirin 75 mg, atorvastatin"]],
+         "subscriptions": [{"plan": "online_trainer_ai", "days_ago": 5, "trainer": "tanvi.desai"}]}
+      ],
+      "chats": [
+        {"member": "zoya.merchant", "staff": "farhan.qureshi", "subject": "Meet prep - opener attempts", "messages": [
+          {"from": "member", "body": "Should my squat opener be 95 or 97.5 kg?", "minutes_ago": 400},
+          {"from": "staff", "body": "Go 95 - you hit it for a double last week. An opener should feel like a heavy warm-up.", "minutes_ago": 380},
+          {"from": "member", "body": "Got it, thanks Coach!", "minutes_ago": 370}]}
+      ],
+      "jobs": [
+        {"title": "Strength Coach (mornings)", "role": "trainer", "type": "part_time", "branch": "Bandra West", "location": "Mumbai - Bandra West",
+         "salary": ["25000", "32000"], "requirements": "Recognised S&C or powerlifting certification; 2+ years of coaching.",
+         "description": "Coach small-group barbell sessions from 6 to 10 am, Monday to Saturday."}
+      ],
+      "shop": {
+        "products": ["whey", "creatine", "belt", "wraps", "sleeves", "gloves", "shaker", "tee"],
+        "stock": {"belt": 3},
+        "orders": [
+          {"ref": "HS-1001", "member": "zoya.merchant", "items": [["belt", 1], ["wraps", 1]], "fulfillment": "pickup", "branch": "Bandra West", "status": "completed", "days_ago": 24,
+           "reviews": [{"product": "belt", "rating": 5, "title": "Rock solid", "body": "The lever makes it quick to tighten between sets. Took a week to break in."}]},
+          {"ref": "HS-1002", "member": "dev.malhotra", "items": [["sleeves", 1]], "fulfillment": "pickup", "branch": "Bandra West", "status": "processing", "days_ago": 2},
+          {"ref": "HS-1003", "member": "sameer.khan", "items": [["whey", 1]], "fulfillment": "delivery", "status": "refund_requested", "days_ago": 4,
+           "address": {"line1": "B-604, Lokhandwala Complex, Andheri West", "city": "Mumbai", "postal_code": "400053"},
+           "refund": {"items": [["whey", 1]], "reason": "The tub arrived with a broken seal.", "status": "requested", "restock": false, "days_ago": 1}}
+        ]
+      }
+    },
+    {
+      "slug": "peak-performance-lab", "name": "Peak Performance Lab", "country": "IN", "currency": "INR", "timezone": "Asia/Kolkata",
+      "tagline": "Sports-science coaching for runners, cyclists and weekend athletes.",
+      "description": "Two Pune studios with a running track, recovery lounge and coaches who plan around your races, injuries and work week.",
+      "contact_email": "peak", "contact_phone": "+91 20 4000 3030", "website": "https://example.com",
+      "online": true, "offline": true, "logo": true, "income_history_months": 6,
+      "owner": {"key": "neha.kulkarni", "name": "Neha Kulkarni", "dob": "1986-07-19", "phone": "+91 98220 30001", "city": "Pune"},
+      "branches": [
+        {"name": "Koregaon Park", "address": "Lane 6, North Main Road, Koregaon Park", "city": "Pune", "state": "Maharashtra", "postal": "411001",
+         "lat": 18.5362, "lon": 73.893, "registration": "27PEAKL4321K1Z8", "phone": "+91 20 4000 3031", "verified": true, "photos": 4,
+         "extra_features": ["Running track", "Recovery lounge", "Ice bath"]},
+        {"name": "Baner", "address": "Baner Road, near Balewadi Phata", "city": "Pune", "state": "Maharashtra", "postal": "411045",
+         "lat": 18.559, "lon": 73.7868, "registration": "27PEAKL4321K1Z8", "phone": "+91 20 4000 3032", "verified": true, "photos": 3,
+         "extra_features": ["Functional area", "Parking"]}
+      ],
+      "staff": [
+        {"key": "omkar.patil", "name": "Omkar Patil", "dob": "1991-03-09", "phone": "+91 98220 30002", "role": "trainer",
+         "title": "Running & Endurance Coach", "salary": "55000", "mode": "both", "hire_days": 820,
+         "specialties": ["Running", "Endurance", "Injury prevention"], "bio": "Ultra-marathoner who builds the strength that keeps runners injury-free.",
+         "shifts": [{"branch": "Koregaon Park", "days": [0, 2, 4], "from": "06:00", "to": "11:00"}, {"branch": "Baner", "days": [0, 2, 4], "from": "17:00", "to": "20:00"}]},
+        {"key": "snehal.joshi", "name": "Snehal Joshi", "dob": "1990-10-21", "phone": "+91 98220 30003", "role": "trainer",
+         "title": "Strength & Rehab-friendly Coach", "salary": "60000", "mode": "offline", "hire_days": 1100,
+         "specialties": ["Strength", "Knee & ankle rehab", "Youth athletes"], "bio": "Works closely with physiotherapists; great with teen athletes.",
+         "shifts": [{"branch": "Baner", "days": [1, 3, 5], "from": "07:00", "to": "13:00"}]},
+        {"key": "ritika.shah", "name": "Ritika Shah", "dob": "1998-02-13", "phone": "+91 98220 30004", "role": "receptionist",
+         "title": "Front Desk Lead", "salary": "26000", "mode": "offline", "hire_days": 400,
+         "shifts": [{"branch": "Koregaon Park", "days": [0, 1, 2, 3, 4, 5], "from": "06:00", "to": "14:00"}]}
+      ],
+      "members": [
+        {"key": "aarav.deshpande", "name": "Aarav Deshpande", "dob": "1995-01-21", "phone": "+91 98220 30005", "home": [18.54, 73.885],
+         "goal": "general_fitness", "level": "intermediate", "height": 178.0, "weight": 70.0, "start_weight": 70.8, "trend": -0.03,
+         "conditions": [["injury", "Recurring right ankle sprain"]],
+         "subscriptions": [{"plan": "combo_trainer", "branch": "Koregaon Park", "days_ago": 12, "trainer": "omkar.patil"}]},
+        {"key": "meghna.pawar", "name": "Meghna Pawar", "dob": "1986-10-05", "phone": "+91 98220 30006", "home": [18.5642, 73.7769],
+         "goal": "weight_loss", "level": "beginner", "height": 160.0, "weight": 71.0, "start_weight": 72.2, "trend": -0.06,
+         "conditions": [["condition", "Hypothyroidism"], ["medication", "Levothyroxine 50 mcg"]],
+         "subscriptions": [{"plan": "offline", "branch": "Baner", "days_ago": 18}]},
+        {"key": "arnav.bhosale", "name": "Arnav Bhosale", "age": 16, "birthday": "03-17", "phone": "+91 98220 30007", "home": [18.559, 73.807],
+         "goal": "general_fitness", "level": "intermediate", "height": 172.0, "weight": 60.0, "start_weight": 59.6, "trend": 0.02,
+         "conditions": [["injury", "Osgood-Schlatter knee pain"]],
+         "guardian": {"name": "Sanjay Bhosale", "phone": "+91 98220 39901", "email": "sanjay.bhosale.guardian", "relation": "Father"},
+         "subscriptions": [{"plan": "offline_trainer", "branch": "Baner", "days_ago": 6, "trainer": "snehal.joshi"}]},
+        {"key": "farah.sayed", "name": "Farah Sayed", "dob": "1999-04-11", "phone": "+91 98220 30008", "home": [18.5463, 73.9033],
+         "goal": "general_fitness", "level": "beginner", "height": 158.0, "weight": 52.0, "start_weight": 52.3, "trend": -0.01,
+         "conditions": [["condition", "Migraine"]],
+         "subscriptions": [{"plan": "online_ai", "days_ago": 3}]}
+      ],
+      "chats": [
+        {"member": "aarav.deshpande", "staff": "omkar.patil", "subject": "Half-marathon taper week", "customer_unread": 1, "messages": [
+          {"from": "member", "body": "Race is on Sunday - should I still do Thursday's tempo run?", "minutes_ago": 900},
+          {"from": "staff", "body": "Keep it, but cut it to 15 minutes at tempo. Ankle feeling okay?", "minutes_ago": 860},
+          {"from": "member", "body": "Ankle's good, I'm wearing the brace on trails.", "minutes_ago": 840},
+          {"from": "staff", "body": "Perfect. Easy shakeout on Saturday, then go get that PB!", "minutes_ago": 45}]}
+      ],
+      "jobs": [
+        {"title": "Sports Massage Therapist", "role": "physiotherapist", "type": "part_time", "branch": "Koregaon Park", "location": "Pune - Koregaon Park",
+         "salary": ["20000", "30000"], "requirements": "Certified sports massage or BPT; experience with runners preferred.",
+         "description": "Recovery sessions for members in our lounge, three evenings a week."},
+        {"title": "Front Desk Associate (evenings)", "role": "receptionist", "type": "full_time", "branch": "Baner", "location": "Pune - Baner",
+         "salary": ["18000", "22000"], "requirements": "Friendly, organised, comfortable with a POS and OTP desk sign-ups.",
+         "description": "Welcome members, handle desk sign-ups and keep the evening shift running smoothly."}
+      ],
+      "notifications": [
+        {"to": "neha.kulkarni", "title": "Payroll statements ready", "body": "Last month's salary statements are ready to review and pay."}
+      ],
+      "shop": {
+        "products": ["whey", "creatine", "electrolytes", "hrm", "watch", "rope", "roller", "bottle", "tee"],
+        "stock": {"watch": 2},
+        "orders": [
+          {"ref": "PP-1001", "member": "aarav.deshpande", "items": [["watch", 1]], "fulfillment": "pickup", "branch": "Koregaon Park", "status": "completed", "days_ago": 28,
+           "reviews": [{"product": "watch", "rating": 5, "title": "GPS locks on fast", "body": "Accurate pace on my long runs, and the battery lasts a full week of training."}]},
+          {"ref": "PP-1002", "member": "meghna.pawar", "items": [["bottle", 1], ["roller", 1]], "fulfillment": "delivery", "status": "completed", "days_ago": 12,
+           "address": {"line1": "C-12, Sus Road, Pashan", "city": "Pune", "postal_code": "411021"},
+           "reviews": [{"product": "roller", "rating": 4, "title": "Firm but helpful", "body": "Took some getting used to, but my calves thank me."}]},
+          {"ref": "PP-1003", "member": "farah.sayed", "items": [["electrolytes", 2]], "fulfillment": "delivery", "status": "shipped", "days_ago": 1,
+           "address": {"line1": "7, Kalyani Nagar Main Road", "city": "Pune", "postal_code": "411006"}}
+        ]
+      }
+    },
+    {
+      "slug": "capital-calisthenics", "name": "Capital Calisthenics Co.", "country": "IN", "currency": "INR", "timezone": "Asia/Kolkata",
+      "tagline": "Bodyweight mastery - from your first push-up to the front lever.",
+      "description": "Calisthenics rigs, parallettes and patient coaches in South and Central Delhi. Mobility, handstands and postnatal-friendly classes too.",
+      "contact_email": "capital", "contact_phone": "+91 11 4000 4040", "online": true, "offline": true, "logo": true, "income_history_months": 6,
+      "owner": {"key": "aman.sethi", "name": "Aman Sethi", "dob": "1990-12-03", "phone": "+91 98110 40001", "city": "New Delhi"},
+      "branches": [
+        {"name": "Hauz Khas", "address": "S-14, Aurobindo Marg, Hauz Khas", "city": "New Delhi", "state": "Delhi", "postal": "110016",
+         "lat": 28.5494, "lon": 77.2001, "registration": "07CAPCL5678M1Z3", "phone": "+91 11 4000 4041", "verified": true, "photos": 3,
+         "features": ["Air conditioning", "Calisthenics rig", "Free weights", "Showers", "Lockers", "Personal training", "Outdoor park access"]},
+        {"name": "Connaught Place", "address": "N-22, Outer Circle, Connaught Place", "city": "New Delhi", "state": "Delhi", "postal": "110001",
+         "lat": 28.6315, "lon": 77.2167, "registration": "07CAPCL5678M1Z3", "phone": "+91 11 4000 4042", "verified": true, "photos": 3,
+         "features": ["Air conditioning", "Calisthenics rig", "Showers", "Lockers", "Personal training", "Women-only hours"]},
+        {"name": "Gurugram (documents pending)", "address": "Plot 31, Sector 29", "city": "Gurugram", "state": "Haryana", "postal": "122002",
+         "lat": 28.4691, "lon": 77.0638, "registration": "06CAPCL5678M1Z1", "phone": "+91 124 400 4043", "verified": false, "photos": 1,
+         "features": ["Air conditioning", "Calisthenics rig"], "documents": ["business_registration"]}
+      ],
+      "staff": [
+        {"key": "yash.chauhan", "name": "Yash Chauhan", "dob": "1993-06-25", "phone": "+91 98110 40002", "role": "trainer",
+         "title": "Head Calisthenics Coach", "salary": "58000", "mode": "both", "hire_days": 950,
+         "specialties": ["Calisthenics", "Front lever", "Wrist prep"], "bio": "Gymnastics background; makes the first muscle-up feel achievable.",
+         "shifts": [{"branch": "Hauz Khas", "days": [0, 2, 4], "from": "06:00", "to": "11:00"}, {"online": true, "days": [1, 3], "from": "19:00", "to": "21:00"}]},
+        {"key": "simran.kaur", "name": "Simran Kaur", "dob": "1995-09-09", "phone": "+91 98110 40003", "role": "trainer",
+         "title": "Mobility & Handstand Coach", "salary": "52000", "mode": "offline", "hire_days": 600,
+         "specialties": ["Mobility", "Handstands", "Postnatal fitness"], "bio": "Certified in pre- and postnatal training; patient and precise.",
+         "shifts": [{"branch": "Connaught Place", "days": [1, 3, 5], "from": "08:00", "to": "14:00"}]},
+        {"key": "mohit.sharma", "name": "Mohit Sharma", "dob": "1996-04-30", "phone": "+91 98110 40004", "role": "receptionist",
+         "title": "Front Desk Associate", "salary": "22000", "mode": "offline", "hire_days": 300,
+         "shifts": [{"branch": "Hauz Khas", "days": [0, 1, 2, 3, 4, 5], "from": "07:00", "to": "15:00"}]}
+      ],
+      "members": [
+        {"key": "rahul.bansal", "name": "Rahul Bansal", "dob": "2000-08-19", "phone": "+91 98110 40005", "home": [28.5245, 77.2066],
+         "goal": "calisthenics", "level": "intermediate", "height": 175.0, "weight": 68.0, "start_weight": 67.6, "trend": 0.02,
+         "conditions": [["injury", "Right wrist pain on loaded extension"]],
+         "subscriptions": [{"plan": "offline_trainer", "branch": "Hauz Khas", "days_ago": 14, "trainer": "yash.chauhan"}]},
+        {"key": "nidhi.arora", "name": "Nidhi Arora", "dob": "1992-02-02", "phone": "+91 98110 40006", "home": [28.5677, 77.2433],
+         "goal": "general_fitness", "level": "beginner", "height": 163.0, "weight": 66.0, "start_weight": 67.0, "trend": -0.05,
+         "conditions": [["condition", "Postpartum (9 months), cleared by her doctor"]],
+         "subscriptions": [{"plan": "combo", "branch": "Connaught Place", "days_ago": 9}]},
+        {"key": "tushar.malik", "name": "Tushar Malik", "dob": "1984-07-07", "phone": "+91 98110 40007", "home": [28.5598, 77.2069],
+         "goal": "weight_loss", "level": "intermediate", "height": 178.0, "weight": 72.2, "start_weight": 76.6, "drop": {"days": 6, "kg": 3.8},
+         "conditions": [["condition", "Type 1 diabetes"], ["medication", "Insulin (basal-bolus)"]],
+         "subscriptions": [{"plan": "offline_trainer_ai", "branch": "Hauz Khas", "days_ago": 20, "trainer": "yash.chauhan"}],
+         "suspension": {"reason": "Weight fell 3.8 kg in 6 days alongside type 1 diabetes. Training is paused for safety until an admin reviews it.",
+                        "alert": {"level": "critical", "title": "Rapid weight loss with diabetes",
+                                  "message": "Your weight dropped 3.8 kg in 6 days. With type 1 diabetes this can be a sign of a problem that needs a doctor.",
+                                  "recommendation": "Please see your doctor before training again. An admin will review and reactivate your plan once you're cleared."}}},
+        {"key": "myra.batra", "name": "Myra Batra", "age": 14, "birthday": "08-24", "phone": "+91 98110 40008", "home": [28.5503, 77.196],
+         "goal": "general_fitness", "level": "beginner", "height": 152.0, "weight": 42.0, "start_weight": 41.8, "trend": 0.01,
+         "conditions": [["allergy", "Lactose intolerance"]],
+         "guardian": {"name": "Pooja Batra", "phone": "+91 98110 49901", "email": "pooja.batra.guardian", "relation": "Mother"},
+         "subscriptions": [{"plan": "offline", "branch": "Hauz Khas", "days_ago": 4}]}
+      ],
+      "chats": [
+        {"member": "rahul.bansal", "staff": "yash.chauhan", "subject": "Wrist pain on planche leans", "messages": [
+          {"from": "member", "body": "My right wrist aches after planche leans. Should I stop?", "minutes_ago": 600},
+          {"from": "staff", "body": "Swap the leans for parallette holds this week and do the wrist-prep routine before every session. If it still hurts, please see a physio.", "minutes_ago": 560}]},
+        {"member": "tushar.malik", "staff": null, "subject": "Why is my training paused?", "messages": [
+          {"from": "member", "body": "My plan says training is paused. What happened?", "minutes_ago": 200},
+          {"from": "owner", "body": "We paused it because your weight dropped quickly and you have type 1 diabetes. Please see your doctor - an admin will reactivate your plan once you're cleared. Your plan days are not lost.", "minutes_ago": 150}]}
+      ],
+      "jobs": [
+        {"title": "Calisthenics Coach (weekends)", "role": "trainer", "type": "part_time", "branch": "Connaught Place", "location": "New Delhi - Connaught Place",
+         "salary": ["25000", "35000"], "requirements": "Strict muscle-up and handstand; coaching or gymnastics background.",
+         "description": "Lead Saturday and Sunday skill classes for beginners and intermediates."}
+      ],
+      "notifications": [
+        {"to": "aman.sethi", "title": "Gurugram branch needs photos", "body": "Add at least 3 photos and the remaining documents so AI verification can start."},
+        {"to": "tushar.malik", "title": "Training paused for your safety", "body": "Your weight dropped quickly. Please see a doctor - an admin will review your account."}
+      ],
+      "shop": {
+        "products": ["bands", "gloves", "wraps", "rope", "mat", "bars", "whey", "shaker"],
+        "coupons": [{"code": "LEVER15", "percent_off": 15, "min_order": "1500", "valid_days": 45}],
+        "orders": [
+          {"ref": "CC-1001", "member": "rahul.bansal", "items": [["wraps", 1], ["bands", 1]], "fulfillment": "delivery", "status": "completed", "days_ago": 15,
+           "address": {"line1": "J-9, Saket", "city": "New Delhi", "postal_code": "110017"},
+           "reviews": [{"product": "wraps", "rating": 5, "title": "Wrist saver", "body": "Firm enough for handstands; the thumb loop makes them quick to put on."}]},
+          {"ref": "CC-1002", "member": "nidhi.arora", "items": [["mat", 1]], "fulfillment": "delivery", "status": "refund_requested", "days_ago": 6,
+           "address": {"line1": "D-41, Lajpat Nagar II", "city": "New Delhi", "postal_code": "110024"},
+           "refund": {"items": [["mat", 1]], "reason": "The colour is different from the photo. It's unused and still in the wrap.", "status": "requested", "restock": true, "days_ago": 2}}
+        ]
+      }
+    },
+    {
+      "slug": "lakeview-fitness", "name": "Lakeview Fitness Collective", "country": "IN", "currency": "INR", "timezone": "Asia/Kolkata",
+      "tagline": "Family-friendly fitness by the lake.",
+      "description": "Pool, kids' zone and women-only hours in Banjara Hills, plus a busy tech-park studio in Gachibowli. Low-impact programmes for every age.",
+      "contact_email": "lakeview", "contact_phone": "+91 40 4000 5050", "online": true, "offline": true, "logo": true, "income_history_months": 6,
+      "owner": {"key": "priyanka.reddy", "name": "Priyanka Reddy", "dob": "1984-04-27", "phone": "+91 98480 50001", "city": "Hyderabad"},
+      "branches": [
+        {"name": "Banjara Hills", "address": "Road No. 12, Banjara Hills", "city": "Hyderabad", "state": "Telangana", "postal": "500034",
+         "lat": 17.4156, "lon": 78.4347, "registration": "36LAKEF2468P1Z6", "phone": "+91 40 4000 5051", "verified": true, "photos": 4,
+         "extra_features": ["Swimming pool", "Kids' zone", "Women-only hours"]},
+        {"name": "Gachibowli", "address": "Survey 64, Old Mumbai Highway, Gachibowli", "city": "Hyderabad", "state": "Telangana", "postal": "500032",
+         "lat": 17.4401, "lon": 78.3489, "registration": "36LAKEF2468P1Z6", "phone": "+91 40 4000 5052", "verified": true, "photos": 3,
+         "extra_features": ["Parking"]}
+      ],
+      "staff": [
+        {"key": "sai.kiran", "name": "Sai Kiran", "dob": "1990-01-11", "phone": "+91 98480 50002", "role": "trainer",
+         "title": "Family Fitness Coach", "salary": "50000", "mode": "offline", "hire_days": 1000,
+         "specialties": ["Weight loss", "Low-impact cardio", "Teens"], "bio": "Makes training fun for teens and gentle on knees.",
+         "shifts": [{"branch": "Banjara Hills", "days": [0, 1, 2, 3, 4], "from": "06:00", "to": "12:00"}]},
+        {"key": "lavanya.rao", "name": "Lavanya Rao", "dob": "1992-05-05", "phone": "+91 98480 50003", "role": "trainer",
+         "title": "Women's Strength & Prenatal Coach", "salary": "54000", "mode": "both", "hire_days": 760,
+         "specialties": ["Women's strength", "Prenatal", "Joint-friendly training"], "bio": "Strength for every stage of life, with a focus on joints and posture.",
+         "shifts": [{"branch": "Gachibowli", "days": [0, 2, 4], "from": "14:00", "to": "20:00"}, {"online": true, "days": [1, 3], "from": "07:00", "to": "09:00"}]},
+        {"key": "imran.ali", "name": "Imran Ali", "dob": "1994-11-19", "phone": "+91 98480 50004", "role": "receptionist",
+         "title": "Front Desk Lead", "salary": "24000", "mode": "offline", "hire_days": 500,
+         "shifts": [{"branch": "Banjara Hills", "days": [0, 1, 2, 3, 4, 5], "from": "12:00", "to": "20:00"}]}
+      ],
+      "members": [
+        {"key": "harsha.vardhan", "name": "Harsha Vardhan", "dob": "1988-12-12", "phone": "+91 98480 50005", "home": [17.4326, 78.4071],
+         "goal": "weight_loss", "level": "beginner", "height": 176.0, "weight": 102.0, "start_weight": 104.1, "trend": -0.1,
+         "conditions": [["condition", "Obesity (BMI 33)"], ["condition", "Sleep apnoea"]],
+         "subscriptions": [{"plan": "offline_trainer", "branch": "Banjara Hills", "days_ago": 21, "trainer": "sai.kiran"}]},
+        {"key": "sravani.goud", "name": "Sravani Goud", "dob": "1996-05-25", "phone": "+91 98480 50006", "home": [17.4435, 78.3772],
+         "goal": "general_fitness", "level": "beginner", "height": 157.0, "weight": 50.0, "start_weight": 49.7, "trend": 0.01,
+         "conditions": [["condition", "Iron-deficiency anaemia"]],
+         "subscriptions": [{"plan": "combo", "branch": "Gachibowli", "days_ago": 11}]},
+        {"key": "aditi.reddy", "name": "Aditi Reddy", "age": 14, "birthday": "01-30", "phone": "+91 98480 50007", "home": [17.42, 78.44],
+         "goal": "general_fitness", "level": "beginner", "height": 155.0, "weight": 45.0, "start_weight": 44.8, "trend": 0.01,
+         "conditions": [["condition", "Exercise-induced asthma"]],
+         "guardian": {"name": "Srinivas Reddy", "phone": "+91 98480 59901", "email": "srinivas.reddy.guardian", "relation": "Father"},
+         "subscriptions": [{"plan": "offline", "branch": "Banjara Hills", "days_ago": 7}]},
+        {"key": "mohammed.faiz", "name": "Mohammed Faiz", "dob": "1966-09-01", "phone": "+91 98480 50008", "home": [17.395, 78.44],
+         "goal": "general_fitness", "level": "beginner", "height": 170.0, "weight": 82.0, "start_weight": 82.9, "trend": -0.04,
+         "conditions": [["condition", "Knee osteoarthritis"], ["condition", "Type 2 diabetes"]],
+         "subscriptions": [{"plan": "online_trainer_ai", "days_ago": 13, "trainer": "lavanya.rao"}]}
+      ],
+      "chats": [
+        {"member": "harsha.vardhan", "staff": "sai.kiran", "subject": "Knee-friendly cardio options", "messages": [
+          {"from": "member", "body": "Running makes my knees sore. What else can I do for cardio?", "minutes_ago": 700},
+          {"from": "staff", "body": "Let's use the cycle, the rower and pool walking. Same calorie burn, much kinder on your knees.", "minutes_ago": 650}]}
+      ],
+      "jobs": [
+        {"title": "Swimming Coach", "role": "trainer", "type": "full_time", "branch": "Banjara Hills", "location": "Hyderabad - Banjara Hills",
+         "salary": ["35000", "45000"], "requirements": "Lifeguard + swim coaching certification; experience with children.",
+         "description": "Run learn-to-swim and aqua-fitness classes in our pool."},
+        {"title": "Housekeeping Associate", "role": "cleaner", "type": "full_time", "branch": "Gachibowli", "location": "Hyderabad - Gachibowli",
+         "salary": ["15000", "18000"], "requirements": "Punctual and thorough; evening availability.",
+         "description": "Keep the studio, changing rooms and equipment clean and safe."}
+      ],
+      "shop": {
+        "products": ["mat", "roller", "bottle", "tee", "electrolytes", "bars", "whey", "duffel", "watch"],
+        "orders": [
+          {"ref": "LV-1001", "member": "harsha.vardhan", "items": [["bottle", 1], ["tee", 2]], "fulfillment": "pickup", "branch": "Banjara Hills", "status": "completed", "days_ago": 19,
+           "reviews": [{"product": "tee", "rating": 4, "title": "Dries quickly", "body": "Good fit and doesn't cling after a sweaty session."}]},
+          {"ref": "LV-1002", "member": "mohammed.faiz", "items": [["roller", 1]], "fulfillment": "delivery", "status": "processing", "days_ago": 1,
+           "address": {"line1": "12-2-831, Mehdipatnam", "city": "Hyderabad", "postal_code": "500028"}}
+        ]
+      }
+    },
+    {
+      "slug": "marina-movement", "name": "Marina Movement Studio", "country": "IN", "currency": "INR", "timezone": "Asia/Kolkata",
+      "tagline": "Yoga, mobility and functional strength by the sea.",
+      "description": "A calm Besant Nagar studio with a sea-facing deck and a T. Nagar strength room. Programmes for desk workers, seniors and teens.",
+      "contact_email": "marina", "contact_phone": "+91 44 4000 6060", "online": true, "offline": true, "logo": true, "income_history_months": 6,
+      "owner": {"key": "karthik.subramanian", "name": "Karthik Subramanian", "dob": "1982-01-15", "phone": "+91 98400 60001", "city": "Chennai"},
+      "branches": [
+        {"name": "Besant Nagar", "address": "4th Main Road, Besant Nagar", "city": "Chennai", "state": "Tamil Nadu", "postal": "600090",
+         "lat": 13.0003, "lon": 80.2668, "registration": "33MARIN1357Q1Z4", "phone": "+91 44 4000 6061", "verified": true, "photos": 3,
+         "features": ["Air conditioning", "Yoga studio", "Free weights", "Showers", "Lockers", "Personal training", "Sea-facing deck"]},
+        {"name": "T. Nagar", "address": "48, Thyagaraya Road, T. Nagar", "city": "Chennai", "state": "Tamil Nadu", "postal": "600017",
+         "lat": 13.0418, "lon": 80.2341, "registration": "33MARIN1357Q1Z4", "phone": "+91 44 4000 6062", "verified": true, "photos": 3,
+         "extra_features": ["Kettlebell zone"]}
+      ],
+      "staff": [
+        {"key": "divya.raman", "name": "Divya Raman", "dob": "1989-08-28", "phone": "+91 98400 60002", "role": "trainer",
+         "title": "Yoga & Mobility Lead", "salary": "48000", "mode": "both", "hire_days": 1300,
+         "specialties": ["Yoga", "Mobility", "Healthy ageing"], "bio": "Twelve years of teaching; specialises in balance and bone health for seniors.",
+         "shifts": [{"branch": "Besant Nagar", "days": [0, 1, 2, 3, 4, 5], "from": "06:00", "to": "10:00"}, {"online": true, "days": [0, 2, 4], "from": "18:00", "to": "20:00"}]},
+        {"key": "vignesh.kumar", "name": "Vignesh Kumar", "dob": "1993-02-07", "phone": "+91 98400 60003", "role": "trainer",
+         "title": "Functional Strength Coach", "salary": "50000", "mode": "offline", "hire_days": 640,
+         "specialties": ["Functional strength", "Back care", "Kettlebells"], "bio": "Helps desk workers fix posture and build a strong, pain-free back.",
+         "shifts": [{"branch": "T. Nagar", "days": [0, 1, 2, 3, 4, 5], "from": "14:00", "to": "20:00"}]},
+        {"key": "anitha.selvam", "name": "Anitha Selvam", "dob": "1995-07-23", "phone": "+91 98400 60004", "role": "receptionist",
+         "title": "Front Desk Associate", "salary": "22000", "mode": "offline", "hire_days": 350,
+         "shifts": [{"branch": "Besant Nagar", "days": [0, 1, 2, 3, 4, 5], "from": "06:00", "to": "14:00"}]}
+      ],
+      "members": [
+        {"key": "lakshmi.narayanan", "name": "Lakshmi Narayanan", "dob": "1962-06-18", "phone": "+91 98400 60005", "home": [13.0067, 80.257],
+         "goal": "general_fitness", "level": "beginner", "height": 155.0, "weight": 58.0, "start_weight": 58.2, "trend": -0.01,
+         "conditions": [["condition", "Osteoporosis"], ["condition", "High blood pressure"], ["medication", "Telmisartan 40 mg"]],
+         "subscriptions": [{"plan": "offline_trainer", "branch": "Besant Nagar", "days_ago": 16, "trainer": "divya.raman"}]},
+        {"key": "pranav.iyer", "name": "Pranav Iyer", "dob": "1997-03-29", "phone": "+91 98400 60006", "home": [13.04, 80.233],
+         "goal": "bulking", "level": "intermediate", "height": 177.0, "weight": 70.0, "start_weight": 69.4, "trend": 0.04,
+         "conditions": [["injury", "Lower back pain from long desk hours"]],
+         "subscriptions": [{"plan": "combo_trainer", "branch": "T. Nagar", "days_ago": 10, "trainer": "vignesh.kumar"}]},
+        {"key": "meenakshi.sundaram", "name": "Meenakshi Sundaram", "dob": "1980-11-08", "phone": "+91 98400 60007", "home": [13.0339, 80.2619],
+         "goal": "weight_loss", "level": "beginner", "height": 160.0, "weight": 74.0, "start_weight": 75.1, "trend": -0.05,
+         "conditions": [["condition", "Asthma"]],
+         "subscriptions": [{"plan": "online_ai", "days_ago": 6}]},
+        {"key": "varun.krishnan", "name": "Varun Krishnan", "age": 17, "birthday": "12-02", "phone": "+91 98400 60008", "home": [13.045, 80.24],
+         "goal": "bulking", "level": "intermediate", "height": 174.0, "weight": 62.0, "start_weight": 61.5, "trend": 0.03,
+         "conditions": [],
+         "guardian": {"name": "Geetha Krishnan", "phone": "+91 98400 69901", "email": "geetha.krishnan.guardian", "relation": "Mother"},
+         "subscriptions": [{"plan": "offline", "branch": "T. Nagar", "days_ago": 2}]}
+      ],
+      "chats": [
+        {"member": "lakshmi.narayanan", "staff": "divya.raman", "subject": "Balance exercises at home", "customer_unread": 1, "messages": [
+          {"from": "member", "body": "Can I practise the balance drills at home on rest days?", "minutes_ago": 500},
+          {"from": "staff", "body": "Yes - stand next to a kitchen counter, hold on lightly and do the heel-to-toe walk and single-leg stands. Five minutes is plenty.", "minutes_ago": 90}]}
+      ],
+      "jobs": [
+        {"title": "Physiotherapist (part-time)", "role": "physiotherapist", "type": "part_time", "branch": "Besant Nagar", "location": "Chennai - Besant Nagar",
+         "salary": ["30000", "40000"], "requirements": "BPT/MPT with a valid registration; experience with seniors.",
+         "description": "Assess new members with injuries and work with our coaches on safe progressions."}
+      ],
+      "shop": {
+        "products": ["mat", "roller", "bands", "bottle", "tee", "electrolytes", "shaker"],
+        "orders": [
+          {"ref": "MM-1001", "member": "pranav.iyer", "items": [["roller", 1], ["mat", 1]], "fulfillment": "pickup", "branch": "T. Nagar", "status": "completed", "days_ago": 16,
+           "reviews": [{"product": "mat", "rating": 5, "title": "Perfect thickness", "body": "Cushioned enough for my knees without feeling wobbly."}]},
+          {"ref": "MM-1002", "member": "lakshmi.narayanan", "items": [["mat", 1]], "fulfillment": "pickup", "branch": "Besant Nagar", "status": "ready_for_pickup", "days_ago": 1}
+        ]
+      }
+    },
+    {
+      "slug": "desert-strength", "name": "Desert Strength Club", "country": "AE", "currency": "AED", "timezone": "Asia/Dubai",
+      "price_factor": 0.044,
+      "tagline": "Strength and conditioning in the heart of Dubai - air-conditioned all year.",
+      "description": "Olympic lifting platforms, a heat-safe conditioning programme and coaches who speak Arabic, English, Hindi and Tagalog. Business Bay and JLT.",
+      "contact_email": "desert", "contact_phone": "+971 4 400 7070", "online": true, "offline": true, "logo": true, "income_history_months": 6,
+      "owner": {"key": "omar.haddad", "name": "Omar Haddad", "dob": "1980-05-22", "phone": "+971 50 123 4501", "city": "Dubai"},
+      "branches": [
+        {"name": "Business Bay", "address": "Bay Square, Building 7", "city": "Dubai", "state": "Dubai", "postal": "00000",
+         "lat": 25.186, "lon": 55.262, "registration": "DED-1048213", "phone": "+971 4 400 7071", "verified": true, "photos": 4,
+         "extra_features": ["Olympic lifting platforms", "Sauna", "Parking"]},
+        {"name": "Jumeirah Lake Towers", "address": "Cluster D, Lake Level", "city": "Dubai", "state": "Dubai", "postal": "00000",
+         "lat": 25.0693, "lon": 55.1413, "registration": "DED-1048213", "phone": "+971 4 400 7072", "verified": true, "photos": 3,
+         "extra_features": ["Women-only hours"]}
+      ],
+      "staff": [
+        {"key": "james.carter", "name": "James Carter", "dob": "1987-03-03", "phone": "+971 50 123 4502", "role": "trainer",
+         "title": "Head of Strength & Conditioning", "salary": "14000", "mode": "offline", "hire_days": 1200,
+         "specialties": ["Strength & conditioning", "Diabetes-aware training", "Olympic lifting"], "bio": "Former rugby S&C coach; careful with blood-sugar-friendly programming.",
+         "shifts": [{"branch": "Business Bay", "days": [0, 1, 2, 3, 4], "from": "06:00", "to": "12:00"}]},
+        {"key": "aisha.rahman", "name": "Aisha Rahman", "dob": "1993-12-17", "phone": "+971 50 123 4503", "role": "trainer",
+         "title": "Women's & Online Coach", "salary": "12000", "mode": "both", "hire_days": 540,
+         "specialties": ["Women's strength", "Online coaching", "Heat-safe training"], "bio": "Plans around Dubai summers: hydration, timing and indoor alternatives.",
+         "shifts": [{"branch": "Jumeirah Lake Towers", "days": [0, 2, 4], "from": "14:00", "to": "20:00"}, {"online": true, "days": [1, 3], "from": "07:00", "to": "09:00"}]},
+        {"key": "paolo.reyes", "name": "Paolo Reyes", "dob": "1992-04-26", "phone": "+971 50 123 4504", "role": "receptionist",
+         "title": "Front Desk Supervisor", "salary": "5500", "mode": "offline", "hire_days": 900,
+         "shifts": [{"branch": "Business Bay", "days": [0, 1, 2, 3, 4, 5], "from": "12:00", "to": "20:00"}]}
+      ],
+      "members": [
+        {"key": "khalid.mansoori", "name": "Khalid Al Mansoori", "dob": "1985-01-09", "phone": "+971 50 123 4505", "home": [25.1972, 55.2744],
+         "goal": "weight_loss", "level": "beginner", "height": 178.0, "weight": 95.0, "start_weight": 96.4, "trend": -0.07,
+         "conditions": [["condition", "Type 2 diabetes"], ["medication", "Metformin 1000 mg"]],
+         "subscriptions": [{"plan": "offline_trainer", "branch": "Business Bay", "days_ago": 19, "trainer": "james.carter"}]},
+        {"key": "sophie.martin", "name": "Sophie Martin", "dob": "1991-07-14", "phone": "+971 50 123 4506", "home": [25.075, 55.145],
+         "goal": "general_fitness", "level": "intermediate", "height": 168.0, "weight": 60.0, "start_weight": 60.2, "trend": -0.01,
+         "conditions": [["condition", "Heat intolerance (fainted outdoors last summer)"]],
+         "subscriptions": [{"plan": "combo", "branch": "Jumeirah Lake Towers", "days_ago": 7}]},
+        {"key": "rohit.menon", "name": "Rohit Menon", "dob": "1996-02-20", "phone": "+971 50 123 4507", "home": [25.08, 55.14],
+         "goal": "bulking", "level": "beginner", "height": 181.0, "weight": 77.0, "start_weight": 76.6, "trend": 0.02,
+         "conditions": [["injury", "Inguinal hernia - surgery scheduled"]],
+         "subscriptions": [{"plan": "online_trainer_ai", "days_ago": 4, "trainer": "aisha.rahman"}]},
+        {"key": "layla.nasser", "name": "Layla Nasser", "age": 15, "birthday": "09-30", "phone": "+971 50 123 4508", "home": [25.19, 55.27],
+         "goal": "general_fitness", "level": "beginner", "height": 158.0, "weight": 48.0, "start_weight": 47.8, "trend": 0.01,
+         "conditions": [],
+         "guardian": {"name": "Rania Nasser", "phone": "+971 50 999 4508", "email": "rania.nasser.guardian", "relation": "Mother"},
+         "subscriptions": [{"plan": "offline", "branch": "Business Bay", "days_ago": 5}]}
+      ],
+      "chats": [
+        {"member": "sophie.martin", "staff": "aisha.rahman", "subject": "Training in the summer heat", "messages": [
+          {"from": "member", "body": "Is it okay to do my conditioning outdoors at 7 pm?", "minutes_ago": 1200},
+          {"from": "staff", "body": "Not with your heat intolerance - it's still above 35 C then. Let's keep conditioning indoors with the AC on, and sip electrolytes during the session.", "minutes_ago": 1100}]}
+      ],
+      "jobs": [
+        {"title": "Personal Trainer (Arabic & English)", "role": "trainer", "type": "full_time", "branch": "Jumeirah Lake Towers", "location": "Dubai - JLT",
+         "salary": ["9000", "13000"], "requirements": "REPs UAE registration; fluent Arabic and English.",
+         "description": "One-to-one and small-group coaching for members at JLT."},
+        {"title": "Facility Technician", "role": "maintenance", "type": "full_time", "branch": "Business Bay", "location": "Dubai - Business Bay",
+         "salary": ["4500", "6000"], "requirements": "HVAC and gym-equipment maintenance experience.",
+         "description": "Keep the air conditioning, machines and platforms in top shape."}
+      ],
+      "misconduct": [
+        {"employee": "paolo.reyes", "reporter": "khalid.mansoori", "category": "billing", "days_ago": 3,
+         "description": "I was charged twice for a locker key at the front desk and nobody could fix it that evening."}
+      ],
+      "notifications": [
+        {"to": "omar.haddad", "title": "Misconduct report received", "body": "A member reported a billing problem at the Business Bay desk. Please review and respond."}
+      ],
+      "shop": {
+        "products": ["whey", "creatine", "preworkout", "belt", "sleeves", "wraps", "gloves", "hrm", "bottle"],
+        "coupons": [{"code": "SUMMER15", "percent_off": 15, "valid_days": 30}],
+        "orders": [
+          {"ref": "DS-1001", "member": "khalid.mansoori", "items": [["whey", 1], ["bottle", 1]], "fulfillment": "pickup", "branch": "Business Bay", "status": "completed", "days_ago": 22,
+           "reviews": [{"product": "whey", "rating": 4, "title": "Good protein, low sugar", "body": "Doesn't spike my glucose readings, which matters to me. Pricey but worth it."}]},
+          {"ref": "DS-1002", "member": "sophie.martin", "items": [["hrm", 1]], "fulfillment": "delivery", "status": "shipped", "days_ago": 2,
+           "address": {"line1": "Apartment 1204, Lake Shore Tower, JLT", "city": "Dubai", "postal_code": "00000"}}
+        ]
+      }
+    },
+    {
+      "slug": "pulse-anywhere", "name": "Pulse Anywhere", "country": "IN", "currency": "INR", "timezone": "Asia/Kolkata",
+      "tagline": "Online coaching and AI-guided plans - train from anywhere.",
+      "description": "An online-only gym: live video coaching, AI plans that respect your health conditions and a delivered-to-your-door shop. No branches - so only online plans are on sale.",
+      "contact_email": "anywhere", "online": true, "offline": false, "logo": true, "income_history_months": 4,
+      "disabled_plans": ["offline", "offline_trainer", "offline_ai", "offline_trainer_ai", "combo", "combo_trainer", "combo_ai", "combo_trainer_ai"],
+      "owner": {"key": "sara.thomas", "name": "Sara Thomas", "dob": "1992-08-08", "phone": "+91 98950 80001", "city": "Kochi"},
+      "branches": [],
+      "staff": [
+        {"key": "nikhil.george", "name": "Nikhil George", "dob": "1991-09-14", "phone": "+91 98950 80002", "role": "trainer",
+         "title": "Online Strength Coach", "salary": "45000", "mode": "online", "hire_days": 500,
+         "specialties": ["Home workouts", "Bands & bodyweight", "Fat loss"], "bio": "No gym? No problem. Builds real strength with bands and a backpack.",
+         "shifts": [{"online": true, "days": [0, 1, 2, 3, 4], "from": "06:00", "to": "09:00"}, {"online": true, "days": [0, 1, 2, 3, 4], "from": "18:00", "to": "21:00"}]},
+        {"key": "ananya.pillai", "name": "Ananya Pillai", "dob": "1996-06-21", "phone": "+91 98950 80003", "role": "trainer",
+         "title": "Online Yoga Coach", "salary": "42000", "mode": "online", "hire_days": 420,
+         "specialties": ["Yoga", "Breathwork", "Stress relief"], "bio": "Gentle, breath-led sessions for busy minds and stiff backs.",
+         "shifts": [{"online": true, "days": [0, 1, 2, 3, 4, 5], "from": "07:00", "to": "10:00"}]},
+        {"key": "jose.mathew", "name": "Jose Mathew", "dob": "1990-02-25", "phone": "+91 98950 80009", "role": "manager",
+         "title": "Community & Support Manager", "salary": "40000", "mode": "online", "hire_days": 700,
+         "shifts": [{"online": true, "days": [0, 1, 2, 3, 4], "from": "10:00", "to": "18:00"}]}
+      ],
+      "members": [
+        {"key": "rhea.joseph", "name": "Rhea Joseph", "dob": "1993-10-10", "phone": "+91 98950 80004", "city": "Kochi",
+         "goal": "weight_loss", "level": "beginner", "height": 163.0, "weight": 70.0, "start_weight": 71.3, "trend": -0.06,
+         "conditions": [],
+         "subscriptions": [{"plan": "online_trainer_ai", "days_ago": 14, "trainer": "nikhil.george"}]},
+        {"key": "gautam.menon", "name": "Gautam Menon", "dob": "1977-04-04", "phone": "+91 98950 80005", "city": "Thiruvananthapuram",
+         "goal": "general_fitness", "level": "beginner", "height": 170.0, "weight": 78.0, "start_weight": 78.6, "trend": -0.03,
+         "conditions": [["condition", "Heart condition - post-stent, cleared for light exercise"], ["medication", "Clopidogrel 75 mg"]],
+         "subscriptions": [{"plan": "online_ai", "days_ago": 9}]},
+        {"key": "fatima.sheikh", "name": "Fatima Sheikh", "dob": "2001-01-28", "phone": "+91 98950 80006", "city": "Hyderabad",
+         "goal": "general_fitness", "level": "beginner", "height": 160.0, "weight": 55.0, "start_weight": 55.2, "trend": -0.01,
+         "conditions": [["condition", "Migraine"], ["condition", "Anxiety"]],
+         "subscriptions": [{"plan": "online_trainer", "days_ago": 12, "trainer": "ananya.pillai"}]},
+        {"key": "ethan.dsouza", "name": "Ethan D'Souza", "age": 16, "birthday": "06-06", "phone": "+91 98950 80007", "city": "Panaji",
+         "goal": "calisthenics", "level": "beginner", "height": 170.0, "weight": 56.0, "start_weight": 55.6, "trend": 0.02,
+         "conditions": [],
+         "guardian": {"name": "Clive D'Souza", "phone": "+91 98950 89901", "email": "clive.dsouza.guardian", "relation": "Father"},
+         "subscriptions": [{"plan": "online_trainer", "days_ago": 3, "trainer": "nikhil.george"}]}
+      ],
+      "chats": [
+        {"member": "rhea.joseph", "staff": "nikhil.george", "subject": "Home workout with only bands", "customer_unread": 1, "messages": [
+          {"from": "member", "body": "I'm travelling this week with just my resistance bands. Can you adapt my plan?", "minutes_ago": 240},
+          {"from": "staff", "body": "Done! Banded squats, rows, presses and hip bridges - 3 rounds, 12 reps each. I've updated today's plan.", "minutes_ago": 15}]}
+      ],
+      "jobs": [
+        {"title": "Nutritionist (remote)", "role": "nutritionist", "type": "contract", "location": "Remote (India)",
+         "salary": ["30000", "45000"], "requirements": "MSc Nutrition or registered dietitian; video consults.",
+         "description": "Run online nutrition check-ins for members alongside their coaches."}
+      ],
+      "shop": {
+        "products": ["bands", "mat", "rope", "hrm", "watch", "whey", "shaker", "bars"],
+        "coupons": [{"code": "ANYWHERE5", "percent_off": 5}],
+        "orders": [
+          {"ref": "PA-1001", "member": "rhea.joseph", "items": [["bands", 1], ["mat", 1]], "fulfillment": "delivery", "status": "completed", "days_ago": 14,
+           "address": {"line1": "38/1120, Panampilly Nagar", "city": "Kochi", "postal_code": "682036"},
+           "reviews": [{"product": "bands", "rating": 5, "title": "Gym in a pouch", "body": "Three useful levels and they pack flat - perfect for travel."}]},
+          {"ref": "PA-1002", "member": "gautam.menon", "items": [["watch", 1]], "fulfillment": "delivery", "status": "refunded", "days_ago": 11,
+           "address": {"line1": "TC 25/1450, Vazhuthacaud", "city": "Thiruvananthapuram", "postal_code": "695014"},
+           "refund": {"items": [["watch", 1]], "reason": "Changed my mind - returned unopened.", "status": "completed", "restock": true, "days_ago": 4}}
+        ]
+      }
+    }
+  ]
+}

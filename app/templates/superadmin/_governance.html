@@ -1,0 +1,62 @@
+{#- Governance building blocks (app/routers/superadmin_governance.py). Import WITH CONTEXT:
+      {% import "superadmin/_governance.html" as gov with context %}
+-#}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+
+{% macro state_badge(state) -%}
+{{ ui.badge(G.STATE_LABELS.get(state, state), G.STATE_TONES.get(state, "zinc")) }}
+{%- endmacro %}
+
+{#- The impact preview: counts and money (a dry run - nothing changes) -#}
+{% macro impact(i, title="Impact preview", note=None) %}
+<section class="card" aria-labelledby="impact-title" data-impact>
+  <div class="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+    <h2 id="impact-title" class="section-title">{{ title }}</h2>
+    <p class="text-xs muted">{{ note or "A dry run - nothing has changed yet." }}</p>
+  </div>
+  <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    {{ sa.mini("Members affected", "{:,}".format(i.members), "{:,} active membership{}".format(i.memberships, "s" if i.memberships != 1 else "")) }}
+    {{ sa.mini("Refunds due (pro rata)", money_text(i.refunds_due), ("last membership ends " ~ (i.last_end | date)) if i.last_end else "no active memberships", "amber" if i.refunds_due else None) }}
+    {{ sa.mini("Staff affected", "{:,}".format(i.staff), "{:,} earning pay{}".format(i.staff_working, " (first " ~ G.PREVIEW_STAFF_MAX ~ " priced)" if i.staff_truncated else "")) }}
+    {{ sa.mini("Earned pay outstanding", money_text(i.earned_pay), "{:,} unpaid statement{} + pay since the last".format(i.unpaid_statements, "s" if i.unpaid_statements != 1 else ""), "red" if i.earned_pay else None) }}
+    {{ sa.mini("Payouts under way", "{:,}".format(i.pending_payouts), money_text(i.pending_payout_pay) if i.pending_payouts else "none") }}
+    {{ sa.mini("Open shop orders", "{:,}".format(i.open_orders), (money_text(i.order_refunds) ~ " to refund") if i.order_refunds else "nothing paid to refund") }}
+    {{ sa.mini("Paid online / in cash", "{:,} / {:,}".format(i.online_refunds, i.manual_refunds), "cash payments are refunded by hand") }}
+    {{ sa.mini("Trainer clients · open jobs", "{:,} · {:,}".format(i.clients, i.open_jobs), "{:,} unpaid checkout{} cancelled".format(i.pending_purchases, "s" if i.pending_purchases != 1 else "")) }}
+  </div>
+</section>
+{% endmacro %}
+
+{#- Reason dropdown + required note + typed confirmation -#}
+{% macro decision_fields(reasons, values, errors, expected, what, prefix="") %}
+<div class="grid gap-4">
+  <div>
+    <label class="label" for="{{ prefix }}reason">Reason <span class="text-bad">*</span></label>
+    <select id="{{ prefix }}reason" name="reason" class="input {{ 'input-error' if errors.reason }}" required>
+      <option value="">Choose…</option>
+      {% for code, r in reasons.items() %}<option value="{{ code }}" {{ 'selected' if values.reason == code }}>{{ r.label }}{{ ' (severe)' if r.severe }}</option>{% endfor %}
+    </select>
+    {% if errors.reason %}<p class="field-error">{{ errors.reason }}</p>{% endif %}
+  </div>
+  <div>
+    <label class="label" for="{{ prefix }}note">Note <span class="text-bad">*</span></label>
+    <textarea id="{{ prefix }}note" name="note" rows="3" minlength="{{ G.NOTE_MIN }}" maxlength="{{ G.NOTE_MAX }}" required
+              class="input {{ 'input-error' if errors.note }}" placeholder="What happened - kept in the audit log">{{ values.note or '' }}</textarea>
+    {% if errors.note %}<p class="field-error">{{ errors.note }}</p>{% else %}<p class="help">{{ G.NOTE_MIN }}-{{ G.NOTE_MAX }} characters.</p>{% endif %}
+  </div>
+  <div>
+    <label class="label" for="{{ prefix }}confirm">Type {{ what }} to confirm: <span class="font-mono">{{ expected }}</span> <span class="text-bad">*</span></label>
+    <input id="{{ prefix }}confirm" name="confirm" value="{{ values.confirm or '' }}" required autocomplete="off" spellcheck="false"
+           class="input {{ 'input-error' if errors.confirm }}" maxlength="300">
+    {% if errors.confirm %}<p class="field-error">{{ errors.confirm }}</p>{% endif %}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro money_confirm(label) %}
+<label class="flex items-start gap-3 text-sm">
+  <input type="checkbox" name="confirm_money" value="1" class="checkbox mt-0.5" required>
+  <span>{{ label }}</span>
+</label>
+{% endmacro %}

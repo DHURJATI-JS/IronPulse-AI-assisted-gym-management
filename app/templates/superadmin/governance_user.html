@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{% import "superadmin/_governance.html" as gov with context %}
+{% block title %}{{ target.display_name }} · Governance{% endblock %}
+{% block content %}
+{% call sa.header(target.display_name, (target.email or "no e-mail") ~ " · account #" ~ target.id ~ " · " ~ (target.role.value | humanize), section, sections, counts, back="/superadmin/users?q=" ~ ((target.email or "") | urlencode)) %}
+  {% if ban %}{{ ui.badge("Banned", "red", "lock") }}{% elif not target.is_active %}{{ ui.badge("Inactive", "zinc") }}{% else %}{{ ui.badge("Active", "green") }}{% endif %}
+{% endcall %}
+
+{% if errors.ban %}
+<div class="alert alert-danger mb-6" role="alert" data-ban-refused>{{ icon("x-circle", "size-5 shrink-0") }}<p>{{ errors.ban }}</p></div>
+{% endif %}
+
+{# ------------------------------------------------------------------ banned: lift #}
+{% if ban %}
+<section class="card" aria-labelledby="ban-title">
+  <h2 id="ban-title" class="section-title">Account banned {{ ban.created_at | timeago }}</h2>
+  <p class="mt-2 text-sm">{{ ban.reason }}</p>
+  <p class="mt-1 text-xs muted">Source: {{ {'platform': 'Platform decision', 'severe': 'Severe violation', 'violations': 'Repeated violations'}.get(ban.source, ban.source) }}{% if target.role.value == 'owner' and gyms %} · {{ gyms | length }} gym{{ 's' if gyms | length != 1 }} - lifting the ban opens the ones it suspended again{% endif %}</p>
+  <form method="post" action="/superadmin/governance/users/{{ target.id }}/lift" class="mt-5 grid gap-3 sm:max-w-xl"
+        data-confirm="Lift the ban on {{ target.display_name }}? They can sign in again.">
+    {{ ui.csrf() }}
+    <label class="label" for="lift-note">Why lift it? <span class="text-bad">*</span></label>
+    <textarea id="lift-note" name="note" rows="2" required minlength="{{ lift_min }}" maxlength="{{ G.NOTE_MAX }}"
+              class="input {{ 'input-error' if errors.lift_note }}" placeholder="e.g. Reviewed the evidence - the complaint was withdrawn">{{ values.lift_note or '' }}</textarea>
+    {% if errors.lift_note %}<p class="field-error">{{ errors.lift_note }}</p>{% endif %}
+    <button class="btn btn-secondary">{{ icon("check", "size-4") }} Lift the ban</button>
+  </form>
+</section>
+{% for g in gyms %}
+  {% if loop.first %}<h2 class="mt-8 text-lg font-semibold">Their gyms</h2><ul class="mt-3 grid gap-2">{% endif %}
+  <li class="card-muted flex items-center justify-between gap-3 !p-4"><span>{{ g.name }} {{ gov.state_badge(G.gym_state(g)) }}</span>
+    <a href="/superadmin/governance/gyms/{{ g.id }}" class="btn btn-secondary btn-sm">Open</a></li>
+  {% if loop.last %}</ul>{% endif %}
+{% endfor %}
+
+{# ------------------------------------------------------------------ cannot be banned here #}
+{% elif refusal %}
+<div class="alert alert-info" role="status" data-ban-unavailable>
+  {{ icon("info", "size-5 shrink-0") }}
+  <div><p class="font-semibold">No governance ban for this account</p><p>{{ refusal }}</p>
+    {% if target.role.value == 'customer' %}<p class="mt-1">Members can be deleted from the <a class="font-semibold underline" href="/superadmin/users?q={{ (target.email or '') | urlencode }}">Users</a> page.</p>{% endif %}</div>
+</div>
+
+{# ------------------------------------------------------------------ ban an owner #}
+{% elif target.role.value == "owner" %}
+{{ gov.impact(total, title="Impact preview - " ~ (gyms | length) ~ " gym" ~ ("s" if gyms | length != 1 else "")) }}
+{% if gyms %}
+<ul class="mt-4 grid gap-2" data-owner-gyms>
+  {% for g in gyms %}
+  {% set i = impacts[g.id] %}
+  <li class="card-muted flex flex-col gap-1 !p-4 sm:flex-row sm:items-center sm:justify-between">
+    <span class="font-medium">{{ g.name }} {{ gov.state_badge(G.gym_state(g)) }}</span>
+    <span class="text-sm muted">{{ i.members }} members · {{ money_text(i.refunds_due) }} unused · {{ i.staff }} staff · {{ money_text(i.earned_pay) }} earned pay · {{ i.open_orders }} open orders</span>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+<section id="ban" class="card mt-6 border border-bad/30" aria-labelledby="ban-owner-title">
+  <h2 id="ban-owner-title" class="section-title">Ban this gym owner</h2>
+  <p class="mt-1 text-sm muted">Their account is banned platform-wide (sessions end, the e-mail, phone and ID can't open a new
+    account; a severe reason also blocks their recent network addresses). Every gym above is suspended at once - hidden, no new
+    memberships, orders or job enquiries - and staff and members are told. Earned staff pay stays on record and is settled on
+    each gym's governance page.</p>
+  <form method="post" action="/superadmin/governance/users/{{ target.id }}/ban" class="mt-5 grid gap-4 sm:max-w-2xl"
+        data-confirm="Ban {{ target.display_name }} and suspend their gyms now?">
+    {{ ui.csrf() }}
+    <fieldset class="grid gap-2">
+      <legend class="label">Members' memberships <span class="text-bad">*</span></legend>
+      {% for code, label in policies.items() %}
+      <label class="flex items-start gap-3 text-sm">
+        <input type="radio" name="member_policy" value="{{ code }}" class="mt-0.5" {{ 'checked' if values.member_policy == code }}>
+        <span><span class="font-medium">{{ label }}</span>
+          {% if code == 'refund' %}<span class="block text-xs muted">{{ money_text(total.refunds_due) }} back to {{ total.online_refunds }} member(s) paid online now; {{ total.manual_refunds }} cash payment(s) are refunded by hand.</span>
+          {% else %}<span class="block text-xs muted">Nothing is refunded now; memberships run until {{ (total.last_end | date) if total.last_end else 'they end' }}.</span>{% endif %}</span>
+      </label>
+      {% endfor %}
+      {% if errors.member_policy %}<p class="field-error">{{ errors.member_policy }}</p>{% endif %}
+    </fieldset>
+    {{ gov.decision_fields(reasons, values, errors, target.email, "the account's e-mail address") }}
+    <button class="btn btn-danger">{{ icon("lock", "size-4") }} Ban the owner and suspend their gyms</button>
+  </form>
+</section>
+
+{# ------------------------------------------------------------------ ban an employee #}
+{% elif target.role.value == "staff" %}
+<section class="card" aria-labelledby="emp-title">
+  <h2 id="emp-title" class="section-title">Impact preview - {{ employments | length }} current employment{{ 's' if employments | length != 1 }}</h2>
+  <p class="mt-1 text-xs muted">A dry run - nothing has changed yet.</p>
+  {% if employments %}
+  <ul class="mt-4 grid gap-3" data-employments>
+    {% for x in employments %}
+    {% set e = x.employee %}
+    <li class="card-muted !p-4">
+      <p class="font-semibold">{{ e.gym.name }} <span class="text-xs font-normal muted">{{ e.role_title or (e.role.value | humanize) }} · {{ e.status.value | humanize }}</span></p>
+      <p class="mt-1 text-sm">Earned pay outstanding: <span class="font-semibold">{{ money_text(x.earned_pay) }}</span>
+        {% if x.gets_settlement %} · a final settlement is created first{% elif x.has_settlement %} · final settlement exists{% endif %}
+        · {{ x.clients }} client{{ 's' if x.clients != 1 }} · {{ x.shifts }} weekly shift{{ 's' if x.shifts != 1 }} cancelled</p>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="mt-3 text-sm muted">No current employment - only the account is banned.</p>
+  {% endif %}
+</section>
+<section id="ban" class="card mt-6 border border-bad/30" aria-labelledby="ban-emp-title">
+  <h2 id="ban-emp-title" class="section-title">Ban this employee</h2>
+  <p class="mt-1 text-sm muted">Their account is banned platform-wide and every employment above ends with the reason - after
+    a final settlement is created, so their earned pay is never lost. Shifts are cancelled; their clients move to the trainer
+    you pick, or are told and unlinked; gym owners are told.</p>
+  <form method="post" action="/superadmin/governance/users/{{ target.id }}/ban" class="mt-5 grid gap-4 sm:max-w-2xl"
+        data-confirm="Ban {{ target.display_name }} and end their employments now?">
+    {{ ui.csrf() }}
+    {% for x in employments if x.clients %}
+    <div>
+      <label class="label" for="reassign-{{ x.employee.id }}">{{ x.clients }} client{{ 's' if x.clients != 1 }} at {{ x.employee.gym.name }}</label>
+      <select id="reassign-{{ x.employee.id }}" name="reassign_{{ x.employee.id }}" class="input">
+        <option value="">Tell them and remove the link (the gym assigns a new trainer)</option>
+        {% for tid, tname in x.trainers %}<option value="{{ tid }}" {{ 'selected' if (values.reassign or {}).get(x.employee.id) == tid }}>Move them to {{ tname }}</option>{% endfor %}
+      </select>
+    </div>
+    {% endfor %}
+    {{ gov.decision_fields(reasons, values, errors, target.email, "the account's e-mail address") }}
+    <button class="btn btn-danger">{{ icon("lock", "size-4") }} Ban the employee</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

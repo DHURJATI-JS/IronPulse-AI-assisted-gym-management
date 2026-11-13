@@ -1,0 +1,390 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui with context %}
+{% import "superadmin/_macros.html" as sa with context %}
+{#- Site overview (app/routers/superadmin_insights.py): the urgent "fix first" list, "Ask the AI" and the digest as
+    cards. Everything works without JavaScript (the ask form posts and the page comes back with the answer); with it,
+    71-insights.js answers in place. Names are shown as elsewhere in the admin area, e-mails masked. -#}
+
+{% macro person(m) -%}
+{%- set p = people.get(m) -%}
+<a href="/superadmin/users?q={{ m }}&amp;state=all" class="flex min-w-0 flex-col hover:text-accent">
+  <span class="truncate font-medium">{{ p.name if p and p.name else m }}</span>
+  <span class="truncate text-xs muted">{{ m }}{% if p and p.email %} · {{ p.email }}{% endif %}{% if p and p.role %} · {{ p.role | humanize }}{% endif %}</span>
+</a>
+{%- endmacro %}
+
+{% macro hours(h) -%}
+{%- if h is none -%}—{%- elif h < 48 -%}{{ h }} h{%- else -%}{{ (h // 24) }} days{%- endif -%}
+{%- endmacro %}
+
+{% macro sev_badge(severity) -%}
+<span class="badge badge-{{ tones.get(severity, 'zinc') }}">{{ severity | capitalize }}</span>
+{%- endmacro %}
+
+{% block title %}Site overview{% endblock %}
+{% block content %}
+{% call sa.header("Site overview", "What is going on across IronPulse and what to fix first - counts, ids and masked e-mails only, refreshed every 2 minutes.", section, sections, counts) %}
+  {{ ui.ai_chip(disclaimer=False) }}
+  <a href="/superadmin" class="btn btn-secondary btn-sm">{{ icon("home", "size-4") }} Platform overview</a>
+{% endcall %}
+
+<div class="grid grid-cols-1 gap-6 xl:grid-cols-5">
+  {# ------------------------------------------------------------------ fix first (rules - no AI needed) #}
+  <section id="urgent" class="card min-w-0 xl:col-span-3" aria-labelledby="urgent-title">
+    <div class="sa-card-head">
+      <div class="min-w-0">
+        <h2 id="urgent-title" class="sa-card-title">Fix first</h2>
+        <p class="sa-card-sub">IronPulse's own rules, most severe first{% if generated_at %} · figures of {{ generated_at | dt("%d %b, %H:%M") }}{% endif %}</p>
+      </div>
+      <span class="badge badge-{{ 'red' if urgent and urgent[0].severity in ('critical', 'high') else ('amber' if urgent else 'green') }}">{{ urgent | length }} urgent</span>
+    </div>
+    {% if urgent %}
+    <ol class="mt-4 grid gap-2" aria-label="Urgent items">
+      {% for u in urgent %}
+      <li>
+        <a href="{{ u.href }}" class="sa-attention sa-attention-{{ 'red' if u.severity in ('critical', 'high') else 'amber' }}" data-urgent="{{ u.key }}">
+          {{ icon("alert" if u.severity == "critical" else ("shield" if u.severity == "high" else "info"), "size-5 shrink-0") }}
+          <span class="min-w-0 flex-1">
+            <span class="flex flex-wrap items-center gap-2"><span class="font-semibold">{{ u.title }}</span>{{ sev_badge(u.severity) }}</span>
+            <span class="mt-0.5 block text-xs font-normal opacity-90">{{ u.detail }}</span>
+          </span>
+          {{ icon("chevron-right", "size-4 shrink-0 opacity-60") }}
+        </a>
+      </li>
+      {% endfor %}
+    </ol>
+    {% else %}
+    <p class="mt-4 flex items-center gap-3 rounded-2xl bg-ok/10 px-4 py-3 text-sm font-medium text-[#166534] ring-1 ring-ok/15 dark:text-[#86efac] dark:ring-ok/25">
+      {{ icon("check-circle", "size-5 shrink-0") }} All clear - no rule found anything urgent.
+    </p>
+    {% endif %}
+  </section>
+
+  {# ------------------------------------------------------------------ ask the AI #}
+  <section id="ask" class="card min-w-0 xl:col-span-2" aria-labelledby="ask-title" data-component="sa-insights" data-feature="{{ feature }}">
+    <div class="flex items-center gap-3">
+      <span class="grid size-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-accent via-indigo to-violet text-white shadow-md shadow-indigo/30">{{ icon("sparkles", "size-5") }}</span>
+      <div class="min-w-0">
+        <h2 id="ask-title" class="sa-card-title">Ask the AI</h2>
+        <p class="text-xs muted">Answers from the figures on this page only - the AI never runs queries or takes actions.</p>
+      </div>
+    </div>
+    <form method="post" action="/superadmin/insights/ask" class="mt-4" data-insights-form novalidate>
+      {{ ui.csrf() }}
+      <div class="flex flex-wrap gap-2">
+        {% for s in suggestions %}<button type="submit" name="suggestion" value="{{ s }}" class="chip hover:bg-accent/15" formnovalidate data-insights-suggest>{{ s }}</button>{% endfor %}
+      </div>
+      <div class="mt-3 flex items-end gap-2">
+        <label class="sr-only" for="insights-question">Your question</label>
+        <input id="insights-question" class="input" name="question" maxlength="{{ question_max }}" autocomplete="off" placeholder="Ask about the site…" value="{{ question }}" data-insights-input>
+        <button type="submit" class="btn btn-primary btn-icon shrink-0" aria-label="Ask" data-insights-send>{{ icon("send", "size-4") }}</button>
+      </div>
+    </form>
+    <p class="mt-2 text-xs font-medium text-[#b45309] dark:text-[#fbbf24]" data-insights-wait hidden></p>
+    {% if ask_error %}<div class="mt-4" data-insights-error>{{ ui.alert(ask_error, "warning") }}</div>{% endif %}
+    <div class="mt-4{{ '' if answer else ' hidden' }}" data-insights-answer aria-live="polite">
+      {% if answer %}{% include "superadmin/insights_answer.html" %}{% endif %}
+    </div>
+    <p class="mt-3 text-xs muted">At most {{ ask_per_minute }} questions a minute; every question is kept in the audit log.</p>
+    {{ ui.ai_disclaimer() }}
+  </section>
+</div>
+
+{# ------------------------------------------------------------------ activity #}
+{% set a = d.activity %}
+<section id="activity" class="card mt-6 min-w-0" aria-labelledby="activity-title">
+  <h2 id="activity-title" class="sa-card-title">Activity</h2>
+  <p class="sa-card-sub">The last 24 hours, with the last 7 days beside them</p>
+  <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+    {{ sa.mini("Sign-ups · 24 h", sa.num(a.signups_24h), sa.num(a.signups_7d) ~ " in 7 days", "blue", "/superadmin/users") }}
+    {{ sa.mini("Active members · 24 h", sa.num(a.active_members_24h), "signed in and seen", "green") }}
+    {{ sa.mini("New memberships · 24 h", sa.num(a.memberships_new_24h), sa.num(a.memberships_new_7d) ~ " in 7 days · " ~ sa.num(a.memberships_active) ~ " active", "green") }}
+    {{ sa.mini("Shop orders · 24 h", sa.num(a.orders_24h), sa.num(a.orders_7d) ~ " in 7 days") }}
+    {{ sa.mini("New gyms · 7 days", sa.num(a.new_gyms_7d), sa.num(a.new_branches_7d) ~ " new branches", None, "/superadmin/reviews") }}
+    {% if a.revenue %}
+      {% set r = a.revenue[0] %}
+      {{ sa.mini("Revenue · 24 h", r.day | money(r.currency), (r.week | money(r.currency)) ~ " in 7 days", "green") }}
+    {% else %}
+      {{ sa.mini("Revenue · 24 h", 0 | money("INR"), "no payments in 7 days") }}
+    {% endif %}
+  </div>
+  {% if a.revenue | length > 1 %}
+  <p class="mt-3 text-xs muted">Other currencies: {% for r in a.revenue[1:] %}{{ r.week | money(r.currency) }} in 7 days{{ ', ' if not loop.last }}{% endfor %}</p>
+  {% endif %}
+</section>
+
+<div class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+  {# ------------------------------------------------------------------ security #}
+  {% set s = d.security %}
+  <section id="security" class="card min-w-0" aria-labelledby="security-title">
+    <div class="sa-card-head">
+      <div class="min-w-0">
+        <h2 id="security-title" class="sa-card-title">Security</h2>
+        <p class="sa-card-sub">{{ "{:,}".format(s.events_24h) }} events in 24 h · {{ "{:,}".format(s.events_7d) }}{{ "+" if s.sampled }} in 7 days</p>
+      </div>
+      <a href="/superadmin/security" class="btn btn-secondary btn-sm shrink-0">Security centre {{ icon("arrow-right", "size-4") }}</a>
+    </div>
+    <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {{ sa.mini("Brute force · 24 h", sa.num(s.bruteforce_24h), sa.num(s.bruteforce_7d) ~ " in 7 days", "red" if s.bruteforce_24h else None, "/superadmin/security?category=bruteforce&range=24h") }}
+      {{ sa.mini("404 scans · 24 h", sa.num(s.scans_24h), "probe events", "amber" if s.scans_24h else None, "/superadmin/security?category=probe&range=24h") }}
+      {{ sa.mini("Admin sign-ins", sa.num(s.admin_signin.failed_attempts), sa.num(s.admin_signin.locked_accounts) ~ " super-admins locked", "red" if s.admin_signin.locked_accounts else None, "/superadmin/users?role=superadmin") }}
+      {{ sa.mini("Active IP bans", sa.num(s.bans_active), sa.num(s.bans_new_24h) ~ " new in 24 h · " ~ sa.num(s.bans_permanent) ~ " permanent", None, "/superadmin/bans") }}
+      {{ sa.mini("Rate limited · 24 h", sa.num(s.rate_limited_24h), "refused by the gate", None, "/superadmin/security?category=rate_limit&range=24h") }}
+      {{ sa.mini("Not triaged", sa.num(s.untriaged_critical), "severity 4-5", "red" if s.untriaged_critical else None, "/superadmin/security?triage=pending&min_severity=4") }}
+    </div>
+    <h3 class="mt-6 text-sm font-semibold">Top offending addresses · 24 h</h3>
+    {% if s.top_ips %}
+    <ul class="mt-2 grid gap-1" aria-label="Top offending addresses">
+      {% for r in s.top_ips %}
+      <li>
+        <a href="/superadmin/security/ip/{{ r.ip }}" class="flex items-center gap-3 rounded-2xl px-2.5 py-2 transition hover:bg-zinc-50 dark:hover:bg-white/[0.04]">
+          <span class="min-w-0 flex-1 truncate font-mono text-[13px]">{{ r.ip }}</span>
+          {% if r.bruteforce %}<span class="badge badge-red">{{ r.bruteforce }} brute force</span>{% endif %}
+          {% if r.probe %}<span class="badge badge-amber">{{ r.probe }} probes</span>{% endif %}
+          {% if r.banned %}<span class="badge badge-zinc">{{ icon("lock", "size-3.5") }}Banned</span>{% endif %}
+          {{ sa.severity(r.max_severity) }}
+          <span class="w-12 text-right text-sm font-semibold tabular-nums">{{ r.events }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mt-2 text-sm muted">No security events in the last 24 hours.</p>
+    {% endif %}
+    {% if s.by_category %}
+    <h3 class="mt-6 text-sm font-semibold">By category · 7 days</h3>
+    <ul class="mt-2 grid gap-1 text-sm">
+      {% for cat, n in s.by_category.items() %}
+      <li class="flex items-center justify-between gap-3"><a href="/superadmin/security?category={{ cat }}&amp;range=7d" class="min-w-0 truncate hover:text-accent">{{ category_labels.get(cat, cat | humanize) }}</a><span class="tabular-nums muted">{{ n.day }} · 24 h &nbsp; <span class="font-semibold text-ink dark:text-white">{{ n.week }}</span> · 7 d</span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  {# ------------------------------------------------------------------ AI guard: frequent limit offenders #}
+  {% set g = d.ai_guard %}
+  <section id="ai" class="card min-w-0" aria-labelledby="ai-title">
+    <div class="sa-card-head">
+      <div class="min-w-0">
+        <h2 id="ai-title" class="sa-card-title">AI guard · frequent limit offenders</h2>
+        <p class="sa-card-sub">Refusals of today (UTC) · {{ "{:,}".format(g.calls_24h) }} AI calls in 24 h, {{ "{:,}".format(g.failures_24h) }} failed{% if not g.shared %} · this process only (no shared Redis){% endif %}</p>
+      </div>
+      <a href="/superadmin/ai#usage" class="btn btn-secondary btn-sm shrink-0">AI usage {{ icon("arrow-right", "size-4") }}</a>
+    </div>
+    <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {% for code, label in guard_labels.items() %}
+        {{ sa.mini(label, sa.num(g.refusals_today[code]), "refused today", "amber" if g.refusals_today[code] else None) }}
+      {% endfor %}
+      {{ sa.mini("Pauses started", sa.num(g.cooldowns_started_today), sa.num(g.escalations_today) ~ " escalated", "red" if g.escalations_today else None) }}
+      {{ sa.mini("Floods", sa.num(g.floods_today), "bursts of refusals") }}
+      {{ sa.mini("Paused now", sa.num(g.paused | length), "accounts", "amber" if g.paused else None, "/superadmin/ai#usage") }}
+      {{ sa.mini("Too many at once", sa.num(g.queue_refused_too_many), "AI queue, this process") }}
+    </div>
+    <h3 class="mt-6 text-sm font-semibold">Most refused today</h3>
+    {% if g.offenders_today %}
+    <ul class="mt-2 grid gap-1.5" aria-label="Most refused accounts today">
+      {% for o in g.offenders_today %}
+      <li class="flex items-center gap-3 text-sm">{{ person(o.member) }}<span class="ml-auto shrink-0 font-semibold tabular-nums">{{ o.refusals }}</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mt-2 text-sm muted">Nobody was refused by the AI guard today.</p>
+    {% endif %}
+    {% if g.offenders_yesterday %}
+    <h3 class="mt-5 text-sm font-semibold">Most refused yesterday</h3>
+    <ul class="mt-2 grid gap-1.5">
+      {% for o in g.offenders_yesterday %}
+      <li class="flex items-center gap-3 text-sm">{{ person(o.member) }}<span class="ml-auto shrink-0 font-semibold tabular-nums">{{ o.refusals }}</span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if g.paused %}
+    <h3 class="mt-5 text-sm font-semibold">AI paused right now</h3>
+    <ul class="mt-2 grid gap-1.5">
+      {% for c in g.paused %}
+      <li class="flex items-center gap-3 text-sm">{{ person(c.member) }}<span class="ml-auto shrink-0 text-xs muted">level {{ c.level }}{{ " · repeat" if c.repeat }} · {{ c.reason | humanize }} · {{ (c.seconds_left // 60) + 1 }} min left</span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if g.abuse_events_7d %}
+    <h3 class="mt-5 text-sm font-semibold">Reported to security · 7 days</h3>
+    <ul class="mt-2 grid gap-1.5">
+      {% for r in g.abuse_events_7d %}
+      <li class="flex items-center gap-3 text-sm">{{ person(r.member) }}<span class="ml-auto shrink-0 font-semibold tabular-nums">{{ r.events }}</span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% if g.top_callers_24h %}
+    <h3 class="mt-5 text-sm font-semibold">Busiest AI users · 24 h</h3>
+    <ul class="mt-2 grid gap-1.5">
+      {% for r in g.top_callers_24h %}
+      <li class="flex items-center gap-3 text-sm">{{ person(r.member) }}<span class="ml-auto shrink-0 tabular-nums"><span class="font-semibold">{{ r.calls }}</span> <span class="text-xs muted">calls{% if r.failures %} · {{ r.failures }} failed{% endif %}</span></span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  {# ------------------------------------------------------------------ spam #}
+  {% set sp = d.spam %}
+  <section id="spam" class="card min-w-0" aria-labelledby="spam-title">
+    <h2 id="spam-title" class="sa-card-title">Spam &amp; limits</h2>
+    <p class="sa-card-sub">Refusals of today and this week (UTC days){% if sp.counted_by != 'redis' %} · this process only{% endif %}</p>
+    <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {{ sa.mini("Job-enquiry spam", sa.num(sp.enquiry_spam_today), sa.num(sp.enquiry_spam_week) ~ " this week", "amber" if sp.enquiry_spam_today else None) }}
+      {{ sa.mini("Chat limits hit", sa.num(sp.chat_cap_hits_today), sa.num(sp.chat_cap_hits_week) ~ " this week") }}
+      {{ sa.mini("AI spam refused", sa.num(sp.ai_spam_today), sa.num(sp.ai_duplicates_today) ~ " duplicates today") }}
+      {{ sa.mini("Rate limited · 24 h", sa.num(sp.rate_limited_24h), "per-address limits", None, "/superadmin/security?category=rate_limit&range=24h") }}
+    </div>
+    <h3 class="mt-6 text-sm font-semibold">Job enquiries refused</h3>
+    <ul class="mt-2 grid gap-1 text-sm">
+      {% for kind, label in enquiry_labels.items() %}
+      {% set n = sp.job_enquiries.get(kind) or {} %}
+      <li class="flex items-center justify-between gap-3"><span class="min-w-0 truncate">{{ label }}</span><span class="shrink-0 tabular-nums muted"><span class="font-semibold text-ink dark:text-white">{{ n.today or 0 }}</span> today · {{ n.week or 0 }} this week</span></li>
+      {% endfor %}
+    </ul>
+    <h3 class="mt-6 text-sm font-semibold">Limits hit most this week</h3>
+    {% if sp.caps %}
+    <ul class="mt-2 grid gap-1 text-sm" aria-label="Limits hit most this week">
+      {% for c in sp.caps %}
+      <li class="flex items-center justify-between gap-3"><span class="min-w-0 truncate" title="{{ c.cap }}">{{ c.label }}</span><span class="shrink-0 tabular-nums muted"><span class="font-semibold text-ink dark:text-white">{{ c.today }}</span> today · {{ c.week }} this week</span></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mt-2 text-sm muted">No limit refused anything this week.</p>
+    {% endif %}
+    {% if sp.top_subjects_week %}
+    <h3 class="mt-6 text-sm font-semibold">Refused most this week</h3>
+    <ul class="mt-2 grid gap-1.5 text-sm">
+      {% for t in sp.top_subjects_week %}
+      <li class="flex items-center gap-3">
+        {% if t.account %}{{ person(t.who) }}{% else %}<a href="/superadmin/security/ip/{{ t.who }}" class="min-w-0 truncate font-mono text-[13px] hover:text-accent">{{ t.who }}</a>{% endif %}
+        <span class="ml-auto shrink-0 text-xs muted">{{ enquiry_labels.get(t.kind) or (t.kind[4:] | humanize if t.kind.startswith('cap.') else t.kind) }}</span>
+        <span class="w-10 shrink-0 text-right font-semibold tabular-nums">{{ t.week }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  {# ------------------------------------------------------------------ trust & safety #}
+  {% set t = d.trust %}
+  <section id="trust" class="card min-w-0" aria-labelledby="trust-title">
+    <div class="sa-card-head">
+      <div class="min-w-0">
+        <h2 id="trust-title" class="sa-card-title">Trust &amp; safety · 7 days</h2>
+        <p class="sa-card-sub">{{ sa.num(t.account_bans_active) }} account bans active</p>
+      </div>
+      <a href="/superadmin/trust" class="btn btn-secondary btn-sm shrink-0">Trust &amp; safety {{ icon("arrow-right", "size-4") }}</a>
+    </div>
+    <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+      {{ sa.mini("Conduct violations", sa.num(t.violations_7d.get('violation', 0)), "reported by gyms", None, "/superadmin/trust?tab=violations") }}
+      {{ sa.mini("Severe violations", sa.num(t.violations_7d.get('severe', 0)), "banned at once", "red" if t.violations_7d.get('severe') else None, "/superadmin/trust?tab=violations") }}
+      {{ sa.mini("Auto-bans", sa.num(t.account_bans_7d.get('violations', 0)), "repeated violations", None, "/superadmin/trust") }}
+      {{ sa.mini("Severe bans", sa.num(t.account_bans_7d.get('severe', 0)), "accounts banned", None, "/superadmin/trust") }}
+      {{ sa.mini("Addresses banned", sa.num(t.ip_actions_7d.get('banned', 0)), "by severe bans", None, "/superadmin/trust?tab=ips") }}
+      {{ sa.mini("Addresses skipped", sa.num(t.ip_actions_7d.get('shared', 0)), "shared - check by hand", "amber" if t.ip_actions_7d.get('shared') else None, "/superadmin/trust?tab=ips") }}
+    </div>
+  </section>
+
+  {# ------------------------------------------------------------------ review queues #}
+  {% set rv = d.reviews %}
+  <section id="reviews" class="card min-w-0" aria-labelledby="reviews-title">
+    <h2 id="reviews-title" class="sa-card-title">Review queues</h2>
+    <p class="sa-card-sub">Waiting for a decision now · age of the oldest</p>
+    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {{ sa.mini("ID documents", sa.num(rv.identity.waiting), "oldest " ~ hours(rv.identity.oldest_hours), "amber" if rv.identity.waiting else None, "/superadmin/reviews?tab=identity") }}
+      {{ sa.mini("Staff certifications", sa.num(rv.staff.waiting), "oldest " ~ hours(rv.staff.oldest_hours), "amber" if rv.staff.waiting else None, "/superadmin/reviews?tab=staff") }}
+      {{ sa.mini("Branches", sa.num(rv.branches.waiting), "oldest " ~ hours(rv.branches.oldest_hours), "amber" if rv.branches.waiting else None, "/superadmin/reviews?tab=branches") }}
+    </div>
+  </section>
+
+  {# ------------------------------------------------------------------ money #}
+  {% set m = d.money %}
+  <section id="money" class="card min-w-0" aria-labelledby="money-title">
+    <div class="sa-card-head">
+      <div class="min-w-0">
+        <h2 id="money-title" class="sa-card-title">Money not paid out yet</h2>
+        <p class="sa-card-sub">Salary statements due or awaiting proof, final settlements and shop refunds</p>
+      </div>
+      <a href="/superadmin/audit?area=payroll" class="btn btn-secondary btn-sm shrink-0">Payroll log {{ icon("arrow-right", "size-4") }}</a>
+    </div>
+    {% if m.payroll_unpaid or m.refunds_pending %}
+    <ul class="mt-4 grid gap-2 text-sm" aria-label="Unpaid amounts">
+      {% for r in m.payroll_unpaid %}
+      <li class="rounded-2xl bg-zinc-50 px-3 py-2 dark:bg-white/[0.03]">
+        <p class="flex items-center justify-between gap-3"><span class="font-medium">Salaries · {{ r.statements }} statement{{ 's' if r.statements != 1 }}</span><span class="font-semibold tabular-nums">{{ r.amount | money(r.currency) }}</span></p>
+        <p class="mt-0.5 text-xs muted">{{ r.final }} final settlement{{ 's' if r.final != 1 }} ({{ r.final_amount | money(r.currency) }}){% if r.overdue %} · <span class="font-medium text-[#d1281e] dark:text-[#ff6b61]">{{ r.overdue }} overdue ({{ r.overdue_amount | money(r.currency) }}), oldest due {{ r.oldest_due }}</span>{% endif %}</p>
+      </li>
+      {% endfor %}
+      {% for r in m.refunds_pending %}
+      <li class="rounded-2xl bg-zinc-50 px-3 py-2 dark:bg-white/[0.03]">
+        <p class="flex items-center justify-between gap-3"><a href="/superadmin/audit?area=shop" class="font-medium hover:text-accent">Shop refunds · {{ r.refunds }} waiting</a><span class="font-semibold tabular-nums">{{ r.amount | money(r.currency) }}</span></p>
+        <p class="mt-0.5 text-xs muted">the oldest waits {{ hours(r.oldest_hours) }}</p>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="mt-4 text-sm muted">Nothing waiting to be paid.</p>
+    {% endif %}
+  </section>
+
+  {# ------------------------------------------------------------------ background jobs #}
+  {% set j = d.jobs %}
+  <section id="jobs" class="card min-w-0" aria-labelledby="jobs-title">
+    <div class="sa-card-head">
+      <div class="min-w-0">
+        <h2 id="jobs-title" class="sa-card-title">Background jobs</h2>
+        <p class="sa-card-sub">Failed in 7 days · running without a heartbeat · queued and overdue</p>
+      </div>
+      <a href="/superadmin/selfcheck" class="btn btn-secondary btn-sm shrink-0">Self-check {{ icon("arrow-right", "size-4") }}</a>
+    </div>
+    <div class="mt-4 grid grid-cols-3 gap-3">
+      {{ sa.mini("Failed · 7 days", sa.num(j.failed_7d), None, "amber" if j.failed_7d else None) }}
+      {{ sa.mini("Stuck", sa.num(j.stuck_running), "no heartbeat", "red" if j.stuck_running else None) }}
+      {{ sa.mini("Overdue", sa.num(j.overdue_queued), "queued 15+ min", "red" if j.overdue_queued else None) }}
+    </div>
+    {% if j.by_kind %}
+    <ul class="mt-4 grid gap-1 text-sm" aria-label="Jobs by kind">
+      {% for k in j.by_kind %}
+      <li class="flex items-center justify-between gap-3"><span class="min-w-0 truncate font-mono text-[13px]">{{ k.kind }}</span><span class="shrink-0 text-xs tabular-nums muted">{{ k.failed }} failed · {{ k.stuck }} stuck · {{ k.overdue }} overdue</span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
+
+  {# ------------------------------------------------------------------ health safety #}
+  {% set h = d.health %}
+  <section id="health" class="card min-w-0" aria-labelledby="health-title">
+    <h2 id="health-title" class="sa-card-title">Health safety</h2>
+    <p class="sa-card-sub">Red flags of the last 24 hours · members paused for safety</p>
+    <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {{ sa.mini("Live-workout red flags", sa.num(h.red_flags_24h.live_coach), "24 h", "red" if h.red_flags_24h.live_coach else None) }}
+      {{ sa.mini("Chat red flags", sa.num(h.red_flags_24h.chat), "24 h", "red" if h.red_flags_24h.chat else None, "/superadmin/audit?q=chat.red_flag") }}
+      {{ sa.mini("Critical alerts", sa.num(h.critical_alerts_24h), "health readings, 24 h", "red" if h.critical_alerts_24h else None) }}
+      {{ sa.mini("Paused for safety", sa.num(h.suspended_awaiting), "oldest " ~ hours(h.suspended_oldest_hours), "amber" if h.suspended_awaiting else None, "/superadmin/audit?area=health") }}
+    </div>
+  </section>
+
+  {# ------------------------------------------------------------------ latest load test #}
+  {% set lt = d.load_test %}
+  <section id="load-test" class="card min-w-0" aria-labelledby="lt-title">
+    <div class="sa-card-head">
+      <div class="min-w-0">
+        <h2 id="lt-title" class="sa-card-title">Latest load test</h2>
+        <p class="sa-card-sub">{% if lt %}{{ lt.run_id }}{% if lt.started_at %} · {{ lt.started_at[:16] | replace("T", " ") }} UTC{% endif %}{% else %}No runs yet{% endif %}</p>
+      </div>
+      <a href="/superadmin/load-test" class="btn btn-secondary btn-sm shrink-0">Load test {{ icon("arrow-right", "size-4") }}</a>
+    </div>
+    {% if lt %}
+    <p class="mt-4 flex flex-wrap items-center gap-2 text-sm">
+      {% if lt.passed is sameas true %}<span class="badge badge-green">Passed</span>{% elif lt.passed is sameas false %}<span class="badge badge-red">Failed</span>{% else %}<span class="badge badge-zinc">Unreadable</span>{% endif %}
+      {% if lt.users_peak %}<span class="muted">{{ "{:,}".format(lt.users_peak) }} users at the peak</span>{% endif %}
+    </p>
+    {% if lt.headline %}<p class="mt-2 text-sm">{{ lt.headline }}</p>{% endif %}
+    {% if lt.error %}<p class="mt-2 text-xs muted">{{ lt.error }}</p>{% endif %}
+    {% else %}
+    <p class="mt-4 text-sm muted">Run the load-test kit (loadtest/) to see its verdict here.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
